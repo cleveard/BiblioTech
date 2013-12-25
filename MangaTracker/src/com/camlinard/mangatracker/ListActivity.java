@@ -1,22 +1,26 @@
 package com.camlinard.mangatracker;
 
+import java.util.ArrayList;
 import java.util.Locale;
+
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 
 import android.app.ActionBar;
 import android.app.FragmentTransaction;
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
-import android.support.v4.app.NavUtils;
 import android.support.v4.view.ViewPager;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 public class ListActivity extends FragmentActivity implements ActionBar.TabListener {
@@ -31,6 +35,10 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
+    public static ArrayList<ArrayList<String>> mLists = new ArrayList<ArrayList<String>>();
+    private static ArrayList<ArrayAdapter<String>> mAdapters = new ArrayList<ArrayAdapter<String>>();
+    private int mTabPosition = 0;
+    
     /**
      * The {@link ViewPager} that will host the section contents.
      */
@@ -65,7 +73,10 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 
         // For each of the sections in the app, add a tab to the action bar.
         for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
-            // Create a tab with text corresponding to the page title defined by
+        	mLists.add(new ArrayList<String>());
+        	mAdapters.add(new ArrayAdapter<String>(this, R.layout.book_layout, mLists.get(i)));
+
+        	// Create a tab with text corresponding to the page title defined by
             // the adapter. Also specify this Activity object, which implements
             // the TabListener interface, as the callback (listener) for when
             // this tab is selected.
@@ -88,6 +99,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         // When the given tab is selected, switch to the corresponding page in
         // the ViewPager.
         mViewPager.setCurrentItem(tab.getPosition());
+        mTabPosition = tab.getPosition();
     }
 
     @Override
@@ -113,7 +125,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             // getItem is called to instantiate the fragment for the given page.
             // Return a DummySectionFragment (defined as a static inner class
             // below) with the page number as its lone argument.
-            Fragment fragment = new ListFragment();
+            ListFragment fragment = new ListFragment();
+            fragment.adapter(mAdapters.get(position));
             //Bundle args = new Bundle();
             //args.putInt(DummySectionFragment.ARG_SECTION_NUMBER, position + 1);
             //fragment.setArguments(args);
@@ -163,4 +176,30 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         }
     }
 
+    
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+		IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
+		if (scanningResult != null) {
+			mAdapters.get(mTabPosition).add(scanningResult.getContents());
+		}
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		switch (item.getItemId()) {
+		case R.id.action_scan:
+			{
+				IntentIntegrator scanIntegrator = new IntentIntegrator(this);
+				scanIntegrator.initiateScan();
+			}
+			break;
+		case R.id.action_settings:
+			return false;	// Use default behavior
+		}
+
+		return true;
+	}
+
+    
 }

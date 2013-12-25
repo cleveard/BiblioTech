@@ -14,6 +14,7 @@ import android.os.Bundle;
  */
 public class ListFragment extends Fragment {
 
+	private ArrayAdapter<String> mAdapter;
 	/**
 	 * 
 	 */
@@ -21,11 +22,19 @@ public class ListFragment extends Fragment {
 		super();
 	}
 
+	public void adapter(ArrayAdapter<String> adapter) {
+		mAdapter = adapter;
+	}
+	
+	public ArrayAdapter<String> adapter() {
+		return mAdapter;
+	}
+	
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
 			Bundle savedInstanceState) {
 		ListView view = (ListView)inflater.inflate(R.layout.list_layout, container, false);
-		view.setAdapter(new ArrayAdapter<String>(getActivity(), R.layout.book_layout, books));
+		view.setAdapter(mAdapter);
 		return view;
 	}
 	
