@@ -1,5 +1,10 @@
 package com.camlinard.mangatracker;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -8,6 +13,7 @@ import com.google.zxing.integration.android.IntentResult;
 
 import android.app.ActionBar;
 import android.app.FragmentTransaction;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
@@ -20,7 +26,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 public class ListActivity extends FragmentActivity implements ActionBar.TabListener {
@@ -35,8 +40,10 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    public static ArrayList<ArrayList<String>> mLists = new ArrayList<ArrayList<String>>();
-    private static ArrayList<ArrayAdapter<String>> mAdapters = new ArrayList<ArrayAdapter<String>>();
+    public static final int kCurrentVersion = 0;
+    public static int mLoadingVersion = 0;
+    public static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
+    private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
     private int mTabPosition = 0;
     
     /**
@@ -73,8 +80,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 
         // For each of the sections in the app, add a tab to the action bar.
         for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
-        	mLists.add(new ArrayList<String>());
-        	mAdapters.add(new ArrayAdapter<String>(this, R.layout.book_layout, mLists.get(i)));
+        	mLists.add(new ArrayList<Book>());
+        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
 
         	// Create a tab with text corresponding to the page title defined by
             // the adapter. Also specify this Activity object, which implements
@@ -87,7 +94,70 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         }
     }
 
+    private boolean loadBooks() {
+    	try {
+			FileInputStream input = openFileInput("puzzle");
+			ObjectInputStream stream = new ObjectInputStream(input);
+			mLoadingVersion = stream.readInt();
+			int listCount = stream.readInt();
+			for (int i = 0; i < listCount; ++i) {
+				if (i >= mLists.size())
+					break;
+				
+				BookAdapter adapter = mAdapters.get(i);
+				int itemCount = stream.readInt();
+				for (int j = 0; j < itemCount; ++j) {
+					try {
+						adapter.add(Book.load(stream, mLoadingVersion));
+					} catch (ClassNotFoundException ce) {
+					}
+				}
+			}
+			stream.close();
+			input.close();
+			return true;
+    	} catch (IOException e) {
+    	}
+    	return false;
+    }
+    
+    private boolean saveBooks(int version) {
+    	try {
+			FileOutputStream output = openFileOutput("puzzle", Context.MODE_PRIVATE);
+			ObjectOutputStream stream = new ObjectOutputStream(output);
+			stream.writeInt(version);
+			int listCount = mLists.size();
+			stream.writeInt(listCount);
+			for (int i = 0; i < listCount; ++i) {
+				ArrayList<Book> list = mLists.get(i);
+				int itemCount = list.size();
+				stream.writeInt(itemCount);
+				for (int j = 0; j < itemCount; ++j) {
+					list.get(i).store(stream, version);
+				}
+				mAdapters.get(i).clear();
+			}
+			stream.close();
+			output.close();
+			return true;
+    	} catch (IOException e) {
+    	}
+    	return false;
+    }
+    
     @Override
+	protected void onStart() {
+		super.onStart();
+		loadBooks();
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+		saveBooks(kCurrentVersion);
+	}
+
+	@Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.list, menu);
@@ -181,7 +251,9 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 	protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
 		IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
 		if (scanningResult != null) {
-			mAdapters.get(mTabPosition).add(scanningResult.getContents());
+			Book book = new Book();
+			book.mISBN = scanningResult.getContents();
+			mAdapters.get(mTabPosition).add(book);
 		}
 	}
 

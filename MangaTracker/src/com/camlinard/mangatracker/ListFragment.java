@@ -14,7 +14,7 @@ import android.os.Bundle;
  */
 public class ListFragment extends Fragment {
 
-	private ArrayAdapter<String> mAdapter;
+	private ArrayAdapter<Book> mAdapter;
 	/**
 	 * 
 	 */
@@ -22,11 +22,11 @@ public class ListFragment extends Fragment {
 		super();
 	}
 
-	public void adapter(ArrayAdapter<String> adapter) {
+	public void adapter(ArrayAdapter<Book> adapter) {
 		mAdapter = adapter;
 	}
 	
-	public ArrayAdapter<String> adapter() {
+	public ArrayAdapter<Book> adapter() {
 		return mAdapter;
 	}
 	
@@ -37,6 +37,4 @@ public class ListFragment extends Fragment {
 		view.setAdapter(mAdapter);
 		return view;
 	}
-	
-	public static String[] books = {"a", "b", "c"};
 }
