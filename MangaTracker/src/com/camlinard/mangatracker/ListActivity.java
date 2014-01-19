@@ -45,6 +45,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     public static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
     private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
     private int mTabPosition = 0;
+    private final String kDocFilename = "mistuff";
+    private BookLookup m_lookup = new BookLookup();
     
     /**
      * The {@link ViewPager} that will host the section contents.
@@ -78,8 +80,11 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             }
         });
 
+        // Load the book list. If it fails, clear the data
+        loadBooks();
+        
         // For each of the sections in the app, add a tab to the action bar.
-        for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
+        for (int i = mLists.size(); i < mSectionsPagerAdapter.getCount(); i++) {
         	mLists.add(new ArrayList<Book>());
         	mAdapters.add(new BookAdapter(this, mLists.get(i)));
 
@@ -96,13 +101,15 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 
     private boolean loadBooks() {
     	try {
-			FileInputStream input = openFileInput("puzzle");
+        	mLists.clear();
+        	mAdapters.clear();
+			FileInputStream input = openFileInput(kDocFilename);
 			ObjectInputStream stream = new ObjectInputStream(input);
 			mLoadingVersion = stream.readInt();
 			int listCount = stream.readInt();
 			for (int i = 0; i < listCount; ++i) {
-				if (i >= mLists.size())
-					break;
+	        	mLists.add(new ArrayList<Book>());
+	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
 				
 				BookAdapter adapter = mAdapters.get(i);
 				int itemCount = stream.readInt();
@@ -118,12 +125,14 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			return true;
     	} catch (IOException e) {
     	}
+    	mLists.clear();
+    	mAdapters.clear();
     	return false;
     }
     
     private boolean saveBooks(int version) {
     	try {
-			FileOutputStream output = openFileOutput("puzzle", Context.MODE_PRIVATE);
+			FileOutputStream output = openFileOutput(kDocFilename, Context.MODE_PRIVATE);
 			ObjectOutputStream stream = new ObjectOutputStream(output);
 			stream.writeInt(version);
 			int listCount = mLists.size();
@@ -135,7 +144,6 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 				for (int j = 0; j < itemCount; ++j) {
 					list.get(i).store(stream, version);
 				}
-				mAdapters.get(i).clear();
 			}
 			stream.close();
 			output.close();
@@ -146,15 +154,20 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     }
     
     @Override
+	protected void onDestroy() {
+		// TODO Auto-generated method stub
+		super.onDestroy();
+		saveBooks(kCurrentVersion);
+	}
+
+	@Override
 	protected void onStart() {
 		super.onStart();
-		loadBooks();
 	}
 
 	@Override
 	protected void onStop() {
 		super.onStop();
-		saveBooks(kCurrentVersion);
 	}
 
 	@Override
@@ -246,14 +259,27 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         }
     }
 
+    class AddBookByISBN implements BookLookup.LookupDelegate {
+
+		@Override
+		public void BookLookupResult(Book[] result, boolean more) {
+			if (result != null && result.length > 0)
+				mAdapters.get(mTabPosition).addAll(result);
+		}
+
+		@Override
+		public void BookLookupError(String error) {
+			// TODO Auto-generated method stub
+			
+		}
+    	
+    }
     
 	@Override
 	protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
 		IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
 		if (scanningResult != null) {
-			Book book = new Book();
-			book.mISBN = scanningResult.getContents();
-			mAdapters.get(mTabPosition).add(book);
+			m_lookup.LookupISBN(new AddBookByISBN(), scanningResult.getContents());
 		}
 	}
 
