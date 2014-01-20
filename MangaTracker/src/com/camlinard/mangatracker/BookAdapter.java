@@ -13,7 +13,6 @@ public class BookAdapter extends ArrayAdapter<Book> {
 
 	public BookAdapter(Context context, List<Book> objects) {
 		super(context, R.layout.book_layout, objects);
-		// TODO Auto-generated constructor stub
 	}
 
 	@Override

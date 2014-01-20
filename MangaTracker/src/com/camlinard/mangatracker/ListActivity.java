@@ -142,7 +142,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 				int itemCount = list.size();
 				stream.writeInt(itemCount);
 				for (int j = 0; j < itemCount; ++j) {
-					list.get(i).store(stream, version);
+					list.get(j).store(stream, version);
 				}
 			}
 			stream.close();
@@ -155,9 +155,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     
     @Override
 	protected void onDestroy() {
-		// TODO Auto-generated method stub
 		super.onDestroy();
-		saveBooks(kCurrentVersion);
 	}
 
 	@Override
@@ -168,6 +166,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 	@Override
 	protected void onStop() {
 		super.onStop();
+		saveBooks(kCurrentVersion);
 	}
 
 	@Override
