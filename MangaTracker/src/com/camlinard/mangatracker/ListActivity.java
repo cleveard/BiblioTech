@@ -40,10 +40,12 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    public static final int kCurrentVersion = 0;
+    public static final int kAddPageTitle = 0;
+    public static final int kCurrentVersion = 1;
     public static int mLoadingVersion = 0;
     public static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
     private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
+    private static ArrayList<String> mPageNames = new ArrayList<String>();
     private int mTabPosition = 0;
     private final String kDocFilename = "mistuff";
     private BookLookup m_lookup = new BookLookup();
@@ -84,9 +86,12 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         loadBooks();
         
         // For each of the sections in the app, add a tab to the action bar.
-        for (int i = mLists.size(); i < mSectionsPagerAdapter.getCount(); i++) {
-        	mLists.add(new ArrayList<Book>());
-        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
+        for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
+        	if (i >= mLists.size()) {
+	        	mLists.add(new ArrayList<Book>());
+	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
+	        	mPageNames.add(mSectionsPagerAdapter.getPageTitle(i).toString());
+        	}
 
         	// Create a tab with text corresponding to the page title defined by
             // the adapter. Also specify this Activity object, which implements
@@ -94,7 +99,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             // this tab is selected.
             actionBar.addTab(
                     actionBar.newTab()
-                            .setText(mSectionsPagerAdapter.getPageTitle(i))
+                            .setText(mPageNames.get(i))
                             .setTabListener(this));
         }
     }
@@ -110,6 +115,11 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			for (int i = 0; i < listCount; ++i) {
 	        	mLists.add(new ArrayList<Book>());
 	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
+	        	if (mLoadingVersion > kAddPageTitle) {
+	        		mPageNames.add(stream.readUTF());
+	        	} else {
+	        		mPageNames.add(mSectionsPagerAdapter.getPageTitle(i).toString());
+	        	}
 				
 				BookAdapter adapter = mAdapters.get(i);
 				int itemCount = stream.readInt();
@@ -138,6 +148,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			int listCount = mLists.size();
 			stream.writeInt(listCount);
 			for (int i = 0; i < listCount; ++i) {
+				if (version > kAddPageTitle)
+					stream.writeUTF(mPageNames.get(i));
 				ArrayList<Book> list = mLists.get(i);
 				int itemCount = list.size();
 				stream.writeInt(itemCount);

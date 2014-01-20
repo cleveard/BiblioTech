@@ -23,8 +23,8 @@ public class BookAdapter extends ArrayAdapter<Book> {
 		Book book = getItem(position);
 		TextView text = (TextView)view.findViewById(R.id.book_title);
 		text.setText(book.mTitle);
-		text = (TextView)view.findViewById(R.id.book_isbn);
-		text.setText(book.mISBN);
+		text = (TextView)view.findViewById(R.id.book_subtitle);
+		text.setText(book.mSubTitle);
 		return view;
 	}
 

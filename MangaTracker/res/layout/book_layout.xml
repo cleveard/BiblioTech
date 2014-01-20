@@ -13,7 +13,7 @@
     </TextView>
 
     <TextView
-        android:id="@+id/book_isbn"
+        android:id="@+id/book_subtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
