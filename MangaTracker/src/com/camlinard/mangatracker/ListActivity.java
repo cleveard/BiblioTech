@@ -40,9 +40,9 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    public static final int kAddPageTitle = 0;
-    public static final int kCurrentVersion = 1;
+    public static final int kCurrentVersion = 0;
     public static int mLoadingVersion = 0;
+    
     public static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
     private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
     private static ArrayList<String> mPageNames = new ArrayList<String>();
@@ -115,11 +115,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			for (int i = 0; i < listCount; ++i) {
 	        	mLists.add(new ArrayList<Book>());
 	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
-	        	if (mLoadingVersion > kAddPageTitle) {
-	        		mPageNames.add(stream.readUTF());
-	        	} else {
-	        		mPageNames.add(mSectionsPagerAdapter.getPageTitle(i).toString());
-	        	}
+        		mPageNames.add(stream.readUTF());
 				
 				BookAdapter adapter = mAdapters.get(i);
 				int itemCount = stream.readInt();
@@ -148,8 +144,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			int listCount = mLists.size();
 			stream.writeInt(listCount);
 			for (int i = 0; i < listCount; ++i) {
-				if (version > kAddPageTitle)
-					stream.writeUTF(mPageNames.get(i));
+				stream.writeUTF(mPageNames.get(i));
 				ArrayList<Book> list = mLists.get(i);
 				int itemCount = list.size();
 				stream.writeInt(itemCount);
