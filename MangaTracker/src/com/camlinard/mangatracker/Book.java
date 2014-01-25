@@ -27,20 +27,19 @@ public class Book {
 	static public final String kThumb = "thumbnail";
 	static public final String kAuthors = "authors";
 
-	public String mVolumeID;
-	public String mISBN;
-	public String mTitle;
-	public String mSubTitle;
-	public String[] mAuthors;
-	public String mDescription;
-	public String mSmallThmbnail;
-	public String mThumbnail;
-	public int mPageCount;
+	public String mVolumeID = new String();
+	public String mISBN = new String();
+	public String mTitle = new String();
+	public String mSubTitle = new String();
+	public String[] mAuthors = new String[0];
+	public String mDescription = new String();
+	public String mSmallThmbnail = new String();
+	public String mSmallThumbnailFile = new String();
+	public String mThumbnail = new String();
+	public String mThumbnailFile = new String();
+	public int mPageCount = 0;
 	
 	Book() {
-		mTitle = new String();
-		mSubTitle = new String();
-		mISBN = new String();
 	}
 	
 	public static Book load(ObjectInputStream s, int version)
@@ -51,7 +50,9 @@ public class Book {
 		book.mISBN = s.readUTF();
 		book.mDescription = s.readUTF();
 		book.mSmallThmbnail = s.readUTF();
+		book.mSmallThumbnailFile = s.readUTF();
 		book.mThumbnail = s.readUTF();
+		book.mThumbnailFile = s.readUTF();
 		book.mPageCount = s.readInt();
 		book.mVolumeID = s.readUTF();
 		book.mAuthors = (String[])s.readObject();
@@ -65,7 +66,9 @@ public class Book {
 		s.writeUTF(mISBN);
 		s.writeUTF(mDescription);
 		s.writeUTF(mSmallThmbnail);
+		s.writeUTF(mSmallThumbnailFile);
 		s.writeUTF(mThumbnail);
+		s.writeUTF(mThumbnailFile);
 		s.writeInt(mPageCount);
 		s.writeUTF(mVolumeID);
 		s.writeObject(mAuthors);

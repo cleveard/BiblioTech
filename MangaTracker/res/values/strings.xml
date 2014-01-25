@@ -6,5 +6,6 @@
     <string name="title_section1">Manga List</string>
     <string name="title_section2">Wishlist</string>
     <string name="scan_isbn">Scan ISBN</string>
+    <string name="book_thumb">Book Thumbnail</string>
 
 </resources>
