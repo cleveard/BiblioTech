@@ -1,5 +1,6 @@
 package com.camlinard.mangatracker;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -40,15 +41,16 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    public static final int kCurrentVersion = 0;
-    public static int mLoadingVersion = 0;
+    private static final int kCurrentVersion = 0;
+    private static int mLoadingVersion = 0;
     
-    public static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
+    private static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
     private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
     private static ArrayList<String> mPageNames = new ArrayList<String>();
     private int mTabPosition = 0;
     private final String kDocFilename = "mistuff";
     private BookLookup m_lookup = new BookLookup();
+    private static File m_cache;
     
     /**
      * The {@link ViewPager} that will host the section contents.
@@ -60,6 +62,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_list);
 
+        m_cache = getCacheDir();
+        
         // Set up the action bar.
         final ActionBar actionBar = getActionBar();
         actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
@@ -103,7 +107,11 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
                             .setTabListener(this));
         }
     }
-
+    
+    static public File getCache() {
+    	return m_cache;
+    }
+    
     private boolean loadBooks() {
     	try {
         	mLists.clear();

@@ -48,6 +48,7 @@ public class BookAdapter extends ArrayAdapter<Book> {
 		text.setText(authors);
 		ImageView thumb = (ImageView)view.findViewById(R.id.book_list_thumb);
 		thumb.setImageDrawable(getNoThumb());
+		book.getThumbnail(Book.kSmallThumbnail, thumb);
 		return view;
 	}
 

@@ -1,12 +1,26 @@
 package com.camlinard.mangatracker;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OptionalDataException;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
+import android.widget.ImageView;
 
 public class Book {
 	static public final String kTitle = "title";
@@ -26,20 +40,132 @@ public class Book {
 	static public final String kSmallThumb = "smallThumbnail";
 	static public final String kThumb = "thumbnail";
 	static public final String kAuthors = "authors";
+	static private final String mSuffix[] = {".small.png", ".png"};
 
+	static public final int kSmallThumbnail = 0;
+	static public final int kThumbnail = 1;
+	static public final int kThumbnailCount = 2;
+	
 	public String mVolumeID = new String();
 	public String mISBN = new String();
 	public String mTitle = new String();
 	public String mSubTitle = new String();
 	public String[] mAuthors = new String[0];
 	public String mDescription = new String();
-	public String mSmallThmbnail = new String();
-	public String mSmallThumbnailFile = new String();
-	public String mThumbnail = new String();
-	public String mThumbnailFile = new String();
+	public String[] mThumbnails = new String[kThumbnailCount];
+	public String[] mThumbnailFiles = new String[kThumbnailCount];
 	public int mPageCount = 0;
 	
-	Book() {
+	private static LinkedBlockingQueue<QueueEntry> mThumbQueue = new LinkedBlockingQueue<QueueEntry>(50);
+
+	private class QueueEntry extends AsyncTask<Void, Void, Bitmap> {
+		int mThumbnail;
+		ImageView mView;
+		File mThumbFile = null;
+		
+		
+		QueueEntry(int thumbnail, ImageView view) {
+			mThumbnail = thumbnail;
+			mView = view;
+		}
+
+		@Override
+		protected Bitmap doInBackground(Void... arg0) {
+			try {
+				if (mThumbnailFiles[mThumbnail] != null) {
+					mThumbFile = new File(mThumbnailFiles[mThumbnail]);
+					Bitmap image = openThumbFile();
+					if (image != null)
+						return image;
+				} else {
+					mThumbFile = File.createTempFile("MangaTracker." + mTitle, mSuffix[mThumbnail], ListActivity.getCache());
+				}
+				if (downloadThumbnail()) {
+					Bitmap image = openThumbFile();
+					if (image != null)
+						return image;
+				}
+			} catch (Exception e) {
+			}
+
+			if (mThumbFile != null) {
+				try {
+					mThumbFile.delete();
+				} catch (Exception e) {
+				}
+			}
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(Bitmap result) {
+			super.onPostExecute(result);
+			if (result != null) {
+				if (mView != null)
+					mView.setImageBitmap(result);
+				mThumbnailFiles[mThumbnail] = mThumbFile.getAbsolutePath();
+			}
+			mThumbQueue.remove();
+			startAsync();
+		}
+
+		private boolean downloadThumbnail() {
+			boolean result = false;
+			HttpURLConnection connection = null;
+			BufferedOutputStream output = null;
+			InputStream stream = null;
+			BufferedInputStream buffered = null;
+			
+			try {
+				String spec = mThumbnails[mThumbnail];
+				if (spec == null)
+					return false;
+				URL url = new URL(spec);
+				connection = (HttpURLConnection)url.openConnection();
+				output = new BufferedOutputStream(new FileOutputStream(mThumbFile));
+				stream = connection.getInputStream();
+				buffered = new BufferedInputStream(stream);
+				
+				final int kBufSize = 4096;
+				byte[] buf = new byte[kBufSize];
+				int size;
+				while ((size = buffered.read(buf)) >= 0) {
+					if (size > 0)
+						output.write(buf, 0, size);
+				}
+				result = true;;
+			} catch (MalformedURLException e) {
+			} catch (IOException e) {
+			}
+
+			if (output != null) {
+				try {
+					output.close();
+				} catch (IOException e) {
+					result = false;
+				}
+			}
+			if (buffered != null) {
+				try {
+					buffered.close();
+				} catch (IOException e) {
+				}
+			}
+			if (stream != null) {
+				try {
+					stream.close();
+				} catch (IOException e) {
+				}
+			}
+			if (connection != null) {
+				connection.disconnect();
+			}
+			return result;
+		}
+		
+		private Bitmap openThumbFile() {
+			return BitmapFactory.decodeFile(mThumbFile.getAbsolutePath());
+		}
 	}
 	
 	public static Book load(ObjectInputStream s, int version)
@@ -49,10 +175,8 @@ public class Book {
 		book.mSubTitle = s.readUTF();
 		book.mISBN = s.readUTF();
 		book.mDescription = s.readUTF();
-		book.mSmallThmbnail = s.readUTF();
-		book.mSmallThumbnailFile = s.readUTF();
-		book.mThumbnail = s.readUTF();
-		book.mThumbnailFile = s.readUTF();
+		book.mThumbnails = (String[])s.readObject();
+		book.mThumbnailFiles = (String[])s.readObject();
 		book.mPageCount = s.readInt();
 		book.mVolumeID = s.readUTF();
 		book.mAuthors = (String[])s.readObject();
@@ -65,10 +189,8 @@ public class Book {
 		s.writeUTF(mSubTitle);
 		s.writeUTF(mISBN);
 		s.writeUTF(mDescription);
-		s.writeUTF(mSmallThmbnail);
-		s.writeUTF(mSmallThumbnailFile);
-		s.writeUTF(mThumbnail);
-		s.writeUTF(mThumbnailFile);
+		s.writeObject(mThumbnails);
+		s.writeObject(mThumbnailFiles);
 		s.writeInt(mPageCount);
 		s.writeUTF(mVolumeID);
 		s.writeObject(mAuthors);
@@ -90,8 +212,8 @@ public class Book {
 		book.mPageCount = volume.has(kPageCount) ? volume.getInt(kPageCount) : 0;
 		if (volume.has(kImageLinks)) {
 			JSONObject links = volume.getJSONObject(kImageLinks);
-			book.mSmallThmbnail = hasMember(links, kSmallThumb);
-			book.mThumbnail = hasMember(links, kThumb);
+			book.mThumbnails[kSmallThumbnail] = hasMember(links, kSmallThumb);
+			book.mThumbnails[kThumbnail] = hasMember(links, kThumb);
 		}
 		if (volume.has(kAuthors)) {
 			JSONArray authors = volume.getJSONArray(kAuthors);
@@ -120,5 +242,21 @@ public class Book {
 				result = id.getString(kIdentifier);
 		}
 		return result;
+	}
+
+	public void getThumbnail(int thumbnail, ImageView view) {
+		if (thumbnail >= 0 && thumbnail < kThumbnailCount) {
+			if (mThumbnails[thumbnail] != null && mThumbnails[thumbnail].length() > 0) {
+				mThumbQueue.add(new QueueEntry(thumbnail, view));
+				if (mThumbQueue.size() == 1)
+					startAsync();
+			}
+		}
+	}
+
+	public static void startAsync() {
+		QueueEntry entry = mThumbQueue.peek();
+		if (entry != null)
+			entry.execute();
 	}
 }
