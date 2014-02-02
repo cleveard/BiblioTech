@@ -33,9 +33,9 @@ public class BookAdapter extends ArrayAdapter<Book> {
 				  (Context.LAYOUT_INFLATER_SERVICE);
 		View view = inflater.inflate(R.layout.book_layout,null);
 		Book book = getItem(position);
-		TextView text = (TextView)view.findViewById(R.id.book_title);
+		TextView text = (TextView)view.findViewById(R.id.book_list_title);
 		text.setText(book.mTitle);
-		text = (TextView)view.findViewById(R.id.book_subtitle);
+		text = (TextView)view.findViewById(R.id.book_list_subtitle);
 		text.setText(book.mSubTitle);
 		String authors = "";
 		if (book.mAuthors != null && book.mAuthors.length > 0) {
@@ -44,7 +44,7 @@ public class BookAdapter extends ArrayAdapter<Book> {
 				authors += ",\n" + book.mAuthors[1];
 			}
 		}
-		text = (TextView)view.findViewById(R.id.book_authors);
+		text = (TextView)view.findViewById(R.id.book_list_authors);
 		text.setText(authors);
 		ImageView thumb = (ImageView)view.findViewById(R.id.book_list_thumb);
 		thumb.setImageDrawable(getNoThumb());

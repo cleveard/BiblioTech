@@ -14,14 +14,14 @@
         android:scaleType="fitCenter" />
 
     <LinearLayout
-        android:id="@+id/book_titles"
+        android:id="@+id/book_list_titles"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="10"
         android:orientation="vertical" >
 
         <TextView
-            android:id="@+id/book_title"
+            android:id="@+id/book_list_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginLeft="3dp"
@@ -29,7 +29,7 @@
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/book_subtitle"
+            android:id="@+id/book_list_subtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginLeft="3dp" />
@@ -41,9 +41,9 @@
 	    android:background="@android:color/darker_gray" />
 
 	<TextView
-	    android:id="@+id/book_authors"
+	    android:id="@+id/book_list_authors"
 	    android:layout_width="100dp"
-	    android:layout_height="fill_parent"
+	    android:layout_height="wrap_content"
 	    android:layout_marginLeft="3dp"
 	    android:layout_marginRight="3dp" />
 

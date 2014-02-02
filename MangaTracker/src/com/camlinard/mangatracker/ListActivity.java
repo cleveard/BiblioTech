@@ -27,6 +27,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.widget.TextView;
 
 public class ListActivity extends FragmentActivity implements ActionBar.TabListener {
@@ -61,7 +63,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_list);
-
+        
         m_cache = getCacheDir();
         
         // Set up the action bar.
@@ -112,6 +114,18 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     	return m_cache;
     }
     
+    static public Book getBook(int list, int book)
+    {
+    	if (list < 0 || list >= mAdapters.size())
+    		return null;
+    	BookAdapter adapter = mAdapters.get(list);
+    	if (adapter == null)
+    		return null;
+    	if (book < 0 || book > adapter.getCount())
+    		return null;
+    	return adapter.getItem(book);
+    }
+
     private boolean loadBooks() {
     	try {
         	mLists.clear();
@@ -223,7 +237,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             // Return a DummySectionFragment (defined as a static inner class
             // below) with the page number as its lone argument.
             ListFragment fragment = new ListFragment();
-            fragment.adapter(mAdapters.get(position));
+            fragment.adapter(mAdapters.get(position), position);
             //Bundle args = new Bundle();
             //args.putInt(DummySectionFragment.ARG_SECTION_NUMBER, position + 1);
             //fragment.setArguments(args);

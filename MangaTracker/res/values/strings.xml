@@ -7,5 +7,15 @@
     <string name="title_section2">Wishlist</string>
     <string name="scan_isbn">Scan ISBN</string>
     <string name="book_thumb">Book Thumbnail</string>
+    <string name="title_activity_book">Book Descxription</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="title">title</string>
+    <string name="subtitle">subtitle</string>
+    <string name="by">By:</string>
+    <string name="authors">authors</string>
+    <string name="desc">description</string>
+    <string name="id">ID:</string>
+    <string name="isbn">ISBN:</string>
+    <string name="isbn_hint">isbn</string>
 
 </resources>
