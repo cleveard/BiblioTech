@@ -9,9 +9,6 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Locale;
 
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
-
 import android.app.ActionBar;
 import android.app.FragmentTransaction;
 import android.content.Context;
@@ -27,8 +24,6 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ListView;
 import android.widget.TextView;
 
 public class ListActivity extends FragmentActivity implements ActionBar.TabListener {
@@ -51,7 +46,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     private static ArrayList<String> mPageNames = new ArrayList<String>();
     private int mTabPosition = 0;
     private final String kDocFilename = "mistuff";
-    private BookLookup m_lookup = new BookLookup();
+    private static BookLookup m_lookup = new BookLookup();
     private static File m_cache;
     
     /**
@@ -287,12 +282,27 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         }
     }
 
-    class AddBookByISBN implements BookLookup.LookupDelegate {
-
+    public static class AddBookByISBN implements BookLookup.LookupDelegate {
+    	private int mList;
+    	public AddBookByISBN(int list) {
+    		mList = list;
+    	}
 		@Override
 		public void BookLookupResult(Book[] result, boolean more) {
-			if (result != null && result.length > 0)
-				mAdapters.get(mTabPosition).addAll(result);
+			if (result != null && result.length > 0) {
+				for (int i = 0; i < result.length; ++i) {
+					Book book = result[i];
+					ArrayList<Book> list = mLists.get(i);
+					for (int j = 0; ; ++j) {
+						if (j >= list.size()) {
+							mAdapters.get(mList).addAll(result);
+							break;
+						}
+						if (list.get(j).mISBN.equals(book.mISBN))
+							break;
+					}
+				}
+			}
 		}
 
 		@Override
@@ -303,12 +313,12 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     	
     }
     
-	@Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
-		IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
-		if (scanningResult != null) {
-			m_lookup.LookupISBN(new AddBookByISBN(), scanningResult.getContents());
-		}
+	public static void addBookByISBN(String isbn, int list) {
+		addBookByISBN(isbn, new AddBookByISBN(list));
+	}
+	
+	public static void addBookByISBN(String isbn, AddBookByISBN callback) {
+		m_lookup.LookupISBN(callback, isbn);
 	}
 
 	@Override
@@ -316,8 +326,9 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 		switch (item.getItemId()) {
 		case R.id.action_scan:
 			{
-				IntentIntegrator scanIntegrator = new IntentIntegrator(this);
-				scanIntegrator.initiateScan();
+				Intent intent = new Intent(this, ScanActivity.class);
+				intent.putExtra(ScanActivity.kScanList, mTabPosition);
+				startActivity(intent);
 			}
 			break;
 		case R.id.action_settings:

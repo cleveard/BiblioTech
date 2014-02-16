@@ -17,5 +17,7 @@
     <string name="id">ID:</string>
     <string name="isbn">ISBN:</string>
     <string name="isbn_hint">isbn</string>
+    <string name="title_activity_scan">Scan Barcodes</string>
+    <string name="ScanButton">Scan Another</string>
 
 </resources>
