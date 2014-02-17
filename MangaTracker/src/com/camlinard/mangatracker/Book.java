@@ -55,6 +55,7 @@ public class Book {
 	public String[] mThumbnails = new String[kThumbnailCount];
 	public String[] mThumbnailFiles = new String[kThumbnailCount];
 	public int mPageCount = 0;
+	public boolean mChecked = false;
 	
 	private static LinkedBlockingQueue<QueueEntry> mThumbQueue = new LinkedBlockingQueue<QueueEntry>(50);
 

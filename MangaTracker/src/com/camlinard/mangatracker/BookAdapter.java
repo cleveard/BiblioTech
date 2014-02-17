@@ -8,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -49,6 +50,9 @@ public class BookAdapter extends ArrayAdapter<Book> {
 		ImageView thumb = (ImageView)view.findViewById(R.id.book_list_thumb);
 		thumb.setImageDrawable(getNoThumb());
 		book.getThumbnail(Book.kSmallThumbnail, thumb);
+		CheckBox box = (CheckBox)view.findViewById(R.id.selected);
+		box.setTag(book);
+		box.setChecked(book.mChecked);
 		return view;
 	}
 
