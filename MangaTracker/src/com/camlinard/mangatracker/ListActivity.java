@@ -332,6 +332,17 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 				startActivity(intent);
 			}
 			break;
+		case R.id.action_delete:
+			{
+				BookAdapter adp = mAdapters.get(mTabPosition);
+				for (int i = adp.getCount(); --i >= 0; ) {
+					Book book = adp.getItem(i);
+					if (book.mChecked) {
+						adp.remove(book);
+					}
+				}
+			}
+			break;
 		case R.id.action_settings:
 			return false;	// Use default behavior
 		}
