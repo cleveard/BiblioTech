@@ -13,6 +13,7 @@ import android.app.ActionBar;
 import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -39,16 +40,10 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      */
     SectionsPagerAdapter mSectionsPagerAdapter;
 
-    private static final int kCurrentVersion = 0;
-    private static int mLoadingVersion = 0;
-    
-    private static ArrayList<ArrayList<Book>> mLists = new ArrayList<ArrayList<Book>>();
-    private static ArrayList<BookAdapter> mAdapters = new ArrayList<BookAdapter>();
-    private static ArrayList<String> mPageNames = new ArrayList<String>();
     private int mTabPosition = 0;
-    private final String kDocFilename = "mistuff";
     private static BookLookup m_lookup = new BookLookup();
     private static File m_cache;
+    private static BookDatabase m_db;
     
     /**
      * The {@link ViewPager} that will host the section contents.
@@ -84,15 +79,19 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             }
         });
 
-        // Load the book list. If it fails, clear the data
-        loadBooks();
+        // Open the book list. If it fails, clear the data
+        if (m_db == null) {
+        	m_db = new BookDatabase();
+        	m_db.open(this);
+        }
+        
+        mSectionsPagerAdapter.loadCursor(m_db.GetViewsCursor());
         
         // For each of the sections in the app, add a tab to the action bar.
         for (int i = 0; i < mSectionsPagerAdapter.getCount(); i++) {
         	if (i >= mLists.size()) {
 	        	mLists.add(new ArrayList<Book>());
 	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
-	        	mPageNames.add(mSectionsPagerAdapter.getPageTitle(i).toString());
         	}
 
         	// Create a tab with text corresponding to the page title defined by
@@ -101,81 +100,13 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             // this tab is selected.
             actionBar.addTab(
                     actionBar.newTab()
-                            .setText(mPageNames.get(i))
+                            .setText(mSectionsPagerAdapter.getPageTitle(i))
                             .setTabListener(this));
         }
     }
     
     static public File getCache() {
     	return m_cache;
-    }
-    
-    static public Book getBook(int list, int book)
-    {
-    	if (list < 0 || list >= mAdapters.size())
-    		return null;
-    	BookAdapter adapter = mAdapters.get(list);
-    	if (adapter == null)
-    		return null;
-    	if (book < 0 || book > adapter.getCount())
-    		return null;
-    	return adapter.getItem(book);
-    }
-
-    private boolean loadBooks() {
-    	try {
-        	mLists.clear();
-        	mAdapters.clear();
-			FileInputStream input = openFileInput(kDocFilename);
-			ObjectInputStream stream = new ObjectInputStream(input);
-			mLoadingVersion = stream.readInt();
-			int listCount = stream.readInt();
-			for (int i = 0; i < listCount; ++i) {
-	        	mLists.add(new ArrayList<Book>());
-	        	mAdapters.add(new BookAdapter(this, mLists.get(i)));
-        		mPageNames.add(stream.readUTF());
-				
-				BookAdapter adapter = mAdapters.get(i);
-				int itemCount = stream.readInt();
-				for (int j = 0; j < itemCount; ++j) {
-					try {
-						adapter.add(Book.load(stream, mLoadingVersion));
-					} catch (ClassNotFoundException ce) {
-					}
-				}
-			}
-			stream.close();
-			input.close();
-			return true;
-    	} catch (IOException e) {
-    	}
-    	mLists.clear();
-    	mAdapters.clear();
-    	return false;
-    }
-    
-    private boolean saveBooks(int version) {
-    	try {
-			FileOutputStream output = openFileOutput(kDocFilename, Context.MODE_PRIVATE);
-			ObjectOutputStream stream = new ObjectOutputStream(output);
-			stream.writeInt(version);
-			int listCount = mLists.size();
-			stream.writeInt(listCount);
-			for (int i = 0; i < listCount; ++i) {
-				stream.writeUTF(mPageNames.get(i));
-				ArrayList<Book> list = mLists.get(i);
-				int itemCount = list.size();
-				stream.writeInt(itemCount);
-				for (int j = 0; j < itemCount; ++j) {
-					list.get(j).store(stream, version);
-				}
-			}
-			stream.close();
-			output.close();
-			return true;
-    	} catch (IOException e) {
-    	}
-    	return false;
     }
     
     @Override
@@ -191,7 +122,6 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 	@Override
 	protected void onStop() {
 		super.onStop();
-		saveBooks(kCurrentVersion);
 	}
 
 	@Override
@@ -222,11 +152,22 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
      * one of the sections/tabs/pages.
      */
     public class SectionsPagerAdapter extends FragmentPagerAdapter {
-
+    	private Cursor m_cursor;
+    	private int m_name_index;
+    	private int m_id_index;
+    	
         public SectionsPagerAdapter(FragmentManager fm) {
             super(fm);
         }
 
+        public void constructCursor() {
+        	m_cursor = m_db.getViewsCursor();
+        	m_name_index = m_cursor.getColumnIndex(BookDatabase.VIEW_NAME_COLUMN);
+        	m_id_index = m_cursor.getColumnIndex(BookDatabase.ID_COLUMN);
+        	
+        	for (int i = 0; i < this.)
+        }
+        
         @Override
         public Fragment getItem(int position) {
             // getItem is called to instantiate the fragment for the given page.
@@ -243,19 +184,16 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
         @Override
         public int getCount() {
             // Show 2 total pages.
-            return 2;
+            return m_cursor == null ? 0 : m_cursor.getCount();
         }
 
         @Override
         public CharSequence getPageTitle(int position) {
-            Locale l = Locale.getDefault();
-            switch (position) {
-                case 0:
-                    return getString(R.string.title_section1).toUpperCase(l);
-                case 1:
-                    return getString(R.string.title_section2).toUpperCase(l);
-            }
-            return null;
+        	if (m_cursor == null || position < 0 || position >= m_cursor.getCount())
+        		return "";
+        	
+        	m_cursor.moveToPosition(position);
+        	return m_cursor.getString(m_name_index);
         }
     }
 
@@ -293,14 +231,9 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 			if (result != null && result.length > 0) {
 				for (int i = 0; i < result.length; ++i) {
 					Book book = result[i];
-					ArrayList<Book> list = mLists.get(i);
-					for (int j = 0; ; ++j) {
-						if (j >= list.size()) {
-							mAdapters.get(mList).addAll(result);
-							break;
-						}
-						if (list.get(j).mISBN.equals(book.mISBN))
-							break;
+					int book_id = m_db.addBook(book);
+					if (book_id >= 0) {
+						m_db.addBookToView(mList, book_id);
 					}
 				}
 			}
@@ -330,17 +263,6 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 				Intent intent = new Intent(this, ScanActivity.class);
 				intent.putExtra(ScanActivity.kScanList, mTabPosition);
 				startActivity(intent);
-			}
-			break;
-		case R.id.action_delete:
-			{
-				BookAdapter adp = mAdapters.get(mTabPosition);
-				for (int i = adp.getCount(); --i >= 0; ) {
-					Book book = adp.getItem(i);
-					if (book.mChecked) {
-						adp.remove(book);
-					}
-				}
 			}
 			break;
 		case R.id.action_settings:

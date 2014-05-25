@@ -20,5 +20,7 @@
     <string name="title_activity_scan">Scan Barcodes</string>
     <string name="ScanButton">Scan Another</string>
     <string name="delete">Delete</string>
+    <string name="db_error_title">Database Error</string>
+    <string name="db_error">The book database is corrupted.</string>
 
 </resources>
