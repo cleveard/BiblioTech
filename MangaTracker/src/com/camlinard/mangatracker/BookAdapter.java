@@ -28,16 +28,25 @@ public class BookAdapter extends ArrayAdapter<Book> {
 		return m_nothumb;
 	}
 
+	private void setField(View parent, int id, String value) {
+		if (value == null)
+			value = "";
+		View view = parent.findViewById(id);
+		TextView text = (TextView)view;
+		text.setText(value);
+	}
+
 	@Override
 	public View getView(int position, View convertView, ViewGroup parent) {
-		LayoutInflater inflater = (LayoutInflater)getContext().getSystemService
-				  (Context.LAYOUT_INFLATER_SERVICE);
-		View view = inflater.inflate(R.layout.book_layout,null);
+		if (convertView == null)
+		{
+			LayoutInflater inflater = (LayoutInflater)getContext().getSystemService
+					  (Context.LAYOUT_INFLATER_SERVICE);
+			convertView = inflater.inflate(R.layout.book_layout,null);
+		}
 		Book book = getItem(position);
-		TextView text = (TextView)view.findViewById(R.id.book_list_title);
-		text.setText(book.mTitle);
-		text = (TextView)view.findViewById(R.id.book_list_subtitle);
-		text.setText(book.mSubTitle);
+		setField(convertView, R.id.book_list_title, book.mTitle);
+		setField(convertView, R.id.book_list_subtitle, book.mSubTitle);
 		String authors = "";
 		if (book.mAuthors != null && book.mAuthors.length > 0) {
 			authors = book.mAuthors[0];
@@ -45,15 +54,19 @@ public class BookAdapter extends ArrayAdapter<Book> {
 				authors += ",\n" + book.mAuthors[1];
 			}
 		}
-		text = (TextView)view.findViewById(R.id.book_list_authors);
-		text.setText(authors);
-		ImageView thumb = (ImageView)view.findViewById(R.id.book_list_thumb);
+		setField(convertView, R.id.book_list_authors, authors);
+		ImageView thumb = (ImageView)convertView.findViewById(R.id.book_list_thumb);
 		thumb.setImageDrawable(getNoThumb());
 		book.getThumbnail(Book.kSmallThumbnail, thumb);
-		CheckBox box = (CheckBox)view.findViewById(R.id.selected);
+		book.getThumbnail(Book.kThumbnail, (ImageView)convertView.findViewById(R.id.book_thumb));
+		setField(convertView, R.id.book_desc, book.mDescription);
+		setField(convertView, R.id.book_volid, book.mVolumeID);
+		setField(convertView, R.id.book_isbn, book.mISBN);
+		CheckBox box = (CheckBox)convertView.findViewById(R.id.selected);
 		box.setTag(book);
 		box.setChecked(book.mChecked);
-		return view;
+		book.changeViewVisibility(convertView);
+		return convertView;
 	}
 
 }

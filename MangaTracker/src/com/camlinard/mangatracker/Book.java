@@ -20,6 +20,7 @@ import org.json.JSONObject;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
+import android.view.View;
 import android.widget.ImageView;
 
 public class Book {
@@ -56,6 +57,7 @@ public class Book {
 	public String[] mThumbnailFiles = new String[kThumbnailCount];
 	public int mPageCount = 0;
 	public boolean mChecked = false;
+	public boolean mOpen = false;
 	
 	private static LinkedBlockingQueue<QueueEntry> mThumbQueue = new LinkedBlockingQueue<QueueEntry>(50);
 
@@ -259,5 +261,17 @@ public class Book {
 		QueueEntry entry = mThumbQueue.peek();
 		if (entry != null)
 			entry.execute();
+	}
+
+	public void changeViewVisibility(View arg1)
+	{
+  	  	View view = arg1.findViewById(R.id.book_list_open);
+  	  	view.setVisibility(mOpen ? View.VISIBLE : View.GONE);
+	}
+	
+	public void toggleViewVisibility(View arg1)
+	{
+		mOpen = !mOpen;
+		changeViewVisibility(arg1);
 	}
 }

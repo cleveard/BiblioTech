@@ -33,7 +33,7 @@ public class ListFragment extends Fragment {
 	public ArrayAdapter<Book> adapter() {
 		return mAdapter;
 	}
-	
+
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
 			Bundle savedInstanceState) {
@@ -45,10 +45,11 @@ public class ListFragment extends Fragment {
 
           @Override
           public void onItemClick(AdapterView<?> arg0, View arg1, int position, long arg3) {
-        	  Intent intent = new Intent(getActivity(), BookActivity.class);
-        	  intent.putExtra(BookActivity.kBookIndex, position);
-        	  intent.putExtra(BookActivity.kListIndex, mPosition);
-        	  startActivity(intent);
+        	  ListActivity.getBook(mPosition, position).toggleViewVisibility(arg1);
+        	  //Intent intent = new Intent(getActivity(), BookActivity.class);
+        	  //intent.putExtra(BookActivity.kBookIndex, position);
+        	  //intent.putExtra(BookActivity.kListIndex, mPosition);
+        	  //startActivity(intent);
           }
         });
         
