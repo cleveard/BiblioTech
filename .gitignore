@@ -24,3 +24,4 @@ proguard/
 
 # Ignore metadata
 .metadata/
+*/.idea/workspace.xml
