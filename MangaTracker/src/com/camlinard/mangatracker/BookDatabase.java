@@ -9,9 +9,7 @@ import android.database.SQLException;
 import android.database.sqlite.*;
 import android.os.CancellationSignal;
 
-import java.lang.reflect.Constructor;
-
-public class BookDatabase implements DatabaseErrorHandler {
+class BookDatabase implements DatabaseErrorHandler {
 
 	private static final String DATABASE_FILENAME = "books_database";
 	private static final String ID_COLUMN = "_id";
@@ -97,30 +95,30 @@ public class BookDatabase implements DatabaseErrorHandler {
 
 	// Open the database if it exists, create it if it doesn't, upgrade it if
 	// it is an earlier version.
-	public void open(Context context) {
+	void open(Context context) {
 		mContext = context;
 		mHelper = new BookOpenHelper(context);
 		mDb = mHelper.getWritableDatabase();
 	}
 
 	// Close the database
-	public void close() {
+	void close() {
 		mHelper.close();
 		mHelper = null;
 	}
 
-	public ViewCursor getViewList(CancellationSignal cancellationSignal) {
+	ViewCursor getViewList(CancellationSignal cancellationSignal) {
 		return (ViewCursor)mDb.queryWithFactory(new ViewCursor.Factory(), false, VIEWS_TABLE, null,
 				null, null, null, null, VIEW_ORDER_COLUMN, null, cancellationSignal);
 	}
 
-	public BookCursor getBookList(int viewid, CancellationSignal cancellationSignal) {
+	BookCursor getBookList(int viewid, CancellationSignal cancellationSignal) {
 		return (BookCursor)mDb.rawQueryWithFactory(new BookCursor.Factory(), "", new String[] {
 			Integer.toString((viewid))
 		}, BOOK_VIEWS_TABLE, cancellationSignal);
 	}
 
-	public BookCursor getBook(int bookId, CancellationSignal cancellationSignal) {
+	BookCursor getBook(int bookId, CancellationSignal cancellationSignal) {
 		return (BookCursor)mDb.rawQueryWithFactory(new BookCursor.Factory(), "", new String[] {
 				Integer.toString((bookId))
 		}, BOOK_VIEWS_TABLE, cancellationSignal);
@@ -217,7 +215,7 @@ public class BookDatabase implements DatabaseErrorHandler {
 		
 	}
 
-	static class Column {
+	private static class Column {
 		public String mName;
 		public String mDefinition;
 		public int mVersion;
@@ -230,7 +228,7 @@ public class BookDatabase implements DatabaseErrorHandler {
 		}
 	}
 
-	static class Table {
+	private static class Table {
 		public String mName;
 		public Column[] mColumns;
 		public String mConstraints;
