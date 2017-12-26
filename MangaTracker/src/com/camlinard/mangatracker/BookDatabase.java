@@ -7,38 +7,41 @@ import android.database.Cursor;
 import android.database.DatabaseErrorHandler;
 import android.database.SQLException;
 import android.database.sqlite.*;
+import android.os.CancellationSignal;
 
-public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.CursorFactory {
+import java.lang.reflect.Constructor;
 
-	public static final String DATABASE_FILENAME = "books_database";
-	public static final String ID_COLUMN = "_id";
-	public static final String BOOK_TABLE = "books";
-	public static final String VOLUME_ID_COLUMN = "volume_id";
-	public static final String ISBN_COLUMN = "isbn";
-	public static final String TITLE_COLUMN = "title";
-	public static final String SUBTITLE_COLUMN = "subtitle";
-	public static final String DESCRIPTION_COLUMN = "description";
-	public static final String SMALL_THUMB_COLUMN = "small_thumb";
-	public static final String LARGE_THUMB_COLUMN = "large_thumb";
-	public static final String AUTHORS_TABLE = "authors";
-	public static final String LAST_NAME_COLUMN = "last_name";
-	public static final String REMAINING_COLUMN = "remaining";
-	public static final String BOOK_AUTHORS_TABLE = "book_authors";
-	public static final String BOOK_ID_COLUMN = "book_id";
-	public static final String AUTHOR_ID_COLUMN = "author_id";
-	public static final String AUTHOR_ORDER_COLUMN = "author_order";
-	public static final String VIEWS_TABLE = "views";
-	public static final String VIEW_NAME_COLUMN = "name";
-	public static final String VIEW_ORDER_COLUMN = "order";
-	public static final String BOOK_VIEWS_TABLE = "book_views";
-	public static final String VIEW_ID_COLUMN = "view_id";
-	public static final String VIEW_SORT_COLUMN = "view_sort";
+public class BookDatabase implements DatabaseErrorHandler {
+
+	private static final String DATABASE_FILENAME = "books_database";
+	private static final String ID_COLUMN = "_id";
+	private static final String BOOK_TABLE = "books";
+	private static final String VOLUME_ID_COLUMN = "volume_id";
+	private static final String ISBN_COLUMN = "isbn";
+	private static final String TITLE_COLUMN = "title";
+	private static final String SUBTITLE_COLUMN = "subtitle";
+	private static final String DESCRIPTION_COLUMN = "description";
+	private static final String SMALL_THUMB_COLUMN = "small_thumb";
+	private static final String LARGE_THUMB_COLUMN = "large_thumb";
+	private static final String AUTHORS_TABLE = "authors";
+	private static final String LAST_NAME_COLUMN = "last_name";
+	private static final String REMAINING_COLUMN = "remaining";
+	private static final String BOOK_AUTHORS_TABLE = "book_authors";
+	private static final String BOOK_ID_COLUMN = "book_id";
+	private static final String AUTHOR_ID_COLUMN = "author_id";
+	private static final String AUTHOR_ORDER_COLUMN = "author_order";
+	private static final String VIEWS_TABLE = "views";
+	private static final String VIEW_NAME_COLUMN = "name";
+	private static final String VIEW_ORDER_COLUMN = "order";
+	private static final String BOOK_VIEWS_TABLE = "book_views";
+	private static final String VIEW_ID_COLUMN = "view_id";
+	private static final String VIEW_SORT_COLUMN = "view_sort";
 	
 	// If you change the databse definition, make sure you change
 	// the version
-	static final int VERSION = 1;
+	private static final int VERSION = 1;
 	// Define the databse tables.
-	static final Table[] mPersistantTables = new Table[] {
+	private static final Table[] mPersistantTables = new Table[] {
 		// The main book table.
 		new Table(BOOK_TABLE,new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
@@ -88,9 +91,9 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 			"UNIQUE (" + BOOK_ID_COLUMN + ", " + VIEW_ID_COLUMN + ")", 1)
 	};
 
-	BookOpenHelper mHelper;
-	SQLiteDatabase mDb;
-	Context mContext;
+	private BookOpenHelper mHelper;
+	private SQLiteDatabase mDb;
+	private Context mContext;
 
 	// Open the database if it exists, create it if it doesn't, upgrade it if
 	// it is an earlier version.
@@ -106,18 +109,21 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 		mHelper = null;
 	}
 
-	public ViewCursor getViewList(CancelationSignal cancelationSignal) {
-		return mDb.query(VIEWS_TABLE, null, null, null, null, null, VIEW_ORDER_COLUMN, cancelationSignal);
+	public ViewCursor getViewList(CancellationSignal cancellationSignal) {
+		return (ViewCursor)mDb.queryWithFactory(new ViewCursor.Factory(), false, VIEWS_TABLE, null,
+				null, null, null, null, VIEW_ORDER_COLUMN, null, cancellationSignal);
 	}
 
-	public BookCursor getBookList(int viewid, CancelationSignal cancelationSignal) {
-		return mDb.rawQuery("", new String[] {
-
-		}, cancelationSignal);
+	public BookCursor getBookList(int viewid, CancellationSignal cancellationSignal) {
+		return (BookCursor)mDb.rawQueryWithFactory(new BookCursor.Factory(), "", new String[] {
+			Integer.toString((viewid))
+		}, BOOK_VIEWS_TABLE, cancellationSignal);
 	}
 
-	public BookCursor getBook(int bookId) {
-
+	public BookCursor getBook(int bookId, CancellationSignal cancellationSignal) {
+		return (BookCursor)mDb.rawQueryWithFactory(new BookCursor.Factory(), "", new String[] {
+				Integer.toString((bookId))
+		}, BOOK_VIEWS_TABLE, cancellationSignal);
 	}
 	
 	@Override
@@ -133,13 +139,6 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 		dialog.show();
 	}
 
-	static class CursorFactory<T> implements SQLiteDatabase.CursorFactory {
-		@Override
-		public Cursor newCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
-								String editTable, SQLiteQuery query) {
-			return new T(db, masterQuery, editTable, query);
-		}
-	}
 	// View cursor supplies information about the view
 	public static class ViewCursor extends SQLiteCursor {
 		int idIndex, nameIndex, orderIndex;
@@ -155,25 +154,41 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 			return this.getInt(idIndex);
 		}
 
-		public string getName() {
+		public String getName() {
 			return this.getString(nameIndex);
 		}
 
 		public int getOrder() {
 			return this.getInt(orderIndex);
 		}
+
+		public static class Factory implements SQLiteDatabase.CursorFactory {
+			@Override
+			public Cursor newCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
+									String editTable, SQLiteQuery query) {
+				return new ViewCursor(db, masterQuery, editTable, query);
+			}
+		}
 	}
 
-	public static class BookCursor implements SQLiteCursor {
+	public static class BookCursor extends SQLiteCursor {
 		BookCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
 				   String editTable, SQLiteQuery query) {
 			super(db, masterQuery, editTable, query);
+		}
+
+		public static class Factory implements SQLiteDatabase.CursorFactory {
+			@Override
+			public Cursor newCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
+									String editTable, SQLiteQuery query) {
+				return new BookCursor(db, masterQuery, editTable, query);
+			}
 		}
 	}
 
 	class BookOpenHelper extends SQLiteOpenHelper {
 		public BookOpenHelper(Context context) {
-			super(context, DATABASE_FILENAME, BookDatabase.this, VERSION);
+			super(context, DATABASE_FILENAME, null, VERSION, BookDatabase.this);
 		}
 
 		@Override
