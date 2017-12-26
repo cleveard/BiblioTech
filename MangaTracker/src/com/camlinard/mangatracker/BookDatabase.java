@@ -26,16 +26,20 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 	public static final String BOOK_AUTHORS_TABLE = "book_authors";
 	public static final String BOOK_ID_COLUMN = "book_id";
 	public static final String AUTHOR_ID_COLUMN = "author_id";
+	public static final String AUTHOR_ORDER_COLUMN = "author_order";
 	public static final String VIEWS_TABLE = "views";
 	public static final String VIEW_NAME_COLUMN = "name";
 	public static final String VIEW_ORDER_COLUMN = "order";
 	public static final String BOOK_VIEWS_TABLE = "book_views";
 	public static final String VIEW_ID_COLUMN = "view_id";
+	public static final String VIEW_SORT_COLUMN = "view_sort";
 	
 	// If you change the databse definition, make sure you change
 	// the version
 	static final int VERSION = 1;
+	// Define the databse tables.
 	static final Table[] mPersistantTables = new Table[] {
+		// The main book table.
 		new Table(BOOK_TABLE,new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
 				new Column(VOLUME_ID_COLUMN, "TEXT DEFAULT NULL UNIQUE", 1),
@@ -47,24 +51,35 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 				new Column(LARGE_THUMB_COLUMN, "TEXT NOT NULL DEFAULT ''", 1),
 			},
 			"", 1),
+		// The author's table. We only keep author's names. Lastname and the remaining
+		// We force the author names to be unique. In our case two different authots with the
+		// same name isn't important, since all we track is the name.
 		new Table(AUTHORS_TABLE, new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
 				new Column(LAST_NAME_COLUMN, "TEXT NOT NULL", 1),
 				new Column(REMAINING_COLUMN, "TEXT NOT NULL DEFAULT ''", 1),
 			},
 			"UNIQUE (" + LAST_NAME_COLUMN + ", " + REMAINING_COLUMN + ")", 1),
+		// This table contains an entry for each author for each book. This is how multiple
+		// authors are handled. To find all the authors of a book, look in this table for
+		// all entries with the book id. The Author id's identify the authors
 		new Table(BOOK_AUTHORS_TABLE, new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
 				new Column(BOOK_ID_COLUMN, "INTEGER NOT NULL REFERENCES " + BOOK_TABLE + "(" + ID_COLUMN + ")", 1),
-				new Column(AUTHOR_ID_COLUMN, "INTEGER NOT NULL REFERNCE " + AUTHORS_TABLE + "(" + ID_COLUMN + ")", 1),
+				new Column(AUTHOR_ID_COLUMN, "INTEGER NOT NULL REFERENCES " + AUTHORS_TABLE + "(" + ID_COLUMN + ")", 1),
+				new Column(AUTHOR_ORDER_COLUMN, "INTEGER NOT NULL", 1),
 			},
 			"UNIQUE (" + BOOK_ID_COLUMN + ", " + AUTHOR_ID_COLUMN + ")", 1),
+		// The table of all of the views in the database. A view is a list of books. A book may
+		// appear in multiple views. The order column is the order the views should appear.
 		new Table(VIEWS_TABLE, new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
-				new Column(VIEW_NAME_COLUMN, "TEXT NOT NULL UNIQUE", 1),
+				new Column(VIEW_NAME_COLUMN, "TEXT NOT NULL", 1),
 				new Column(VIEW_ORDER_COLUMN, "INTEGER NOT NULL", 1),
+				new Column(VIEW_SORT_COLUMN, "STRING NOT NULL", 1),
 			},
 			"", 1),
+		// The table that identifies which books are in which views.
 		new Table(BOOK_VIEWS_TABLE, new Column[] {
 				new Column(ID_COLUMN, "INTEGER PRIMARY KEY AUTOINCREMENT", 1),
 				new Column(BOOK_ID_COLUMN, "INTEGER NOT NULL REFERENCES " + BOOK_TABLE + "(" + ID_COLUMN + ")", 1),
@@ -76,16 +91,33 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 	BookOpenHelper mHelper;
 	SQLiteDatabase mDb;
 	Context mContext;
-	
+
+	// Open the database if it exists, create it if it doesn't, upgrade it if
+	// it is an earlier version.
 	public void open(Context context) {
 		mContext = context;
 		mHelper = new BookOpenHelper(context);
 		mDb = mHelper.getWritableDatabase();
 	}
 
+	// Close the database
 	public void close() {
 		mHelper.close();
 		mHelper = null;
+	}
+
+	public ViewCursor getViewList(CancelationSignal cancelationSignal) {
+		return mDb.query(VIEWS_TABLE, null, null, null, null, null, VIEW_ORDER_COLUMN, cancelationSignal);
+	}
+
+	public BookCursor getBookList(int viewid, CancelationSignal cancelationSignal) {
+		return mDb.rawQuery("", new String[] {
+
+		}, cancelationSignal);
+	}
+
+	public BookCursor getBook(int bookId) {
+
 	}
 	
 	@Override
@@ -101,11 +133,42 @@ public class BookDatabase implements DatabaseErrorHandler, SQLiteDatabase.Cursor
 		dialog.show();
 	}
 
-	@Override
-	public Cursor newCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
-			String editTable, SQLiteQuery query) {
-		// TODO Auto-generated method stub
-		return null;
+	static class CursorFactory<T> implements SQLiteDatabase.CursorFactory {
+		@Override
+		public Cursor newCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
+								String editTable, SQLiteQuery query) {
+			return new T(db, masterQuery, editTable, query);
+		}
+	}
+	// View cursor supplies information about the view
+	public static class ViewCursor extends SQLiteCursor {
+		int idIndex, nameIndex, orderIndex;
+		ViewCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
+				   String editTable, SQLiteQuery query) {
+			super(db, masterQuery, editTable, query);
+			idIndex = this.getColumnIndex(VIEW_ID_COLUMN);
+			nameIndex = this.getColumnIndex(VIEW_NAME_COLUMN);
+			orderIndex = this.getColumnIndex(VIEW_ORDER_COLUMN);
+		}
+
+		public int getId() {
+			return this.getInt(idIndex);
+		}
+
+		public string getName() {
+			return this.getString(nameIndex);
+		}
+
+		public int getOrder() {
+			return this.getInt(orderIndex);
+		}
+	}
+
+	public static class BookCursor implements SQLiteCursor {
+		BookCursor(SQLiteDatabase db, SQLiteCursorDriver masterQuery,
+				   String editTable, SQLiteQuery query) {
+			super(db, masterQuery, editTable, query);
+		}
 	}
 
 	class BookOpenHelper extends SQLiteOpenHelper {
