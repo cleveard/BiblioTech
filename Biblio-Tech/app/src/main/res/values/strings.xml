@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Biblio-Tech</string>
+    <string name="action_settings">Settings</string>
+    <string name="title_section1">Manga List</string>
+    <string name="title_section2">Wishlist</string>
+    <string name="scan_isbn">Scan ISBN</string>
+    <string name="book_thumb">Book Thumbnail</string>
+    <string name="title_activity_book">Book Descxription</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="title">title</string>
+    <string name="subtitle">subtitle</string>
+    <string name="by">By:</string>
+    <string name="authors">authors</string>
+    <string name="desc">description</string>
+    <string name="id">ID:</string>
+    <string name="isbn">ISBN:</string>
+    <string name="isbn_hint">isbn</string>
+    <string name="title_activity_scan">Scan Barcodes</string>
+    <string name="ScanButton">Scan Another</string>
+    <string name="delete">Delete</string>
+    <string name="db_error_title">Database Error</string>
+    <string name="db_error">The book database is corrupted.</string>
+</resources>
