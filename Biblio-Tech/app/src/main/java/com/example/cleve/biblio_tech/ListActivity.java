@@ -154,6 +154,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 
         void constructCursor(BookDatabase db) {
         	m_cursor = db.getViewList(m_cancel_list_cursor);
+            this.notifyDataSetChanged();
         }
         
         @Override
