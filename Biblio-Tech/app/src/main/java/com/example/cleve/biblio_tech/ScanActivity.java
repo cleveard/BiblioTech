@@ -6,55 +6,56 @@
  */
 package com.example.cleve.biblio_tech;
 
+import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.SoundPool;
 import android.os.Bundle;
-import android.os.Handler;
 
+import android.provider.ContactsContract;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.FrameLayout;
 import android.widget.Button;
 
-import android.hardware.Camera;
-import android.hardware.Camera.PreviewCallback;
-import android.hardware.Camera.AutoFocusCallback;
-import android.hardware.Camera.Size;
-
 /* Import ZBar Class files */
-import net.sourceforge.zbar.ImageScanner;
-import net.sourceforge.zbar.Image;
-import net.sourceforge.zbar.Symbol;
-import net.sourceforge.zbar.SymbolSet;
-import net.sourceforge.zbar.Config;
+import com.yanzhenjie.zbar.ImageScanner;
+import com.yanzhenjie.zbar.Symbol;
+import com.yanzhenjie.zbar.SymbolSet;
+import com.yanzhenjie.zbar.Config;
 
 public class ScanActivity extends Activity
 {
-	public static final String kScanList = "scan_list";
-    private Camera mCamera;
+	public static final String kScanViewId = "scan_view_id";
+    private final int REQUEST_CAMERA_PERMISSION = 1;
     private CameraPreview mPreview;
-    private Handler autoFocusHandler;
+    private CameraPreview.Callback mPreviewCallback = new CameraPreview.Callback() {
+        @Override
+        public void OnPreviewFrame(android.media.Image preview) {
+            processPreviewImage(preview);
+        }
+    };
 
     Button scanButton;
+    boolean mBarcodeLookedUp = true;
 
     ImageScanner scanner;
 
-    private boolean barcodeScanned = false;
-    private boolean previewing = true;
-
-    private int mList;
-    private final int kNumSounds = 3;
-    private SoundPool mSoundPool;
-    private int mSoundResIds[] = new int[] { R.raw.beep,R.raw.beepbeep, R.raw.longbeep };
-    private int mPoolIds[] = new int[kNumSounds];
-    private final int kBeep = 0;
-    private final int kBeepBeep = 1;
-    private final int kLongBeep = 2;
-    private AudioManager mAudioManager;
+    private long mViewId;
+    //private final int kNumSounds = 3;
+    //private SoundPool mSoundPool;
+    //private int mSoundResIds[] = new int[] { R.raw.beep,R.raw.beepbeep, R.raw.longbeep };
+    //private int mPoolIds[] = new int[kNumSounds];
+    //private final int kBeep = 0;
+    //private final int kBeepBeep = 1;
+    //private final int kLongBeep = 2;
+    //private AudioManager mAudioManager;
     
     static {
         System.loadLibrary("iconv");
@@ -66,26 +67,23 @@ public class ScanActivity extends Activity
         setContentView(R.layout.scan);
 
 		Intent intent = getIntent();
-		mList = intent.getIntExtra(kScanList, 0);
-   	
-        mSoundPool = new SoundPool(3, AudioManager.STREAM_MUSIC, 0);
-    	for (int i = 0; i < kNumSounds; ++i) {
-    		mPoolIds[i] = mSoundPool.load(this, mSoundResIds[i], i);
-    	}
-    	mAudioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
-    	setVolumeControlStream(AudioManager.STREAM_MUSIC);
+		mViewId = intent.getLongExtra(kScanViewId, 0);
+
+        //mSoundPool = new SoundPool(3, AudioManager.STREAM_MUSIC, 0);
+        //for (int i = 0; i < kNumSounds; ++i) {
+        //	mPoolIds[i] = mSoundPool.load(this, mSoundResIds[i], i);
+        //}
+        //mAudioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+        //setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-
-        autoFocusHandler = new Handler();
-        mCamera = getCameraInstance();
 
         /* Instance barcode scanner */
         scanner = new ImageScanner();
         scanner.setConfig(0, Config.X_DENSITY, 3);
         scanner.setConfig(0, Config.Y_DENSITY, 3);
 
-        mPreview = new CameraPreview(this, mCamera, previewCb, autoFocusCB);
+        mPreview = new CameraPreview(this, mPreviewCallback);
         FrameLayout preview = (FrameLayout)findViewById(R.id.cameraPreview);
         preview.addView(mPreview);
 
@@ -93,94 +91,108 @@ public class ScanActivity extends Activity
 
         scanButton.setOnClickListener(new OnClickListener() {
                 public void onClick(View v) {
-                    if (barcodeScanned) {
-                        barcodeScanned = false;
-                        mCamera.setPreviewCallback(previewCb);
-                        mCamera.startPreview();
-                        previewing = true;
-                        mCamera.autoFocus(autoFocusCB);
+                    if (mBarcodeLookedUp && !mPreview.isScanning()) {
+                        mPreview.startScanner();
                     }
                 }
             });
     }
 
     public void onPause() {
+        mBarcodeLookedUp = false;
+        mPreview.releaseCamera();
         super.onPause();
-        releaseCamera();
-        mSoundPool.release();
-        mSoundPool = null;
+        //mSoundPool.release();
+        //mSoundPool = null;
     }
 
-    /** A safe way to get an instance of the Camera object. */
-    public static Camera getCameraInstance(){
-        Camera c = null;
-        try {
-            c = Camera.open();
-        } catch (Exception e){
+    public void onResume() {
+        super.onResume();
+        mBarcodeLookedUp = true;
+        requestCameraPermission();
+    }
+
+    private void finishStarting() {
+        mPreview.startPreview();
+        //mSoundPool.release();
+        //mSoundPool = null;
+    }
+
+    void processPreviewImage(android.media.Image preview) {
+        int width = preview.getWidth(), height = preview.getHeight();
+        com.yanzhenjie.zbar.Image barcode = new com.yanzhenjie.zbar.Image(width, height, "Y800");
+        byte[] data = new byte[width * height];
+        android.media.Image.Plane planes[] = preview.getPlanes();
+        android.media.Image.Plane plane = planes[0];
+        if (plane.getPixelStride() != 1 || plane.getRowStride() != width) {
+            // Don't understand the format, turn off the camera
+            mPreview.stopScanner();
+            return;
         }
-        return c;
-    }
+        plane.getBuffer().get(data, 0, width * height);
+        barcode.setData(data);
 
-    private void releaseCamera() {
-        if (mCamera != null) {
-            previewing = false;
-            mCamera.setPreviewCallback(null);
-            mCamera.release();
-            mCamera = null;
-        }
-    }
+        int result = scanner.scanImage(barcode);
 
-    private Runnable doAutoFocus = new Runnable() {
-            public void run() {
-                if (previewing)
-                    mCamera.autoFocus(autoFocusCB);
-            }
-        };
+        if (result != 0) {
+            //final float v = (float)mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            //			  / (float)mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            //mSoundPool.play(mPoolIds[kBeep], v, v, 2, 0, 1.0f);
+            // Found a barcode. Stop callbacks, but keep the preview going.
+            mBarcodeLookedUp = false;
+            mPreview.stopScanner();
 
-    PreviewCallback previewCb = new PreviewCallback() {
-            public void onPreviewFrame(byte[] data, Camera camera) {
-                Camera.Parameters parameters = camera.getParameters();
-                Size size = parameters.getPreviewSize();
-
-                Image barcode = new Image(size.width, size.height, "Y800");
-                barcode.setData(data);
-
-                int result = scanner.scanImage(barcode);
-                
-                if (result != 0) {
-                	final float v = (float)mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                				  / (float)mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                	mSoundPool.play(mPoolIds[kBeep], v, v, 2, 0, 1.0f);
-                    previewing = false;
-                    mCamera.setPreviewCallback(null);
-                    mCamera.stopPreview();
-                    
-                    SymbolSet syms = scanner.getResults();
-                    for (Symbol sym : syms) {
-                        barcodeScanned = true;
-                     	ListActivity.addBookByISBN(sym.getData(), new ListActivity.AddBookByISBN(mList) {
-							@Override
-							public void BookLookupResult(Book[] result,
-									boolean more) {
-								mSoundPool.play(mPoolIds[kBeepBeep], v, v, 2, 0, 1.0f);
-								super.BookLookupResult(result, more);
-							}
-
-							@Override
-							public void BookLookupError(String error) {
-								mSoundPool.play(mPoolIds[kLongBeep], v, v, 2, 0, 1.0f);
-								super.BookLookupError(error);
-							}
-                    	} );
+            SymbolSet syms = scanner.getResults();
+            for (Symbol sym : syms) {
+                ListActivity.addBookByISBN(sym.getData(), new ListActivity.AddBookByISBN(mViewId) {
+                    @Override
+                    public void BookLookupResult(Book[] result,
+                                                 boolean more) {
+                        //mSoundPool.play(mPoolIds[kBeepBeep], v, v, 2, 0, 1.0f);
+                        mBarcodeLookedUp = true;
+                        super.BookLookupResult(result, more);
                     }
-                }
-            }
-        };
 
-    // Mimic continuous auto-focusing
-    AutoFocusCallback autoFocusCB = new AutoFocusCallback() {
-            public void onAutoFocus(boolean success, Camera camera) {
-                autoFocusHandler.postDelayed(doAutoFocus, 1000);
+                    @Override
+                    public void BookLookupError(String error) {
+                        //mSoundPool.play(mPoolIds[kLongBeep], v, v, 2, 0, 1.0f);
+                        mBarcodeLookedUp = true;
+                        super.BookLookupError(error);
+                    }
+                });
             }
-        };
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_CAMERA_PERMISSION: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    finishStarting();
+                } else {
+                    this.finish();
+                }
+                return;
+
+            }
+        }
+    }
+
+    private void requestCameraPermission() {
+        // Here, thisActivity is the current activity
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    REQUEST_CAMERA_PERMISSION);
+            return;
+        }
+
+        finishStarting();
+    }
 }

@@ -41,6 +41,10 @@ public class ListFragment extends Fragment {
 		}
 	}
 
+	public long getViewId() {
+		return mViewId;
+	}
+
 	@Override
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
 			Bundle savedInstanceState) {

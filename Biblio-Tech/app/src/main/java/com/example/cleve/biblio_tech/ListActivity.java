@@ -168,8 +168,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             if (fragment == null) {
                 // Create list fragment if it doesn't exist.
                 fragment = new ListFragment();
-                m_cursor.moveToPosition(position);
-                long viewId = m_cursor.getId();
+                long viewId = getViewId(position);
                 String sortOrder = m_cursor.getSort();
                 fragment.constructCursor(m_db, viewId, sortOrder);
                 m_fragments.set(position, fragment);
@@ -178,6 +177,15 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
             //args.putInt(DummySectionFragment.ARG_SECTION_NUMBER, position + 1);
             //fragment.setArguments(args);
             return fragment;
+        }
+
+        public long getViewId(int position) {
+            ListFragment fragment;
+            if (m_fragments.size() <= position || (fragment = m_fragments.get(position)) == null) {
+                m_cursor.moveToPosition(position);
+                return m_cursor.getId();
+            }
+            return fragment.getViewId();
         }
 
         @Override
@@ -230,8 +238,8 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
     }
 
     static class AddBookByISBN implements BookLookup.LookupDelegate {
-    	private int mList;
-    	AddBookByISBN(int list) {
+    	private long mList;
+    	AddBookByISBN(long list) {
     		mList = list;
     	}
 		@Override
@@ -269,7 +277,7 @@ public class ListActivity extends FragmentActivity implements ActionBar.TabListe
 		case R.id.action_scan:
 			{
 				Intent intent = new Intent(this, ScanActivity.class);
-				intent.putExtra(ScanActivity.kScanList, mTabPosition);
+				intent.putExtra(ScanActivity.kScanViewId, mSectionsPagerAdapter.getViewId(mTabPosition));
 				startActivity(intent);
 			}
 			break;
