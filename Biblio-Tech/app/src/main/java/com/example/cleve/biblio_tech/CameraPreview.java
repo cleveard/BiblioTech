@@ -30,16 +30,16 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.support.annotation.IntDef;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+//import android.support.annotation.IntDef;
+//import android.support.annotation.NonNull;
+//import android.support.v4.app.ActivityCompat;
+//import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
 import android.util.Size;
 import android.view.Surface;
-import android.view.SurfaceView;
-import android.view.SurfaceHolder;
+//import android.view.SurfaceView;
+//import android.view.SurfaceHolder;
 
 import android.content.Context;
 import android.view.TextureView;

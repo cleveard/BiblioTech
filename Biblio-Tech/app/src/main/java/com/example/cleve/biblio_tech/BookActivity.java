@@ -8,7 +8,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.support.v4.app.NavUtils;
+import androidx.core.app.NavUtils;
 
 public class BookActivity extends Activity {
 
