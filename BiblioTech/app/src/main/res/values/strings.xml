@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">BiblioTech</string>
 
-    <!-- TODO: Remove or change this placeholder text -->
     <string name="app_name_lf">Biblio\nTech</string>
+    <string name="title_section1">Manga List</string>
+    <string name="title_section2">Wishlist</string>
+    <string name="db_error_title">Database Error</string>
+    <string name="db_error">The book database is corrupted.</string>
+    <string name="book_thumb">Book Thumbnail</string>
+    <string name="desc">description</string>
+    <string name="id">ID:</string>
+    <string name="isbn">ISBN:</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

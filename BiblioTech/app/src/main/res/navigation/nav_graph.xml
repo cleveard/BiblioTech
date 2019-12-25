@@ -3,22 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/startFragment">
-
+    app:startDestination="@id/listFragment">
     <fragment
         android:id="@+id/listFragment"
         android:name="com.example.cleve.bibliotech.ListFragment"
-        android:label="fragment_list"
-        tools:layout="@layout/fragment_list" />
-    <fragment
-        android:id="@+id/startFragment"
-        android:name="com.example.cleve.bibliotech.StartFragment"
-        android:label="fragment_start"
-        tools:layout="@layout/fragment_start" >
+        android:label="Books"
+        tools:layout="@layout/fragment_list" >
         <action
-            android:id="@+id/action_startFragment_to_listFragment"
-            app:destination="@+id/listFragment"
-            app:popUpTo="@+id/startFragment"
-            app:popUpToInclusive="true" />
+            android:id="@+id/action_listFragment_to_addListFragment"
+            app:destination="@id/addListFragment" />
     </fragment>
+    <dialog
+        android:id="@+id/addListFragment"
+        android:name="com.example.cleve.bibliotech.AddListFragment" >
+    </dialog>
 </navigation>
