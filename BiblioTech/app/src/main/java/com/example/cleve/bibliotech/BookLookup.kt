@@ -13,7 +13,7 @@ import java.net.URL
 
 internal class BookLookup {
     internal interface LookupDelegate {
-        fun bookLookupResult(result: Array<Book?>?, more: Boolean)
+        fun bookLookupResult(result: Array<Book>?, more: Boolean)
         fun bookLookupError(error: String?)
     }
 
@@ -46,9 +46,9 @@ internal class BookLookup {
     }
 
     private class LookupTask internal constructor(parent: BookLookup, val mResults: LookupDelegate) :
-        AsyncTask<String?, Void?, Array<Book?>?>() {
+        AsyncTask<String?, Void?, Array<Book>?>() {
         val mParent = WeakReference(parent)
-        override fun doInBackground(vararg params: String?): Array<Book?>? {
+        override fun doInBackground(vararg params: String?): Array<Book>? {
             val spec = params[0]
             var bookClient: HttpURLConnection? = null
             try {
@@ -89,7 +89,7 @@ internal class BookLookup {
             return null
         }
 
-        override fun onPostExecute(result: Array<Book?>?) {
+        override fun onPostExecute(result: Array<Book>?) {
             super.onPostExecute(result)
             mResults.bookLookupResult(result, false)
             val parent = mParent.get()
@@ -98,17 +98,15 @@ internal class BookLookup {
         }
 
         @Throws(Exception::class)
-        fun parseResponse(json: JSONObject): Array<Book?>? {
+        fun parseResponse(json: JSONObject): Array<Book>? {
             val kind = json.getString(kKind)
             if (kind == kBooksVolumes) {
                 val count = json.getInt(kItemCount)
                 if (count == 0) return null
                 val items = json.getJSONArray(kItems)
-                val books: Array<Book?> = arrayOfNulls(count)
-                for (i in 0 until count) {
-                    books[i] = Book.parseJSON(items.getJSONObject(i))
+                return Array(count) {
+                    Book.parseJSON(items.getJSONObject(it))
                 }
-                return books
             }
             throw Exception("Invalid Response")
         }

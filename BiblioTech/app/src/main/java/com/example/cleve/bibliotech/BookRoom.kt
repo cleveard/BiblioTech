@@ -37,6 +37,7 @@ private const val ALL_AUTHORS_COLUMN = "book_authors_view_all_authors"
 
 @Entity(tableName = BOOK_TABLE,
     indices = [
+        Index(value = [BOOK_ID_COLUMN],unique = true),
         Index(value = [VOLUME_ID_COLUMN],unique = true),
         Index(value = [ISBN_COLUMN],unique = true)
     ])
@@ -53,6 +54,7 @@ data class BookEntity(
 
 @Entity(tableName = AUTHORS_TABLE,
     indices = [
+        Index(value = [AUTHORS_ID_COLUMN],unique = true),
         Index(value = [LAST_NAME_COLUMN,REMAINING_COLUMN],unique = true)
     ])
 data class AuthorEntity(
@@ -73,6 +75,7 @@ data class AuthorEntity(
             onDelete = CASCADE)
     ],
     indices = [
+        Index(value = [BOOK_AUTHORS_ID_COLUMN],unique = true),
         Index(value = [BOOK_AUTHORS_AUTHOR_ID_COLUMN,BOOK_AUTHORS_BOOK_ID_COLUMN],unique = true)
     ])
 data class BookAndAuthorEntity(
@@ -81,7 +84,10 @@ data class BookAndAuthorEntity(
     @ColumnInfo(name = BOOK_AUTHORS_BOOK_ID_COLUMN) val bookId: Long
 )
 
-@Entity(tableName = VIEWS_TABLE)
+@Entity(tableName = VIEWS_TABLE,
+    indices = [
+        Index(value = [VIEWS_ID_COLUMN],unique = true)
+    ])
 data class ViewEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) val id: Long,
     @ColumnInfo(name = VIEWS_NAME_COLUMN) val name: String,
@@ -101,6 +107,7 @@ data class ViewEntity(
             onDelete = CASCADE)
     ],
     indices = [
+        Index(value = [BOOK_VIEWS_ID_COLUMN],unique = true),
         Index(value = [BOOK_VIEWS_BOOK_ID_COLUMN,BOOK_VIEWS_VIEW_ID_COLUMN],unique = true)
     ])
 data class BookAndViewEntity(
@@ -130,7 +137,7 @@ data class BookAuthor(
         entityColumn = AUTHORS_ID_COLUMN) val authors: List<AuthorEntity>
 )
 
-data class BooksAndAuthors(
+data class BookAndAuthors(
     @Embedded val book: BookEntity,
     @Relation(
         entity = BookAndAuthorEntity::class,
@@ -140,7 +147,7 @@ data class BooksAndAuthors(
 )
 
 data class BookInView(
-    @Relation(parentColumn = BOOK_VIEWS_BOOK_ID_COLUMN, entityColumn = BOOK_ID_COLUMN) val book: BooksAndAuthors
+    @Relation(parentColumn = BOOK_VIEWS_BOOK_ID_COLUMN, entityColumn = BOOK_ID_COLUMN) val book: BookAndAuthors
 )
 
 @Dao
@@ -254,7 +261,7 @@ abstract class BookDao(private val db: BookRoomDatabase) {
     abstract fun add(book: BookEntity): Long
 
     // Add book from description
-    fun add(book: Book) {
+    fun add(book: Book, viewId: Long? = null, selected: Boolean = false, open: Boolean = false): Long {
         val bookId: Long = add(BookEntity(
             0,
             book.mVolumeID,
@@ -267,7 +274,16 @@ abstract class BookDao(private val db: BookRoomDatabase) {
         ))
 
         db.getAuthorDao().addAuthors(bookId, book.mAuthors)
+
+        if (viewId != null)
+            db.getViewDao().add(viewId, bookId, selected, open)
+
+        return bookId
     }
+
+    @Query(value = "SELECT * FROM $BOOK_TABLE"
+            + " WHERE $BOOK_ID_COLUMN = bookId")
+    abstract fun getBook(bookId: Long): BookAndAuthors?
 }
 
 @Database(

@@ -10,6 +10,7 @@
     <string name="desc">description</string>
     <string name="id">ID:</string>
     <string name="isbn">ISBN:</string>
+    <string name="books">Books</string>
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>

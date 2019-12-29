@@ -4,27 +4,28 @@ import android.content.Context
 import android.database.sqlite.SQLiteCursor
 import android.os.Bundle
 import android.os.CancellationSignal
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModelProvider
 import com.example.cleve.bibliotech.MainActivity.Static.ARG_BOOK_LIST
 import com.example.cleve.bibliotech.MainActivity.Static.ARG_POSITION
 import kotlin.math.min
 
-internal class ViewList(var name: String, var id: Long, var order: Int, var sortOrder: String)
-
 internal class ViewModel : androidx.lifecycle.ViewModel() {
+    companion object Static {
+        const val SORT_AUTHOR = "author";
+    }
     private var mInitialized = false
+
+    private val mBooksInView = MutableLiveData<List<BookInView>>(ArrayList(0))
 
     private val mBookList = MutableLiveData<String>("")
     var bookList: String
         get() { return mBookList.value!! }
         set(list) {
             val view = views.find { it.name == list }
+            mBooksInView.value = if (view != null) db.getBookDao().getBooksForView(view) else ArrayList(0)
             mView = view
-            adaptor.cursor = if (view == null) null else db.getBookList(view.id, view.sortOrder, mCancel)
-            if (bookList != list)
-                position = 0
-            mBookList.value = list
         }
 
     private val mPosition = MutableLiveData(0)
@@ -34,15 +35,15 @@ internal class ViewModel : androidx.lifecycle.ViewModel() {
             mPosition.value = min(adaptor.itemCount, pos)
         }
 
-    private val mViews = MutableLiveData<ArrayList<ViewList>>(ArrayList())
-    val views: ArrayList<ViewList>
+    private val mViews = MutableLiveData<ArrayList<ViewEntity>>(ArrayList())
+    val views: ArrayList<ViewEntity>
         get() = mViews.value!!
 
-    private var mView: ViewList? = null
-    val view: ViewList?
+    private var mView: ViewEntity? = null
+    val view: ViewEntity?
         get() = mView
 
-    val db = BookDatabase()
+    lateinit var db: BookRoomDatabase
     lateinit var adaptor: BookAdapter
 
     val mLookup = BookLookup()
@@ -54,17 +55,15 @@ internal class ViewModel : androidx.lifecycle.ViewModel() {
             return
 
         // Open the data base and create the recycler adaptor
-        db.open(context)
+        db = BookRoomDatabase.create(context)
         adaptor = BookAdapter(context)
 
         // initialize the views array list
-        val list = views
-        val cursor: BookDatabase.ViewCursor = db.getViewList(mCancel)
-        cursor.moveToFirst()
-        do {
-            list.add(ViewList(cursor.name, cursor.id, cursor.order, cursor.sort))
-        } while (cursor.moveToNext())
-        list.sortBy { it.order }    // Sort by the order field
+        var list = db.getViewDao().get()
+        if (list.size == 0) {
+            db.getViewDao().add(ViewEntity(0, context.getString(R.string.books), 1, SORT_AUTHOR))
+            list = db.getViewDao().get()
+        }
 
         // Get the list and position arguments
         var books = bookList
@@ -81,8 +80,8 @@ internal class ViewModel : androidx.lifecycle.ViewModel() {
         mInitialized = true
     }
 
-    fun getBook(viewId: Long, bookId: Long): SQLiteCursor {
-        return db.getBook(bookId, mCancel)
+    fun getBook(bookId: Long): BookAndAuthors? {
+        return db.getBookDao().getBook(bookId)
     }
 
     override fun onCleared() {
@@ -91,14 +90,10 @@ internal class ViewModel : androidx.lifecycle.ViewModel() {
     }
 
     internal inner class AddBookByISBN(private val mList: Long) : BookLookup.LookupDelegate {
-        override fun bookLookupResult(result: Array<Book?>?, more: Boolean) {
-            if (result != null && result.isNotEmpty()) {
-                for (i in result.indices) {
-                    val book = result[i]
-                    val bookId: Long = db.addBook(book!!)
-                    if (bookId >= 0) {
-                        db.addBookToView(mList, bookId)
-                    }
+        override fun bookLookupResult(result: Array<Book>?, more: Boolean) {
+            if (result != null) {
+                for (book in result) {
+                    db.getBookDao().add(book, mList)
                 }
             }
         }
@@ -108,8 +103,8 @@ internal class ViewModel : androidx.lifecycle.ViewModel() {
 
     }
 
-    internal fun addBookByISBN(isbn: String?, list: Int) {
-        addBookByISBN(isbn, AddBookByISBN(list.toLong()))
+    internal fun addBookByISBN(isbn: String?, list: Long) {
+        addBookByISBN(isbn, AddBookByISBN(list))
     }
 
     internal fun addBookByISBN(isbn: String?, callback: AddBookByISBN) {

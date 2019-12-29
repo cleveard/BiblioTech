@@ -11,6 +11,8 @@ import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.BookDatabase.BookCursor
 import java.io.*
@@ -21,7 +23,7 @@ import java.util.concurrent.LinkedBlockingQueue
 
 
 internal class BookAdapter(private val context: Context) :
-    RecyclerView.Adapter<BookAdapter.ViewHolder>() {
+    ListAdapter<BookInView, BookAdapter.ViewHolder>(DIFF_CALLBACK) {
     private var mBookCursor: BookCursor? = null
     public var cursor: BookCursor?
         get() = mBookCursor
@@ -182,6 +184,21 @@ internal class BookAdapter(private val context: Context) :
 
         private val mThumbQueue =
             LinkedBlockingQueue<QueueEntry>(50)
+
+        val DIFF_CALLBACK =
+            object: DiffUtil.ItemCallback<BookInView>() {
+                override fun areItemsTheSame(
+                    oldUser: BookInView, newUser: BookInView): Boolean {
+                    // User properties may have changed if reloaded from the DB, but ID is fixed
+                    return oldUser.book.book.id == newUser.book.book.id;
+                }
+                override fun areContentsTheSame(
+                    oldUser: BookInView, newUser: BookInView): Boolean {
+                    // NOTE: if you use equals, your object must properly override Object#equals()
+                    // Incorrectly returning false here will result in too many animations.
+                    return oldUser.equals(newUser);
+                }
+            }
     }
 
     internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
