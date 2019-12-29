@@ -1,8 +1,15 @@
 package com.example.cleve.bibliotech
 
 import android.content.Context
+import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
+import androidx.sqlite.db.SupportSQLiteDatabase
+import java.util.*
+import java.util.concurrent.Executors
+import kotlin.Comparator
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 private const val BOOK_TABLE = "books"
 private const val BOOK_ID_COLUMN = "books_id"
@@ -35,6 +42,13 @@ private const val OPEN_COLUMN = "book_views_open"
 private const val BOOK_AUTHORS_VIEW = "book_authors_view"
 private const val ALL_AUTHORS_COLUMN = "book_authors_view_all_authors"
 
+private val SORT_ORDER: HashMap<String, Comparator<BookAndAuthors>> = hashMapOf<String, Comparator<BookAndAuthors>>(
+    BookEntity.SORT_BY_AUTHOR_LAST_FIRST to compareBy(
+        { if (it.authors.size > 0) it.authors[0].lastName else "" },
+        { if (it.authors.size > 0) it.authors[0].remainingName else "" }
+    )
+)
+
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
@@ -50,7 +64,11 @@ data class BookEntity(
     @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") val description: String,
     @ColumnInfo(name = SMALL_THUMB_COLUMN) val smallThumb: String?,
     @ColumnInfo(name = LARGE_THUMB_COLUMN) val largeThumb: String?
-)
+) {
+    companion object {
+        const val SORT_BY_AUTHOR_LAST_FIRST = "authorsLastFirst"
+    }
+}
 
 @Entity(tableName = AUTHORS_TABLE,
     indices = [
@@ -76,7 +94,8 @@ data class AuthorEntity(
     ],
     indices = [
         Index(value = [BOOK_AUTHORS_ID_COLUMN],unique = true),
-        Index(value = [BOOK_AUTHORS_AUTHOR_ID_COLUMN,BOOK_AUTHORS_BOOK_ID_COLUMN],unique = true)
+        Index(value = [BOOK_AUTHORS_AUTHOR_ID_COLUMN,BOOK_AUTHORS_BOOK_ID_COLUMN],unique = true),
+        Index(value = [BOOK_AUTHORS_BOOK_ID_COLUMN])
     ])
 data class BookAndAuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_AUTHORS_ID_COLUMN) val id: Long,
@@ -108,7 +127,8 @@ data class ViewEntity(
     ],
     indices = [
         Index(value = [BOOK_VIEWS_ID_COLUMN],unique = true),
-        Index(value = [BOOK_VIEWS_BOOK_ID_COLUMN,BOOK_VIEWS_VIEW_ID_COLUMN],unique = true)
+        Index(value = [BOOK_VIEWS_BOOK_ID_COLUMN,BOOK_VIEWS_VIEW_ID_COLUMN],unique = true),
+        Index(value = [BOOK_VIEWS_VIEW_ID_COLUMN])
     ])
 data class BookAndViewEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_VIEWS_ID_COLUMN) val id: Long,
@@ -131,30 +151,47 @@ data class BookView(
     @ColumnInfo(name = ALL_AUTHORS_COLUMN) val authors: String?
 )
 
-data class BookAuthor(
-    @Relation(
-        parentColumn = BOOK_AUTHORS_AUTHOR_ID_COLUMN,
-        entityColumn = AUTHORS_ID_COLUMN) val authors: List<AuthorEntity>
-)
-
-data class BookAndAuthors(
+class BookAndAuthors(
     @Embedded val book: BookEntity,
     @Relation(
-        entity = BookAndAuthorEntity::class,
+        entity = AuthorEntity::class,
         parentColumn = BOOK_ID_COLUMN,
-        entityColumn = BOOK_AUTHORS_BOOK_ID_COLUMN)
-    val authors: List<BookAuthor>
+        entityColumn = AUTHORS_ID_COLUMN,
+        associateBy = Junction(
+            BookAndAuthorEntity::class,
+            parentColumn = BOOK_AUTHORS_BOOK_ID_COLUMN,
+            entityColumn = BOOK_AUTHORS_AUTHOR_ID_COLUMN
+        )
+    )
+    val authors: List<AuthorEntity>
 )
 
 data class BookInView(
-    @Relation(parentColumn = BOOK_VIEWS_BOOK_ID_COLUMN, entityColumn = BOOK_ID_COLUMN) val book: BookAndAuthors
+    @Embedded val view: ViewEntity,
+    @Relation(
+        entity = BookEntity::class,
+        parentColumn = VIEWS_ID_COLUMN,
+        entityColumn = BOOK_ID_COLUMN,
+        associateBy = Junction(
+            BookAndViewEntity::class,
+            parentColumn = BOOK_VIEWS_VIEW_ID_COLUMN,
+            entityColumn = BOOK_VIEWS_BOOK_ID_COLUMN
+        )
+    )
+    val books: MutableList<BookAndAuthors>
 )
 
 @Dao
 abstract class ViewDao {
+    // Select all books for a view
+    @Transaction
+    @Query(value = "SELECT * FROM $VIEWS_TABLE"
+            + " WHERE $VIEWS_ID_COLUMN = :viewId")
+    abstract fun getBooksForView(viewId: Long): BookInView?
+
     // Get the list of views
     @Query(value = "SELECT * FROM $VIEWS_TABLE ORDER BY $VIEWS_ORDER_COLUMN")
-    abstract fun get(): List<ViewEntity>
+    abstract fun get(): LiveData<List<ViewEntity>>
 
     // Add a view
     @Insert
@@ -165,20 +202,35 @@ abstract class ViewDao {
     abstract fun add(bookAndView: BookAndViewEntity): Long
 
     // Add a book to a view
+    //@Transaction
     fun add(viewId: Long, bookId: Long, selected: Boolean = false, open: Boolean = false) {
         add(BookAndViewEntity(0, bookId, viewId, selected, open))
     }
+
+    //@Transaction
+    fun getBooksForView(viewId: Long, sort: String): List<BookAndAuthors> {
+        val bookInView = getBooksForView(viewId)
+        if (bookInView == null)
+            return ArrayList(0)
+        val compare = SORT_ORDER[sort]
+        if (compare != null)
+            bookInView.books.sortWith(compare)
+        return bookInView.books
+    }
+
 }
 
 @Dao
 abstract class AuthorDao {
     // Add multiple authors for a book
+    //@Transaction
     fun addAuthors(bookId: Long, authors: List<String>) {
         for (author in authors)
             addAuthor(bookId, author)
     }
 
     // Add a single author for a book
+    //@Transaction
     fun addAuthor(bookId: Long, author: String) {
         val last = StringBuilder()
         val remaining = StringBuilder()
@@ -251,16 +303,12 @@ abstract class BookDao(private val db: BookRoomDatabase) {
     //        + " ORDER BY :view.sort")
     //fun getBooksForView(view: ViewEntity): List<BookView>
 
-    @Query(value = "SELECT * FROM ($BOOK_VIEWS_TABLE"
-            + " WHERE $BOOK_VIEWS_VIEW_ID_COLUMN = :view.id"
-            + " ORDER BY :view.sort")
-    abstract fun getBooksForView(view: ViewEntity): List<BookInView>
-
     // Add a book to the data base
     @Insert
     abstract fun add(book: BookEntity): Long
 
     // Add book from description
+    //@Transaction
     fun add(book: Book, viewId: Long? = null, selected: Boolean = false, open: Boolean = false): Long {
         val bookId: Long = add(BookEntity(
             0,
@@ -281,8 +329,9 @@ abstract class BookDao(private val db: BookRoomDatabase) {
         return bookId
     }
 
+    @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
-            + " WHERE $BOOK_ID_COLUMN = bookId")
+            + " WHERE $BOOK_ID_COLUMN = :bookId")
     abstract fun getBook(bookId: Long): BookAndAuthors?
 }
 
@@ -295,18 +344,36 @@ abstract class BookDao(private val db: BookRoomDatabase) {
         BookAndViewEntity::class
     ],
     version = 1,
+    exportSchema = false,
     views = [BookView::class]
 )
+
 abstract class BookRoomDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_FILENAME = "books_database.db"
         fun create(context: Context): BookRoomDatabase {
-            return Room.databaseBuilder(
+            var create = false;
+            val db = Room.databaseBuilder(
                 context, BookRoomDatabase::class.java, DATABASE_FILENAME
+            ).addCallback(
+                object: RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        create = true;
+                    }
+                }
             ).build();
+            db.mCreated = create
+            return db;
         }
     }
+
     abstract fun getBookDao(): BookDao
     abstract fun getViewDao(): ViewDao
     abstract fun getAuthorDao(): AuthorDao
+
+    private var mCreated: Boolean = false
+    val created: Boolean
+        get() = mCreated
+
 }

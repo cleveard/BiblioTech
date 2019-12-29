@@ -1,10 +1,9 @@
 package com.example.cleve.bibliotech
 
-import android.database.sqlite.SQLiteCursor
 import android.os.Bundle
-import android.os.CancellationSignal
 import android.os.PersistableBundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
@@ -30,18 +29,18 @@ class MainActivity : AppCompatActivity(), ShareViewModel {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val navController = findNavController(R.id.nav_host_fragment)
+        val mainView = findViewById<DrawerLayout>(R.id.activity_main)
+        appBarConfiguration = AppBarConfiguration(navController.graph, mainView)
+        setupActionBarWithNavController(navController, appBarConfiguration)
+        findViewById<NavigationView>(R.id.navDrawer)
+            .setupWithNavController(navController)
+
         mViewModelProvider = ViewModelProvider(this, ViewModelProvider.AndroidViewModelFactory(application))
         mViewModel = mViewModelProvider[ViewModel::class.java]
         mViewModel.initialize(this, savedInstanceState)
 
         cache = this.cacheDir
-
-        val navController = findNavController(R.id.nav_host_fragment)
-        appBarConfiguration = AppBarConfiguration(navController.graph,
-            findViewById(R.id.activity_main))
-        setupActionBarWithNavController(navController, appBarConfiguration)
-        findViewById<NavigationView>(R.id.navDrawer)
-            .setupWithNavController(navController)
     }
 
     override fun onSupportNavigateUp(): Boolean {

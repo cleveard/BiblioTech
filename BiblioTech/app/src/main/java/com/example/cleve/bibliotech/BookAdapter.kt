@@ -23,7 +23,7 @@ import java.util.concurrent.LinkedBlockingQueue
 
 
 internal class BookAdapter(private val context: Context) :
-    ListAdapter<BookInView, BookAdapter.ViewHolder>(DIFF_CALLBACK) {
+    ListAdapter<BookAndAuthors, BookAdapter.ViewHolder>(DIFF_CALLBACK) {
     private var mBookCursor: BookCursor? = null
     public var cursor: BookCursor?
         get() = mBookCursor
@@ -186,14 +186,14 @@ internal class BookAdapter(private val context: Context) :
             LinkedBlockingQueue<QueueEntry>(50)
 
         val DIFF_CALLBACK =
-            object: DiffUtil.ItemCallback<BookInView>() {
+            object: DiffUtil.ItemCallback<BookAndAuthors>() {
                 override fun areItemsTheSame(
-                    oldUser: BookInView, newUser: BookInView): Boolean {
+                    oldUser: BookAndAuthors, newUser: BookAndAuthors): Boolean {
                     // User properties may have changed if reloaded from the DB, but ID is fixed
-                    return oldUser.book.book.id == newUser.book.book.id;
+                    return oldUser.book.id == newUser.book.id;
                 }
                 override fun areContentsTheSame(
-                    oldUser: BookInView, newUser: BookInView): Boolean {
+                    oldUser: BookAndAuthors, newUser: BookAndAuthors): Boolean {
                     // NOTE: if you use equals, your object must properly override Object#equals()
                     // Incorrectly returning false here will result in too many animations.
                     return oldUser.equals(newUser);

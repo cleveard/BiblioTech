@@ -22,7 +22,7 @@ private const val ARG_PARAM2 = "param2"
  * Use the [AddListFragment.newInstance] factory method to
  * create an instance of this fragment.
  */
-class AddListFragment : DialogFragment() {
+class AddListFragment : Fragment() {
     private var listener: OnFragmentInteractionListener? = null
 
     override fun onCreateView(
