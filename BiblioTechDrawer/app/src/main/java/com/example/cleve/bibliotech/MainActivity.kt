@@ -1,6 +1,8 @@
 package com.example.cleve.bibliotech
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import androidx.navigation.findNavController
@@ -13,8 +15,11 @@ import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import android.view.Menu
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.io.File
 
+const val KEY_EVENT_ACTION = "key_event_action"
+const val KEY_EVENT_EXTRA = "key_event_extra"
 class MainActivity : AppCompatActivity() {
     companion object {
         private lateinit var mCache: File
@@ -23,6 +28,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var appBarConfiguration: AppBarConfiguration
+    private var scanning = false
+
+    fun updateTitle() {
+        title = getString(R.string.list_fragment_title,
+            BookRepository.repo.list, getString(R.string.menu_list))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,7 +53,7 @@ class MainActivity : AppCompatActivity() {
         // menu should be considered as top level destinations.
         appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_list, R.id.nav_gallery, R.id.nav_slideshow,
+                R.id.nav_list, R.id.nav_scan, R.id.nav_slideshow,
                 R.id.nav_tools, R.id.nav_share, R.id.nav_send
             ), drawerLayout
         )
@@ -52,6 +63,14 @@ class MainActivity : AppCompatActivity() {
         // Create the data base
         BookDatabase.initialize(applicationContext)
         BookRepository.initialize(applicationContext)
+
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            // compare destination id
+            when (destination.id) {
+                R.id.nav_list -> updateTitle()
+            }
+            scanning = destination.id == R.id.nav_scan
+        }
 
         mCache = cacheDir
     }
@@ -65,5 +84,21 @@ class MainActivity : AppCompatActivity() {
     override fun onSupportNavigateUp(): Boolean {
         val navController = findNavController(R.id.nav_host_fragment)
         return navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
+    }
+
+    /** When key down event is triggered, relay it via local broadcast so fragments can handle it */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (scanning) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_VOLUME_DOWN,
+                KeyEvent.KEYCODE_VOLUME_UP -> {
+                    val intent =
+                        Intent(KEY_EVENT_ACTION).apply { putExtra(KEY_EVENT_EXTRA, keyCode) }
+                    LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }

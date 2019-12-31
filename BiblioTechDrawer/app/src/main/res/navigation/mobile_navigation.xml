@@ -8,14 +8,14 @@
     <fragment
         android:id="@+id/nav_list"
         android:name="com.example.cleve.bibliotech.ui.home.ListFragment"
-        android:label="@string/menu_list"
-        tools:layout="@layout/fragment_list" />
+        tools:layout="@layout/fragment_list">
+    </fragment>
 
     <fragment
-        android:id="@+id/nav_gallery"
-        android:name="com.example.cleve.bibliotech.ui.gallery.GalleryFragment"
+        android:id="@+id/nav_scan"
+        android:name="com.example.cleve.bibliotech.ui.gallery.ScanFragment"
         android:label="@string/menu_scan"
-        tools:layout="@layout/fragment_gallery" />
+        tools:layout="@layout/fragment_scan" />
 
     <fragment
         android:id="@+id/nav_slideshow"
