@@ -2,6 +2,8 @@ package com.example.cleve.bibliotech
 
 import android.os.Bundle
 import android.os.PersistableBundle
+import android.util.Log
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.ViewModelProvider
@@ -31,7 +33,26 @@ class MainActivity : AppCompatActivity(), ShareViewModel {
 
         val navController = findNavController(R.id.nav_host_fragment)
         val mainView = findViewById<DrawerLayout>(R.id.activity_main)
-        appBarConfiguration = AppBarConfiguration(navController.graph, mainView)
+        mainView.addDrawerListener(object: DrawerLayout.DrawerListener {
+            override fun onDrawerClosed(drawerView: View) {
+                Log.d("BiblioTech", String.format("onDrawerClosed %d", drawerView.id))
+            }
+
+            override fun onDrawerOpened(drawerView: View) {
+                Log.d("BiblioTech", String.format("onDrawerOpen %d", drawerView.id))
+            }
+
+            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {
+                Log.d("BiblioTech", String.format("onDrawerSlide %d, %f", drawerView.id, slideOffset))
+            }
+
+            override fun onDrawerStateChanged(newState: Int) {
+                Log.d("BiblioTech", String.format("onDrawerStateChanged %d", newState))
+            }
+        })
+        appBarConfiguration = AppBarConfiguration.Builder(navController.graph)
+            .setDrawerLayout(mainView)
+            .build()
         setupActionBarWithNavController(navController, appBarConfiguration)
         findViewById<NavigationView>(R.id.navDrawer)
             .setupWithNavController(navController)

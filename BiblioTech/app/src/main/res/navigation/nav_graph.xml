@@ -9,14 +9,14 @@
         android:name="com.example.cleve.bibliotech.ListFragment"
         android:label="Books"
         tools:layout="@layout/fragment_list" >
-        <!-- <action
+        <action
             android:id="@+id/action_listFragment_to_addListFragment"
-            app:destination="@id/addListFragment" /> -->
+            app:destination="@id/addListFragment" />
     </fragment>
-    <!-- <fragment
+    <fragment
         android:id="@+id/addListFragment"
         android:name="com.example.cleve.bibliotech.AddListFragment" >
         android:label="Add Book List"
         tools:layout="@layout/fragment_add_list" >
-    </fragment> -->
+    </fragment>
 </navigation>
