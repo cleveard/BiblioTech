@@ -22,7 +22,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Camera control and gallery buttons -->
+    <!-- Camera control and scan buttons -->
     <ImageButton
         android:id="@id/camera_accept_button"
         android:layout_width="@dimen/round_button_large"

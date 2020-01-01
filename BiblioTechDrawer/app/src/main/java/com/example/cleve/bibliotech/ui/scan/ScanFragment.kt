@@ -1,57 +1,36 @@
-package com.example.cleve.bibliotech.ui.gallery
+package com.example.cleve.bibliotech.ui.scan
 
+//import android.hardware.Camera
+
+/* Import ZBar Class files */
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-//import android.hardware.Camera
 import android.hardware.display.DisplayManager
-import android.media.MediaScannerConnection
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.*
-import android.webkit.MimeTypeMap
 import android.widget.ImageButton
-import android.widget.TextView
 import android.widget.Toast
+import androidx.camera.core.*
+import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
-import androidx.core.view.setPadding
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.camera.core.AspectRatio
-import androidx.camera.core.CameraX
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageAnalysisConfig
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCapture.CaptureMode
-import androidx.camera.core.ImageCapture.Metadata
-import androidx.camera.core.ImageCaptureConfig
-import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
-import androidx.camera.core.PreviewConfig
-import androidx.navigation.Navigation
 import com.example.cleve.bibliotech.KEY_EVENT_ACTION
 import com.example.cleve.bibliotech.KEY_EVENT_EXTRA
-import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.io.File
-import java.lang.Exception
+import com.yanzhenjie.zbar.Config
+import com.yanzhenjie.zbar.Image
+import com.yanzhenjie.zbar.ImageScanner
 import java.nio.ByteBuffer
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
@@ -60,16 +39,43 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
+
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
 /** Helper type alias used for analysis use case callbacks */
-typealias LumaListener = (luma: Double) -> Unit
+typealias BarcodeListener = (codes: Array<String>) -> Unit
 
+/**
+ * Simulate a button click, including a small delay while it is being pressed to trigger the
+ * appropriate animations.
+ */
+fun ImageButton.simulateClick(delay: Long = 50) {
+    performClick()
+    isPressed = true
+    invalidate()
+    postDelayed({
+        invalidate()
+        isPressed = false
+    }, delay)
+}
 
 class ScanFragment : Fragment() {
 
-    private lateinit var galleryViewModel: GalleryViewModel
+    private lateinit var scanViewModel: ScanViewModel
+    private lateinit var container: ConstraintLayout
+    private lateinit var viewFinder: TextureView
+    private lateinit var broadcastManager: LocalBroadcastManager
+    private lateinit var mainExecutor: Executor
+    private lateinit var scanner: ImageScanner
+
+    private var displayId = -1
+    private var lensFacing = CameraX.LensFacing.BACK
+    private var preview: Preview? = null
+    private var imageCapture: ImageCapture? = null
+    private var imageAnalyzer: ImageAnalysis? = null
+    private var previewing = false
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +83,11 @@ class ScanFragment : Fragment() {
         // Mark this as a retain fragment, so the lifecycle does not get restarted on config change
         retainInstance = true
         mainExecutor = ContextCompat.getMainExecutor(requireContext())
+
+        // Instance barcode scanner
+        scanner = ImageScanner()
+        scanner.setConfig(0, Config.X_DENSITY, 3)
+        scanner.setConfig(0, Config.Y_DENSITY, 3)
     }
 
     override fun onRequestPermissionsResult(
@@ -93,17 +104,6 @@ class ScanFragment : Fragment() {
         }
     }
 
-    private lateinit var container: ConstraintLayout
-    private lateinit var viewFinder: TextureView
-    private lateinit var broadcastManager: LocalBroadcastManager
-    private lateinit var mainExecutor: Executor
-
-    private var displayId = -1
-    private var lensFacing = CameraX.LensFacing.BACK
-    private var preview: Preview? = null
-    private var imageCapture: ImageCapture? = null
-    private var imageAnalyzer: ImageAnalysis? = null
-
     /** Volume down button receiver used to trigger shutter */
     private val volumeDownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -111,7 +111,9 @@ class ScanFragment : Fragment() {
                 // When the volume down button is pressed, simulate a shutter button click
                 KeyEvent.KEYCODE_VOLUME_DOWN,
                 KeyEvent.KEYCODE_VOLUME_UP -> {
-                    // TODO: Accept book
+                    val shutter = container
+                        .findViewById<ImageButton>(R.id.camera_accept_button)
+                    shutter.simulateClick()
                 }
             }
         }
@@ -155,13 +157,17 @@ class ScanFragment : Fragment() {
         displayManager.unregisterDisplayListener(displayListener)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? =
         inflater.inflate(R.layout.fragment_scan, container, false)
 
-    @SuppressLint("MissingPermission")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         container = view as ConstraintLayout
@@ -179,6 +185,8 @@ class ScanFragment : Fragment() {
 
         // Wait for the views to be properly laid out
         viewFinder.post {
+            previewing = true;
+
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
 
@@ -241,19 +249,20 @@ class ScanFragment : Fragment() {
 
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor,
-                LuminosityAnalyzer { luma ->
-                    // Values returned from our analyzer are passed to the attached listener
-                    // We log image analysis results here --
-                    // you should do something useful instead!
-                    val fps = (analyzer as LuminosityAnalyzer).framesPerSecond
-                    Log.d(TAG, "Average luminosity: $luma. " +
-                            "Frames per second: ${"%.01f".format(fps)}")
+                BarcodeScanner { codes ->
+                    Toast.makeText(
+                        context,
+                        "ISBN is ${codes.joinToString(", ")}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 })
         }
 
         // Apply declared configs to CameraX using the same lifecycle owner
         CameraX.bindToLifecycle(
             viewLifecycleOwner, preview, imageCapture, imageAnalyzer)
+
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 
     /**
@@ -277,7 +286,6 @@ class ScanFragment : Fragment() {
     }
 
     /** Method used to re-draw the camera UI controls, called every time configuration changes */
-    @SuppressLint("RestrictedApi")
     private fun updateCameraUi() {
 
         // Remove previous UI if any
@@ -286,7 +294,11 @@ class ScanFragment : Fragment() {
         }
 
         // Inflate a new view containing all UI for controlling the camera
-        View.inflate(requireContext(), R.layout.camera_ui_container, container)
+        val controls = View.inflate(requireContext(), R.layout.camera_ui_container, container)
+
+        controls.findViewById<ImageButton>(R.id.camera_accept_button).setOnClickListener {
+            previewing = !previewing
+        }
     }
 
 
@@ -296,18 +308,18 @@ class ScanFragment : Fragment() {
      * <p>All we need to do is override the function `analyze` with our desired operations. Here,
      * we compute the average luminosity of the image by looking at the Y plane of the YUV frame.
      */
-    private class LuminosityAnalyzer(listener: LumaListener? = null) : ImageAnalysis.Analyzer {
+    private inner class BarcodeScanner(listener: BarcodeListener? = null) : ImageAnalysis.Analyzer {
         private val frameRateWindow = 8
         private val frameTimestamps = ArrayDeque<Long>(5)
-        private val listeners = ArrayList<LumaListener>().apply { listener?.let { add(it) } }
+        private val listeners = ArrayList<BarcodeListener>().apply { listener?.let { add(it) } }
         private var lastAnalyzedTimestamp = 0L
         var framesPerSecond: Double = -1.0
             private set
 
         /**
-         * Used to add listeners that will be called with each luma computed
+         * Used to add listeners that will be called with each barcode scanned
          */
-        fun onFrameAnalyzed(listener: LumaListener) = listeners.add(listener)
+        fun onFrameAnalyzed(listener: BarcodeListener) = listeners.add(listener)
 
         /**
          * Helper extension function used to extract a byte array from an image plane buffer
@@ -336,7 +348,7 @@ class ScanFragment : Fragment() {
          */
         override fun analyze(image: ImageProxy, rotationDegrees: Int) {
             // If there are no listeners attached, we don't need to perform analysis
-            if (listeners.isEmpty()) return
+            if (listeners.isEmpty() || !previewing) return
 
             // Keep track of frames analyzed
             val currentTime = System.currentTimeMillis()
@@ -349,25 +361,27 @@ class ScanFragment : Fragment() {
             framesPerSecond = 1.0 / ((timestampFirst - timestampLast) /
                     frameTimestamps.size.coerceAtLeast(1).toDouble()) * 1000.0
 
-            // Calculate the average luma no more often than every second
-            if (frameTimestamps.first - lastAnalyzedTimestamp >= TimeUnit.SECONDS.toMillis(1)) {
+            // scan barcode no more often than every .25 seconds
+            if (frameTimestamps.first - lastAnalyzedTimestamp >= TimeUnit.MILLISECONDS.toMillis(250)) {
                 lastAnalyzedTimestamp = frameTimestamps.first
 
+                val barcode =
+                    Image(image.width, image.height, "GREY")
                 // Since format in ImageAnalysis is YUV, image.planes[0] contains the luminance
-                //  plane
-                val buffer = image.planes[0].buffer
+                //  plane. Use that as a gray level image
+                val data = image.planes[0].buffer.toByteArray()
+                barcode.data = data
 
-                // Extract image data from callback object
-                val data = buffer.toByteArray()
+                val result: Int = scanner.scanImage(barcode)
 
-                // Convert the data into an array of pixel values ranging 0-255
-                val pixels = data.map { it.toInt() and 0xFF }
-
-                // Compute average luminance for the image
-                val luma = pixels.average()
-
-                // Call all listeners with new value
-                listeners.forEach { it(luma) }
+                if (result != 0) {
+                    previewing = false
+                    val syms = scanner.results
+                    val i = syms.iterator()
+                    val codes = Array<String>(syms.size) { i.next().data }
+                    // Call all listeners with new value
+                    listeners.forEach { it(codes) }
+                }
             }
         }
     }

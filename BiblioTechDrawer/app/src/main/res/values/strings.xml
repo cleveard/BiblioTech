@@ -23,5 +23,5 @@
     <string name="capture_accept_alt">Capture</string>
 
     <string name="list_fragment_title">%1$s %2$s</string>
-    <string name="scan_fragment_title">%2$s -> %1$s</string>
+    <string name="scan_fragment_title">%2$s  \u21e8  %1$s</string>
 </resources>

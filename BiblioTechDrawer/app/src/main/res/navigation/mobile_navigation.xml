@@ -13,8 +13,7 @@
 
     <fragment
         android:id="@+id/nav_scan"
-        android:name="com.example.cleve.bibliotech.ui.gallery.ScanFragment"
-        android:label="@string/menu_scan"
+        android:name="com.example.cleve.bibliotech.ui.scan.ScanFragment"
         tools:layout="@layout/fragment_scan" />
 
     <fragment

@@ -30,9 +30,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appBarConfiguration: AppBarConfiguration
     private var scanning = false
 
-    fun updateTitle() {
-        title = getString(R.string.list_fragment_title,
-            BookRepository.repo.list, getString(R.string.menu_list))
+    fun updateTitle(titleId: Int, menuId: Int) {
+        title = getString(titleId,
+            BookRepository.repo.list, getString(menuId))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,7 +67,8 @@ class MainActivity : AppCompatActivity() {
         navController.addOnDestinationChangedListener { _, destination, _ ->
             // compare destination id
             when (destination.id) {
-                R.id.nav_list -> updateTitle()
+                R.id.nav_list -> updateTitle(R.string.list_fragment_title, R.string.menu_list)
+                R.id.nav_scan -> updateTitle(R.string.scan_fragment_title, R.string.menu_scan)
             }
             scanning = destination.id == R.id.nav_scan
         }
