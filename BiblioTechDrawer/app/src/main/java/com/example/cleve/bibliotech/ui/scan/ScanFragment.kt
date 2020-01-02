@@ -157,11 +157,6 @@ class ScanFragment : Fragment() {
         displayManager.unregisterDisplayListener(displayListener)
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -185,8 +180,6 @@ class ScanFragment : Fragment() {
 
         // Wait for the views to be properly laid out
         viewFinder.post {
-            previewing = true;
-
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
 
@@ -261,8 +254,6 @@ class ScanFragment : Fragment() {
         // Apply declared configs to CameraX using the same lifecycle owner
         CameraX.bindToLifecycle(
             viewLifecycleOwner, preview, imageCapture, imageAnalyzer)
-
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 
     /**
@@ -297,11 +288,34 @@ class ScanFragment : Fragment() {
         val controls = View.inflate(requireContext(), R.layout.camera_ui_container, container)
 
         controls.findViewById<ImageButton>(R.id.camera_accept_button).setOnClickListener {
-            previewing = !previewing
+            focus()
+            previewing = true
         }
     }
 
+    private fun focus(): Boolean {
+        val x = viewFinder.getX() + viewFinder.getWidth() / 2f
+        val y = viewFinder.getY() + viewFinder.getHeight() / 2f
 
+        val pointFactory = DisplayOrientedMeteringPointFactory(viewFinder.display,
+            lensFacing, viewFinder.width.toFloat(), viewFinder.height.toFloat())
+        val afPointWidth = 1.0f / 6.0f  // 1/6 total area
+        val aePointWidth = afPointWidth * 1.5f
+        val afPoint = pointFactory.createPoint(x, y, afPointWidth, 1.0f)
+        val aePoint = pointFactory.createPoint(x, y, aePointWidth, 1.0f)
+
+        try {
+            CameraX.getCameraControl(lensFacing).startFocusAndMetering(
+                FocusMeteringAction.Builder.from(afPoint, FocusMeteringAction.MeteringMode.AF_ONLY)
+                                           .addPoint(aePoint, FocusMeteringAction.MeteringMode.AE_ONLY)
+                                           .build()
+            )
+        } catch (e: CameraInfoUnavailableException) {
+            Log.d(TAG, "cannot access camera", e)
+        }
+
+        return true
+    }
     /**
      * Our custom image analysis class.
      *
