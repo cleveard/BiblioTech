@@ -8,7 +8,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.os.Bundle
@@ -27,9 +26,12 @@ import com.example.cleve.bibliotech.KEY_EVENT_ACTION
 import com.example.cleve.bibliotech.KEY_EVENT_EXTRA
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
+import com.example.cleve.bibliotech.BookLookup
+import com.example.cleve.bibliotech.Book
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
+import com.yanzhenjie.zbar.Symbol
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.Executor
@@ -75,6 +77,7 @@ class ScanFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private var imageAnalyzer: ImageAnalysis? = null
     private var previewing = false
+    private val lookup = BookLookup()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -241,14 +244,38 @@ class ScanFragment : Fragment() {
         }.build()
 
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
-            setAnalyzer(mainExecutor,
-                BarcodeScanner { codes ->
+            setAnalyzer(mainExecutor, BarcodeScanner(
+                fun(codes: Array<String>) {
                     Toast.makeText(
                         context,
                         "ISBN is ${codes.joinToString(", ")}",
-                        android.widget.Toast.LENGTH_LONG
+                        Toast.LENGTH_LONG
                     ).show()
-                })
+
+                    for (isbn in codes) {
+                        lookup.lookupISBN(object : BookLookup.LookupDelegate {
+                            override fun bookLookupResult(result: Array<Book>?, more: Boolean) {
+                                val titles = Array(result?.size ?: 0) {
+                                    result!![it].mTitle
+                                }.joinToString("\n")
+                                Toast.makeText(
+                                    context,
+                                    "Book title $titles",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+
+                            override fun bookLookupError(error: String?) {
+                                Toast.makeText(
+                                    context,
+                                    "Error finding book: ${error ?: "Unknown error"}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }, isbn)
+                    }
+                }
+            ))
         }
 
         // Apply declared configs to CameraX using the same lifecycle owner
@@ -294,8 +321,8 @@ class ScanFragment : Fragment() {
     }
 
     private fun focus(): Boolean {
-        val x = viewFinder.getX() + viewFinder.getWidth() / 2f
-        val y = viewFinder.getY() + viewFinder.getHeight() / 2f
+        val x = viewFinder.x + viewFinder.width / 2f
+        val y = viewFinder.y + viewFinder.height / 2f
 
         val pointFactory = DisplayOrientedMeteringPointFactory(viewFinder.display,
             lensFacing, viewFinder.width.toFloat(), viewFinder.height.toFloat())
@@ -390,9 +417,19 @@ class ScanFragment : Fragment() {
 
                 if (result != 0) {
                     previewing = false
-                    val syms = scanner.results
-                    val i = syms.iterator()
-                    val codes = Array<String>(syms.size) { i.next().data }
+                    val symbols = scanner.results
+                    val extract = arrayOfNulls<String>(symbols.size)
+                    var i = 0
+                    for (sym in symbols) {
+                        when (sym.type) {
+                            Symbol.ISBN10,
+                            Symbol.ISBN13,
+                            Symbol.EAN13 ->
+                                extract[i++] = sym.data
+                        }
+                    }
+
+                    val codes = Array(i) { extract[it]!! }
                     // Call all listeners with new value
                     listeners.forEach { it(codes) }
                 }
