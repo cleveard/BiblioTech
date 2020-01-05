@@ -63,7 +63,7 @@ class BookRepository {
         }
     }
 
-    fun addBook(book: Book, view: ViewEntity) {
+    fun addBook(book: BookAndAuthors, view: ViewEntity) {
         executor.execute {
             db.getBookDao().add(book, view.id)
         }

@@ -1,10 +1,9 @@
 package com.example.cleve.bibliotech
 
 import android.content.Context
-import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
-import androidx.sqlite.db.SupportSQLiteDatabase
+import java.util.*
 import kotlin.Comparator
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -16,6 +15,12 @@ private const val ISBN_COLUMN = "books_isbn"
 private const val TITLE_COLUMN = "books_title"
 private const val SUBTITLE_COLUMN = "books_subtitle"
 private const val DESCRIPTION_COLUMN = "books_description"
+private const val PAGE_COUNT_COLUMN = "books_page_count"
+private const val BOOK_COUNT_COLUMN = "books_count"
+private const val VOLUME_LINK = "books_volume_link"
+private const val RATING_COLUMN = "books_rating"
+private const val DATE_ADDED_COLUMN = "books_date_added"
+private const val DATE_MODIFIED_COLUMN = "books_date_modified"
 private const val SMALL_THUMB_COLUMN = "books_small_thumb"
 private const val LARGE_THUMB_COLUMN = "books_large_thumb"
 private const val AUTHORS_TABLE = "authors"
@@ -26,6 +31,13 @@ private const val BOOK_AUTHORS_TABLE = "book_authors"
 private const val BOOK_AUTHORS_ID_COLUMN = "book_authors_id"
 private const val BOOK_AUTHORS_BOOK_ID_COLUMN = "book_authors_book_id"
 private const val BOOK_AUTHORS_AUTHOR_ID_COLUMN = "book_authors_author_id"
+private const val CATEGORIES_TABLE = "categories"
+private const val CATEGORIES_ID_COLUMN = "categories_id"
+private const val CATEGORY_COLUMN = "categories_category"
+private const val BOOK_CATEGORIES_TABLE = "book_categories"
+private const val BOOK_CATEGORIES_ID_COLUMN = "book_categories_id"
+private const val BOOK_CATEGORIES_BOOK_ID_COLUMN = "book_categories_book_id"
+private const val BOOK_CATEGORIES_CATEGORY_ID_COLUMN = "book_categories_category_id"
 private const val VIEWS_TABLE = "views"
 private const val VIEWS_ID_COLUMN = "views_id"
 private const val VIEWS_NAME_COLUMN = "views_name"
@@ -54,12 +66,18 @@ private val SORT_ORDER: HashMap<String, Comparator<BookInView>> = hashMapOf(
         Index(value = [ISBN_COLUMN],unique = true)
     ])
 data class BookEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
     @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?,
     @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") val title: String,
     @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") val subTitle: String,
     @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") val description: String,
+    @ColumnInfo(name = PAGE_COUNT_COLUMN,defaultValue = "0") val pageCount: Int,
+    @ColumnInfo(name = BOOK_COUNT_COLUMN,defaultValue = "1") val bookCount: Int,
+    @ColumnInfo(name = VOLUME_LINK,defaultValue = "") val linkUrl: String,
+    @ColumnInfo(name = RATING_COLUMN,defaultValue = "-1.0") val rating: Double,
+    @ColumnInfo(name = DATE_ADDED_COLUMN,defaultValue = "0") var added: Long,
+    @ColumnInfo(name = DATE_MODIFIED_COLUMN,defaultValue = "0") var modified: Long,
     @ColumnInfo(name = SMALL_THUMB_COLUMN) val smallThumb: String?,
     @ColumnInfo(name = LARGE_THUMB_COLUMN) val largeThumb: String?
 ) {
@@ -106,7 +124,7 @@ data class BookEntity(
         Index(value = [LAST_NAME_COLUMN,REMAINING_COLUMN],unique = true)
     ])
 data class AuthorEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) val id: Long,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "") val lastName: String,
     @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "") val remainingName: String
 ) {
@@ -148,9 +166,59 @@ data class AuthorEntity(
         Index(value = [BOOK_AUTHORS_BOOK_ID_COLUMN])
     ])
 data class BookAndAuthorEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_AUTHORS_ID_COLUMN) val id: Long,
-    @ColumnInfo(name = BOOK_AUTHORS_AUTHOR_ID_COLUMN) val authorId: Long,
-    @ColumnInfo(name = BOOK_AUTHORS_BOOK_ID_COLUMN) val bookId: Long
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_AUTHORS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = BOOK_AUTHORS_AUTHOR_ID_COLUMN) var authorId: Long,
+    @ColumnInfo(name = BOOK_AUTHORS_BOOK_ID_COLUMN) var bookId: Long
+)
+
+@Entity(tableName = CATEGORIES_TABLE,
+    indices = [
+        Index(value = [CATEGORIES_ID_COLUMN],unique = true),
+        Index(value = [CATEGORY_COLUMN],unique = true)
+    ])
+data class CategoryEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = CATEGORIES_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "") val category: String
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as CategoryEntity
+
+        if (id != other.id) return false
+        if (category != other.category) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + category.hashCode()
+        return result
+    }
+}
+
+@Entity(tableName = BOOK_CATEGORIES_TABLE,
+    foreignKeys = [
+        ForeignKey(entity = BookEntity::class,
+            parentColumns = [BOOK_ID_COLUMN],
+            childColumns = [BOOK_CATEGORIES_BOOK_ID_COLUMN],
+            onDelete = CASCADE),
+        ForeignKey(entity = CategoryEntity::class,
+            parentColumns = [CATEGORIES_ID_COLUMN],
+            childColumns = [BOOK_CATEGORIES_CATEGORY_ID_COLUMN],
+            onDelete = CASCADE)
+    ],
+    indices = [
+        Index(value = [BOOK_CATEGORIES_ID_COLUMN],unique = true),
+        Index(value = [BOOK_CATEGORIES_CATEGORY_ID_COLUMN,BOOK_CATEGORIES_BOOK_ID_COLUMN],unique = true),
+        Index(value = [BOOK_CATEGORIES_BOOK_ID_COLUMN])
+    ])
+data class BookAndCategoryEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_CATEGORIES_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = BOOK_CATEGORIES_CATEGORY_ID_COLUMN) var categoryId: Long,
+    @ColumnInfo(name = BOOK_CATEGORIES_BOOK_ID_COLUMN) var bookId: Long
 )
 
 @Entity(tableName = VIEWS_TABLE,
@@ -158,7 +226,7 @@ data class BookAndAuthorEntity(
         Index(value = [VIEWS_ID_COLUMN],unique = true)
     ])
 data class ViewEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) val id: Long,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VIEWS_NAME_COLUMN) val name: String,
     @ColumnInfo(name = VIEWS_ORDER_COLUMN) val order: Int,
     @ColumnInfo(name = VIEWS_SORT_COLUMN) val sort: String
@@ -181,9 +249,9 @@ data class ViewEntity(
         Index(value = [BOOK_VIEWS_VIEW_ID_COLUMN])
     ])
 data class BookAndViewEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_VIEWS_ID_COLUMN) val id: Long,
-    @ColumnInfo(name = BOOK_VIEWS_BOOK_ID_COLUMN) val bookId: Long,
-    @ColumnInfo(name = BOOK_VIEWS_VIEW_ID_COLUMN) val viewId: Long,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_VIEWS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = BOOK_VIEWS_BOOK_ID_COLUMN) var bookId: Long,
+    @ColumnInfo(name = BOOK_VIEWS_VIEW_ID_COLUMN) var viewId: Long,
     @ColumnInfo(name = SELECTED_COLUMN) val isSelected: Boolean,
     @ColumnInfo(name = OPEN_COLUMN) val isOpen: Boolean
 ) {
@@ -237,7 +305,18 @@ open class BookAndAuthors(
             entityColumn = BOOK_AUTHORS_AUTHOR_ID_COLUMN
         )
     )
-    val authors: List<AuthorEntity>
+    val authors: List<AuthorEntity>,
+    @Relation(
+        entity = CategoryEntity::class,
+        parentColumn = BOOK_ID_COLUMN,
+        entityColumn = CATEGORIES_ID_COLUMN,
+        associateBy = Junction(
+            BookAndCategoryEntity::class,
+            parentColumn = BOOK_CATEGORIES_BOOK_ID_COLUMN,
+            entityColumn = BOOK_CATEGORIES_CATEGORY_ID_COLUMN
+        )
+    )
+    val categories: List<CategoryEntity>
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -337,27 +416,22 @@ abstract class ViewDao {
 abstract class AuthorDao {
     // Add multiple authors for a book
     //@Transaction
-    fun addAuthors(bookId: Long, authors: List<String>) {
+    fun add(bookId: Long, authors: List<AuthorEntity>) {
         for (author in authors)
-            addAuthor(bookId, author)
+            add(bookId, author)
     }
 
     // Add a single author for a book
     //@Transaction
-    fun addAuthor(bookId: Long, author: String) {
-        val last = StringBuilder()
-        val remaining = StringBuilder()
-        // Separate the author into last name and remaining
-        separateAuthor(author, last, remaining)
-
+    fun add(bookId: Long, author: AuthorEntity) {
         // Find the author
-        val list: List<AuthorEntity> = findByName(last.toString(), remaining.toString())
-        val authorId: Long = if (list.isNotEmpty()) {
+        val list: List<AuthorEntity> = findByName(author.lastName, author.remainingName)
+        author.id = if (list.isNotEmpty()) {
             list[0].id
         } else {
-            add(AuthorEntity(0, last.toString(), remaining.toString()))
+            add(AuthorEntity(0, author.lastName, author.remainingName))
         }
-        add(bookId, authorId)
+        add(bookId, author.id)
     }
 
     // Get all authors
@@ -381,30 +455,44 @@ abstract class AuthorDao {
     fun add(authorId: Long, bookId: Long) {
         add(BookAndAuthorEntity(0, authorId, bookId))
     }
+}
 
-    // Break authors name in to last and rest.
-    private fun separateAuthor(
-        in_name: String,
-        last: StringBuilder,
-        remaining: StringBuilder
-    ) {
-        var name = in_name
-        name = name.trim { it <= ' ' }
-        // Look for a , assume last, remaining if found
-        var lastIndex = name.lastIndexOf(',')
-        if (lastIndex > 0) {
-            last.append(name.substring(0, lastIndex).trim { it <= ' ' })
-            remaining.append(name.substring(lastIndex + 1).trim { it <= ' ' })
-        } else { // look for a space, assume remaining last if found
-            lastIndex = name.lastIndexOf(' ')
-            if (lastIndex > 0) {
-                last.append(name.substring(lastIndex))
-                remaining.append(name.substring(0, lastIndex).trim { it <= ' ' })
-            } else { // No space or commas, only last name
-                last.append(name)
-            }
-        }
+@Dao
+abstract class CategoryDao {
+    @Insert
+    abstract fun add(category: CategoryEntity): Long
+
+    @Insert
+    abstract fun add(bookCategory: BookAndCategoryEntity) : Long
+
+    // Add multiple categories for a book
+    //@Transaction
+    fun add(bookId: Long, categories: List<CategoryEntity>) {
+        for (cat in categories)
+            add(bookId, cat)
     }
+
+    // Add a single categories for a book
+    //@Transaction
+    fun add(bookId: Long, category: CategoryEntity) {
+        // Find the author
+        val list: List<CategoryEntity> = findByName(category.category)
+        category.id = if (list.isNotEmpty()) {
+            list[0].id
+        } else {
+            add(category)
+        }
+        add(BookAndCategoryEntity(
+            id = 0,
+            categoryId = category.id,
+            bookId = bookId
+        ))
+    }
+
+    // Find an author by name
+    @Query(value = "SELECT * FROM $CATEGORIES_TABLE"
+            + " WHERE $CATEGORY_COLUMN = :category")
+    abstract fun findByName(category: String): List<CategoryEntity>
 }
 
 @Dao
@@ -422,24 +510,19 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Add book from description
     //@Transaction
-    fun add(book: Book, viewId: Long? = null, selected: Boolean = false, open: Boolean = false): Long {
-        val bookId: Long = add(BookEntity(
-            0,
-            book.mVolumeID,
-            book.mISBN,
-            book.mTitle,
-            book.mSubTitle,
-            book.mDescription,
-            book.mThumbnails[0],
-            book.mThumbnails[1]
-        ))
+    fun add(book: BookAndAuthors, viewId: Long? = null, selected: Boolean = false, open: Boolean = false): Long {
+        val time = Calendar.getInstance().time.time
+        book.book.added = time
+        book.book.modified = time
+        book.book.id = add(book.book)
 
-        db.getAuthorDao().addAuthors(bookId, book.mAuthors)
+        db.getCategoryDao().add(book.book.id, book.categories)
+        db.getAuthorDao().add(book.book.id, book.authors)
 
         if (viewId != null)
-            db.getViewDao().add(viewId, bookId, selected, open)
+            db.getViewDao().add(viewId, book.book.id, selected, open)
 
-        return bookId
+        return book.book.id
     }
 
     @Transaction
@@ -454,7 +537,9 @@ abstract class BookDao(private val db: BookDatabase) {
         AuthorEntity::class,
         BookAndAuthorEntity::class,
         ViewEntity::class,
-        BookAndViewEntity::class
+        BookAndViewEntity::class,
+        CategoryEntity::class,
+        BookAndCategoryEntity::class
     ],
     version = 1,
     exportSchema = false,
@@ -490,4 +575,5 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getBookDao(): BookDao
     abstract fun getViewDao(): ViewDao
     abstract fun getAuthorDao(): AuthorDao
+    abstract fun getCategoryDao(): CategoryDao
 }

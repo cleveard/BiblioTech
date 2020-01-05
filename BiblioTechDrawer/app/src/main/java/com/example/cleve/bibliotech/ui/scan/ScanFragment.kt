@@ -22,12 +22,10 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.example.cleve.bibliotech.KEY_EVENT_ACTION
-import com.example.cleve.bibliotech.KEY_EVENT_EXTRA
+import com.example.cleve.bibliotech.*
+import com.example.cleve.bibliotech.BookLookup
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
-import com.example.cleve.bibliotech.BookLookup
-import com.example.cleve.bibliotech.Book
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
@@ -254,9 +252,9 @@ class ScanFragment : Fragment() {
 
                     for (isbn in codes) {
                         lookup.lookupISBN(object : BookLookup.LookupDelegate {
-                            override fun bookLookupResult(result: Array<Book>?, more: Boolean) {
+                            override fun bookLookupResult(result: Array<BookAndAuthors>?, more: Boolean) {
                                 val titles = Array(result?.size ?: 0) {
-                                    result!![it].mTitle
+                                    result!![it].book.title
                                 }.joinToString("\n")
                                 Toast.makeText(
                                     context,
