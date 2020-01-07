@@ -1,4 +1,4 @@
-package com.example.cleve.bibliotech.ui.home
+package com.example.cleve.bibliotech.ui.list
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData

@@ -1,5 +1,6 @@
-package com.example.cleve.bibliotech
+package com.example.cleve.bibliotech.gb
 
+import com.example.cleve.bibliotech.db.*
 import android.os.AsyncTask
 import org.json.JSONArray
 import org.json.JSONObject
@@ -12,7 +13,7 @@ import java.net.HttpURLConnection
 import java.net.MalformedURLException
 import java.net.URL
 
-internal class BookLookup {
+internal class GoogleBookLookup {
     internal interface LookupDelegate {
         fun bookLookupResult(result: Array<BookAndAuthors>?, more: Boolean)
         fun bookLookupError(error: String?)
@@ -46,7 +47,7 @@ internal class BookLookup {
         )
     }
 
-    private class LookupTask internal constructor(parent: BookLookup, val mResults: LookupDelegate) :
+    private class LookupTask internal constructor(parent: GoogleBookLookup, val mResults: LookupDelegate) :
         AsyncTask<String?, Void?, Array<BookAndAuthors>?>() {
         val mParent = WeakReference(parent)
         override fun doInBackground(vararg params: String?): Array<BookAndAuthors>? {

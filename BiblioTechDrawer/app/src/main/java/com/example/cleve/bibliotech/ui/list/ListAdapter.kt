@@ -1,5 +1,7 @@
-package com.example.cleve.bibliotech
+package com.example.cleve.bibliotech.ui.list
 
+import com.example.cleve.bibliotech.db.*
+import com.example.cleve.bibliotech.*
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -23,7 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue
 
 
 internal class ListAdapter(private val context: Context) :
-    ListAdapter<BookInView, com.example.cleve.bibliotech.ListAdapter.ViewHolder>(DIFF_CALLBACK) {
+    ListAdapter<BookInView, com.example.cleve.bibliotech.ui.list.ListAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private fun getNoThumb(context: Context): Drawable? {
         if (m_nothumb == null) {
@@ -71,7 +73,7 @@ internal class ListAdapter(private val context: Context) :
         suffix: String,
         private val mCallback: (Bitmap?) -> Unit
     ) : AsyncTask<Void?, Void?, Bitmap?>() {
-        private var mCache: String = "MangaTracker.Thumb.$bookId$suffix"
+        private var mCache: String = "BiblioTech.Thumb.$bookId$suffix"
         private var mThumbFile: File? = null
         override fun doInBackground(vararg arg0: Void?): Bitmap? {
             try {
@@ -242,8 +244,8 @@ internal class ListAdapter(private val context: Context) :
         book.book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
         val box = holder.itemView.findViewById<View>(R.id.selected) as CheckBox
         box.tag = position
-        box.isChecked = book.bookinView.isSelected
-        changeViewVisibility(book.bookinView.isOpen, holder.itemView)
+        box.isChecked = book.bookInView.isSelected
+        changeViewVisibility(book.bookInView.isOpen, holder.itemView)
 
         thumbSmall.setImageDrawable(getNoThumb(context))
         thumbLarge.setImageResource(0)

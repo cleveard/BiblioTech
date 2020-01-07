@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/nav_list"
-        android:name="com.example.cleve.bibliotech.ui.home.ListFragment"
+        android:name="com.example.cleve.bibliotech.ui.list.ListFragment"
         tools:layout="@layout/fragment_list">
     </fragment>
 

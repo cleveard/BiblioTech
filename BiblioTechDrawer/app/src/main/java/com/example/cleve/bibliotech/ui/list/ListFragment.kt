@@ -1,5 +1,6 @@
-package com.example.cleve.bibliotech.ui.home
+package com.example.cleve.bibliotech.ui.list
 
+import com.example.cleve.bibliotech.db.*
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -10,7 +11,6 @@ import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.*
-import com.example.cleve.bibliotech.ListAdapter
 
 class ListFragment : Fragment() {
 

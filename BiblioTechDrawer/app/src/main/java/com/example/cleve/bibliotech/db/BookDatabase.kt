@@ -1,4 +1,4 @@
-package com.example.cleve.bibliotech
+package com.example.cleve.bibliotech.db
 
 import android.content.Context
 import androidx.room.*
@@ -338,7 +338,7 @@ open class BookAndAuthors(
 }
 
 class BookInView(
-    @Embedded val bookinView: BookAndViewEntity,
+    @Embedded val bookInView: BookAndViewEntity,
     @Relation(
         entity = BookEntity::class,
         parentColumn = BOOK_VIEWS_VIEW_ID_COLUMN,
@@ -352,14 +352,14 @@ class BookInView(
 
         other as BookInView
 
-        if (bookinView != other.bookinView) return false
+        if (bookInView != other.bookInView) return false
         if (book != other.book) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        var result = bookinView.hashCode()
+        var result = bookInView.hashCode()
         result = 31 * result + book.hashCode()
         return result
     }
@@ -565,10 +565,9 @@ abstract class BookDatabase : RoomDatabase() {
         }
 
         fun create(context: Context): BookDatabase {
-            val db = Room.databaseBuilder(
+            return Room.databaseBuilder(
                 context, BookDatabase::class.java, DATABASE_FILENAME
             ).build()
-            return db
         }
     }
 

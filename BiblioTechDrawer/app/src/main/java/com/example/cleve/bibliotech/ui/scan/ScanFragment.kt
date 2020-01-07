@@ -3,6 +3,8 @@ package com.example.cleve.bibliotech.ui.scan
 //import android.hardware.Camera
 
 /* Import ZBar Class files */
+import com.example.cleve.bibliotech.db.*
+import com.example.cleve.bibliotech.gb.*
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -23,7 +25,6 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.cleve.bibliotech.*
-import com.example.cleve.bibliotech.BookLookup
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
 import com.yanzhenjie.zbar.Config
@@ -75,7 +76,7 @@ class ScanFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private var imageAnalyzer: ImageAnalysis? = null
     private var previewing = false
-    private val lookup = BookLookup()
+    private val lookup = GoogleBookLookup()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -251,7 +252,7 @@ class ScanFragment : Fragment() {
                     ).show()
 
                     for (isbn in codes) {
-                        lookup.lookupISBN(object : BookLookup.LookupDelegate {
+                        lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
                             override fun bookLookupResult(result: Array<BookAndAuthors>?, more: Boolean) {
                                 val titles = Array(result?.size ?: 0) {
                                     result!![it].book.title

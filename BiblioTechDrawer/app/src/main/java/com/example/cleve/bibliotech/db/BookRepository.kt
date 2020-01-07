@@ -1,8 +1,9 @@
-package com.example.cleve.bibliotech
+package com.example.cleve.bibliotech.db
 
 import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.example.cleve.bibliotech.R
 import java.util.concurrent.Executors
 
 class BookRepository {
@@ -22,7 +23,7 @@ class BookRepository {
             BookDatabase.close()
             mRepo = null
         }
-        lateinit private var defaultViewName: String
+        private lateinit var defaultViewName: String
     }
 
     private val db = BookDatabase.db

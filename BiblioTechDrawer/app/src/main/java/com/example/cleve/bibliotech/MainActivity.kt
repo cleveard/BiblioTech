@@ -17,6 +17,7 @@ import androidx.appcompat.widget.Toolbar
 import android.view.Menu
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.io.File
+import com.example.cleve.bibliotech.db.*
 
 const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"
@@ -30,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appBarConfiguration: AppBarConfiguration
     private var scanning = false
 
-    fun updateTitle(titleId: Int, menuId: Int) {
+    private fun updateTitle(titleId: Int, menuId: Int) {
         title = getString(titleId,
             BookRepository.repo.list, getString(menuId))
     }
