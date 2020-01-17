@@ -25,7 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue
 
 
 internal class ListAdapter(private val context: Context) :
-    ListAdapter<BookInView, com.example.cleve.bibliotech.ui.list.ListAdapter.ViewHolder>(DIFF_CALLBACK) {
+    ListAdapter<BookAndAuthors, com.example.cleve.bibliotech.ui.list.ListAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private fun getNoThumb(context: Context): Drawable? {
         if (m_nothumb == null) {
@@ -201,14 +201,14 @@ internal class ListAdapter(private val context: Context) :
             LinkedBlockingQueue<QueueEntry>(50)
 
         val DIFF_CALLBACK =
-            object: DiffUtil.ItemCallback<BookInView>() {
+            object: DiffUtil.ItemCallback<BookAndAuthors>() {
                 override fun areItemsTheSame(
-                    oldBook: BookInView, newBook: BookInView): Boolean {
+                    oldBook: BookAndAuthors, newBook: BookAndAuthors): Boolean {
                     // User properties may have changed if reloaded from the DB, but ID is fixed
-                    return oldBook.book.book.id == newBook.book.book.id
+                    return oldBook.book.id == newBook.book.id
                 }
                 override fun areContentsTheSame(
-                    oldBook: BookInView, newBook: BookInView): Boolean {
+                    oldBook: BookAndAuthors, newBook: BookAndAuthors): Boolean {
                     // NOTE: if you use equals, your object must properly override Object#equals()
                     // Incorrectly returning false here will result in too many animations.
                     return oldBook == newBook
@@ -224,50 +224,54 @@ internal class ListAdapter(private val context: Context) :
 
         // Inflate the custom layout
         val contactView: View = inflater.inflate(R.layout.book_layout, parent, false)
+        contactView.setOnClickListener {
+            toggleViewVisibility(it)
+        }
+        contactView.findViewById<View>(R.id.selected).setOnClickListener {
+        }
 
         // Return a new holder instance
         return ViewHolder(contactView)
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val book: BookInView = getItem(position)
-        val id = book.book.book.id
+        val book: BookAndAuthors = getItem(position)
+        val id = book.book.id
         val thumbSmall =
             holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)
         val thumbLarge =
             holder.itemView.findViewById<ImageView>(R.id.book_thumb)
-        book.book.book.title.setField(holder.itemView, R.id.book_list_title)
-        book.book.book.subTitle.setField(holder.itemView, R.id.book_list_subtitle)
-        book.book.authors.setField(holder.itemView, R.id.book_list_authors)
-        book.book.book.description.setField(holder.itemView, R.id.book_desc)
-        book.book.book.volumeId.setField(holder.itemView, R.id.book_volid)
-        book.book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
+        book.book.title.setField(holder.itemView, R.id.book_list_title)
+        book.book.subTitle.setField(holder.itemView, R.id.book_list_subtitle)
+        book.authors.setField(holder.itemView, R.id.book_list_authors)
+        book.book.description.setField(holder.itemView, R.id.book_desc)
+        book.book.volumeId.setField(holder.itemView, R.id.book_volid)
+        book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
         val box = holder.itemView.findViewById<View>(R.id.selected) as CheckBox
-        box.tag = position
-        box.isChecked = book.bookInView.isSelected
-        changeViewVisibility(book.bookInView.isOpen, holder.itemView)
+        box.setChecked(false)
+        changeViewVisibility(false, holder.itemView)
 
         thumbSmall.setImageDrawable(getNoThumb(context))
         thumbLarge.setImageResource(0)
         QueueEntry.getThumbnail(
-            book.book.book.id,
-            book.book.book.smallThumb,
+            book.book.id,
+            book.book.smallThumb,
             kSmallThumb
         ) {
             if (it != null) {
                 val item = getItem(holder.adapterPosition)
-                if (item.book.book.id == id)
+                if (item.book.id == id)
                     thumbSmall.setImageBitmap(it)
             }
         }
         QueueEntry.getThumbnail(
-            book.book.book.id,
-            book.book.book.largeThumb,
+            book.book.id,
+            book.book.largeThumb,
             kThumb
         ) {
             if (it != null) {
                 val item = getItem(holder.adapterPosition)
-                if (item.book.book.id == id)
+                if (item.book.id == id)
                     thumbLarge.setImageBitmap(it)
             }
         }

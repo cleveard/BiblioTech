@@ -31,11 +31,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appBarConfiguration: AppBarConfiguration
     private var scanning = false
 
-    private fun updateTitle(titleId: Int, menuId: Int) {
-        title = getString(titleId,
-            BookRepository.repo.list, getString(menuId))
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -64,15 +59,6 @@ class MainActivity : AppCompatActivity() {
         // Create the data base
         BookDatabase.initialize(applicationContext)
         BookRepository.initialize(applicationContext)
-
-        navController.addOnDestinationChangedListener { _, destination, _ ->
-            // compare destination id
-            when (destination.id) {
-                R.id.nav_list -> updateTitle(R.string.list_fragment_title, R.string.menu_list)
-                R.id.nav_scan -> updateTitle(R.string.scan_fragment_title, R.string.menu_scan)
-            }
-            scanning = destination.id == R.id.nav_scan
-        }
 
         mCache = cacheDir
     }

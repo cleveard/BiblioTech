@@ -1,16 +1,19 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import java.util.*
-import kotlin.Comparator
 import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
+
 
 private const val BOOK_TABLE = "books"
 private const val BOOK_ID_COLUMN = "books_id"
 private const val VOLUME_ID_COLUMN = "books_volume_id"
+private const val SOURCE_ID_COLUMN = "books_source_id"
 private const val ISBN_COLUMN = "books_isbn"
 private const val TITLE_COLUMN = "books_title"
 private const val SUBTITLE_COLUMN = "books_subtitle"
@@ -38,48 +41,56 @@ private const val BOOK_CATEGORIES_TABLE = "book_categories"
 private const val BOOK_CATEGORIES_ID_COLUMN = "book_categories_id"
 private const val BOOK_CATEGORIES_BOOK_ID_COLUMN = "book_categories_book_id"
 private const val BOOK_CATEGORIES_CATEGORY_ID_COLUMN = "book_categories_category_id"
-private const val VIEWS_TABLE = "views"
-private const val VIEWS_ID_COLUMN = "views_id"
-private const val VIEWS_NAME_COLUMN = "views_name"
-private const val VIEWS_ORDER_COLUMN = "views_order"
-private const val VIEWS_SORT_COLUMN = "views_sort"
-private const val BOOK_VIEWS_TABLE = "book_views"
-private const val BOOK_VIEWS_ID_COLUMN = "book_views_id"
-private const val BOOK_VIEWS_VIEW_ID_COLUMN = "book_views_view_id"
-private const val BOOK_VIEWS_BOOK_ID_COLUMN = "book_views_book_id"
-private const val SELECTED_COLUMN = "book_views_selected"
-private const val OPEN_COLUMN = "book_views_open"
-private const val BOOK_AUTHORS_VIEW = "book_authors_view"
-private const val ALL_AUTHORS_COLUMN = "book_authors_view_all_authors"
+private const val TAGS_TABLE = "tags"
+private const val TAGS_ID_COLUMN = "tags_id"
+private const val TAGS_NAME_COLUMN = "tags_name"
+private const val BOOK_TAGS_TABLE = "book_tags"
+private const val BOOK_TAGS_ID_COLUMN = "book_tags_id"
+private const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"
+private const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"
 
-private val SORT_ORDER: HashMap<String, Comparator<BookInView>> = hashMapOf(
+private val SORT_ORDER: HashMap<String, Comparator<BookAndAuthors>> = hashMapOf(
     BookEntity.SORT_BY_AUTHOR_LAST_FIRST to compareBy(
-        { if (it.book.authors.isNotEmpty()) it.book.authors[0].lastName else "" },
-        { if (it.book.authors.isNotEmpty()) it.book.authors[0].remainingName else "" }
+        { if (it.authors.isNotEmpty()) it.authors[0].lastName else "" },
+        { if (it.authors.isNotEmpty()) it.authors[0].remainingName else "" }
     )
 )
 
+class Converters {
+    @TypeConverter
+    fun fromTimestamp(value: Long?): Date? {
+        return value?.let { Date(it) }
+    }
+
+    @TypeConverter
+    fun dateToTimestamp(date: Date?): Long? {
+        return date?.time
+    }
+}
+
+@TypeConverters(Converters::class)
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
-        Index(value = [VOLUME_ID_COLUMN],unique = true),
+        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN],unique = true),
         Index(value = [ISBN_COLUMN],unique = true)
     ])
 data class BookEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
-    @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?,
-    @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") val title: String,
-    @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") val subTitle: String,
-    @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") val description: String,
-    @ColumnInfo(name = PAGE_COUNT_COLUMN,defaultValue = "0") val pageCount: Int,
-    @ColumnInfo(name = BOOK_COUNT_COLUMN,defaultValue = "1") val bookCount: Int,
-    @ColumnInfo(name = VOLUME_LINK,defaultValue = "") val linkUrl: String,
-    @ColumnInfo(name = RATING_COLUMN,defaultValue = "-1.0") val rating: Double,
-    @ColumnInfo(name = DATE_ADDED_COLUMN,defaultValue = "0") var added: Long,
-    @ColumnInfo(name = DATE_MODIFIED_COLUMN,defaultValue = "0") var modified: Long,
-    @ColumnInfo(name = SMALL_THUMB_COLUMN) val smallThumb: String?,
-    @ColumnInfo(name = LARGE_THUMB_COLUMN) val largeThumb: String?
+    @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
+    @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
+    @ColumnInfo(name = ISBN_COLUMN) var ISBN: String?,
+    @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") var title: String,
+    @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") var subTitle: String,
+    @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") var description: String,
+    @ColumnInfo(name = PAGE_COUNT_COLUMN,defaultValue = "0") var pageCount: Int,
+    @ColumnInfo(name = BOOK_COUNT_COLUMN,defaultValue = "1") var bookCount: Int,
+    @ColumnInfo(name = VOLUME_LINK,defaultValue = "") var linkUrl: String,
+    @ColumnInfo(name = RATING_COLUMN,defaultValue = "-1.0") var rating: Double,
+    @ColumnInfo(name = DATE_ADDED_COLUMN,defaultValue = "0") var added: Date,
+    @ColumnInfo(name = DATE_MODIFIED_COLUMN,defaultValue = "0") var modified: Date,
+    @ColumnInfo(name = SMALL_THUMB_COLUMN) var smallThumb: String?,
+    @ColumnInfo(name = LARGE_THUMB_COLUMN) var largeThumb: String?
 ) {
     companion object {
         const val SORT_BY_AUTHOR_LAST_FIRST = "authorsLastFirst"
@@ -125,8 +136,8 @@ data class BookEntity(
     ])
 data class AuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "") val lastName: String,
-    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "") val remainingName: String
+    @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "") var lastName: String,
+    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "") var remainingName: String
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -178,7 +189,7 @@ data class BookAndAuthorEntity(
     ])
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = CATEGORIES_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "") val category: String
+    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "") var category: String
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -221,51 +232,45 @@ data class BookAndCategoryEntity(
     @ColumnInfo(name = BOOK_CATEGORIES_BOOK_ID_COLUMN) var bookId: Long
 )
 
-@Entity(tableName = VIEWS_TABLE,
+@Entity(tableName = TAGS_TABLE,
     indices = [
-        Index(value = [VIEWS_ID_COLUMN],unique = true)
+        Index(value = [TAGS_ID_COLUMN],unique = true)
     ])
-data class ViewEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = VIEWS_NAME_COLUMN) val name: String,
-    @ColumnInfo(name = VIEWS_ORDER_COLUMN) val order: Int,
-    @ColumnInfo(name = VIEWS_SORT_COLUMN) val sort: String
+data class TagEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = TAGS_NAME_COLUMN) var name: String
 )
 
-@Entity(tableName = BOOK_VIEWS_TABLE,
+@Entity(tableName = BOOK_TAGS_TABLE,
     foreignKeys = [
         ForeignKey(entity = BookEntity::class,
             parentColumns = [BOOK_ID_COLUMN],
-            childColumns = [BOOK_VIEWS_BOOK_ID_COLUMN],
+            childColumns = [BOOK_TAGS_BOOK_ID_COLUMN],
             onDelete = CASCADE),
-        ForeignKey(entity = ViewEntity::class,
-            parentColumns = [VIEWS_ID_COLUMN],
-            childColumns = [BOOK_VIEWS_VIEW_ID_COLUMN],
+        ForeignKey(entity = TagEntity::class,
+            parentColumns = [TAGS_ID_COLUMN],
+            childColumns = [BOOK_TAGS_TAG_ID_COLUMN],
             onDelete = CASCADE)
     ],
     indices = [
-        Index(value = [BOOK_VIEWS_ID_COLUMN],unique = true),
-        Index(value = [BOOK_VIEWS_BOOK_ID_COLUMN,BOOK_VIEWS_VIEW_ID_COLUMN],unique = true),
-        Index(value = [BOOK_VIEWS_VIEW_ID_COLUMN])
+        Index(value = [BOOK_TAGS_ID_COLUMN],unique = true),
+        Index(value = [BOOK_TAGS_BOOK_ID_COLUMN,BOOK_TAGS_TAG_ID_COLUMN],unique = true),
+        Index(value = [BOOK_TAGS_TAG_ID_COLUMN])
     ])
-data class BookAndViewEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_VIEWS_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = BOOK_VIEWS_BOOK_ID_COLUMN) var bookId: Long,
-    @ColumnInfo(name = BOOK_VIEWS_VIEW_ID_COLUMN) var viewId: Long,
-    @ColumnInfo(name = SELECTED_COLUMN) val isSelected: Boolean,
-    @ColumnInfo(name = OPEN_COLUMN) val isOpen: Boolean
+data class BookAndTagEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_TAGS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = BOOK_TAGS_TAG_ID_COLUMN) var tagId: Long,
+    @ColumnInfo(name = BOOK_TAGS_BOOK_ID_COLUMN) var bookId: Long
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as BookAndViewEntity
+        other as BookAndTagEntity
 
         if (id != other.id) return false
         if (bookId != other.bookId) return false
-        if (viewId != other.viewId) return false
-        if (isSelected != other.isSelected) return false
-        if (isOpen != other.isOpen) return false
+        if (tagId != other.tagId) return false
 
         return true
     }
@@ -273,28 +278,13 @@ data class BookAndViewEntity(
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + bookId.hashCode()
-        result = 31 * result + viewId.hashCode()
-        result = 31 * result + isSelected.hashCode()
-        result = 31 * result + isOpen.hashCode()
+        result = 31 * result + tagId.hashCode()
         return result
     }
 }
 
-@DatabaseView(viewName = BOOK_AUTHORS_VIEW,
-    value = " SELECT *, GROUP_CONCAT(($LAST_NAME_COLUMN || ', ' || $REMAINING_COLUMN), ',\n') AS $ALL_AUTHORS_COLUMN"
-            + " FROM ( SELECT * FROM $BOOK_TABLE"
-            + " LEFT JOIN $BOOK_AUTHORS_TABLE"
-            + " ON ($BOOK_AUTHORS_BOOK_ID_COLUMN = $BOOK_ID_COLUMN)"
-            + " LEFT JOIN $AUTHORS_TABLE"
-            + " ON ($AUTHORS_ID_COLUMN = $BOOK_AUTHORS_AUTHOR_ID_COLUMN)"
-            + ") GROUP BY $BOOK_ID_COLUMN;")
-data class BookView(
-    @Embedded val book: BookEntity,
-    @ColumnInfo(name = ALL_AUTHORS_COLUMN) val authors: String?
-)
-
 open class BookAndAuthors(
-    @Embedded val book: BookEntity,
+    @Embedded var book: BookEntity,
     @Relation(
         entity = AuthorEntity::class,
         parentColumn = BOOK_ID_COLUMN,
@@ -305,7 +295,7 @@ open class BookAndAuthors(
             entityColumn = BOOK_AUTHORS_AUTHOR_ID_COLUMN
         )
     )
-    val authors: List<AuthorEntity>,
+    var authors: List<AuthorEntity>,
     @Relation(
         entity = CategoryEntity::class,
         parentColumn = BOOK_ID_COLUMN,
@@ -316,7 +306,18 @@ open class BookAndAuthors(
             entityColumn = BOOK_CATEGORIES_CATEGORY_ID_COLUMN
         )
     )
-    val categories: List<CategoryEntity>
+    var categories: List<CategoryEntity>,
+    @Relation(
+        entity = TagEntity::class,
+        parentColumn = BOOK_ID_COLUMN,
+        entityColumn = TAGS_ID_COLUMN,
+        associateBy = Junction(
+            BookAndTagEntity::class,
+            parentColumn = BOOK_TAGS_BOOK_ID_COLUMN,
+            entityColumn = BOOK_TAGS_TAG_ID_COLUMN
+        )
+    )
+    var tags: List<TagEntity>
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -337,101 +338,65 @@ open class BookAndAuthors(
     }
 }
 
-class BookInView(
-    @Embedded val bookInView: BookAndViewEntity,
-    @Relation(
-        entity = BookEntity::class,
-        parentColumn = BOOK_VIEWS_VIEW_ID_COLUMN,
-        entityColumn = BOOK_ID_COLUMN
-    )
-    val book: BookAndAuthors
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as BookInView
-
-        if (bookInView != other.bookInView) return false
-        if (book != other.book) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = bookInView.hashCode()
-        result = 31 * result + book.hashCode()
-        return result
-    }
-}
-
-data class BookListInView(
-    @Embedded val view: ViewEntity,
-    @Relation(
-        entity = BookAndViewEntity::class,
-        parentColumn = VIEWS_ID_COLUMN,
-        entityColumn = BOOK_VIEWS_BOOK_ID_COLUMN
-    )
-    val books: MutableList<BookInView>
-)
-
 @Dao
-abstract class ViewDao {
-    // Select all books for a view
+abstract class TagDao {
+    // Get the list of tags
+    @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
+    abstract fun get(): List<TagEntity>
+
+    // Add a tag
+    @Insert
+    abstract fun add(tag: TagEntity): Long
+
+    // Add a tag to a book
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract fun add(bookAndTag: BookAndTagEntity): Long
+
+    // Add a single tag for a book
     @Transaction
-    @Query(value = "SELECT * FROM $VIEWS_TABLE"
-            + " WHERE $VIEWS_ID_COLUMN = :viewId")
-    abstract fun getBooksForView(viewId: Long): BookListInView?
-
-    // Get the list of views
-    @Query(value = "SELECT * FROM $VIEWS_TABLE ORDER BY $VIEWS_ORDER_COLUMN")
-    abstract fun get(): List<ViewEntity>
-
-    // Add a view
-    @Insert
-    abstract fun add(view: ViewEntity): Long
-
-    // Add a book to a view
-    @Insert
-    abstract fun add(bookAndView: BookAndViewEntity): Long
-
-    // Add a book to a view
-    //@Transaction
-    fun add(viewId: Long, bookId: Long, selected: Boolean = false, open: Boolean = false) {
-        add(BookAndViewEntity(0, bookId, viewId, selected, open))
+    open fun add(bookId: Long, tag: TagEntity) {
+        // Find the author
+        val list: List<TagEntity> = findByName(tag.name)
+        tag.id = if (list.isNotEmpty()) {
+            list[0].id
+        } else {
+            add(tag)
+        }
+        add(BookAndTagEntity(0, tag.id, bookId))
     }
 
-    //@Transaction
-    fun getBooksForView(viewId: Long, sort: String): List<BookInView> {
-        val bookInView = getBooksForView(viewId) ?: return ArrayList(0)
-        val compare = SORT_ORDER[sort]
-        if (compare != null)
-            bookInView.books.sortWith(compare)
-        return bookInView.books
+    @Transaction
+    open fun add(bookId: Long, tags: List<TagEntity>) {
+        for (tag in tags)
+            add(bookId, tag)
     }
 
+    // Find an author by name
+    @Query(value = "SELECT * FROM $TAGS_TABLE"
+            + " WHERE $TAGS_NAME_COLUMN = :name")
+    abstract fun findByName(name: String): List<TagEntity>
 }
 
 @Dao
 abstract class AuthorDao {
     // Add multiple authors for a book
-    //@Transaction
-    fun add(bookId: Long, authors: List<AuthorEntity>) {
+    @Transaction
+    open fun add(bookId: Long, authors: List<AuthorEntity>) {
         for (author in authors)
             add(bookId, author)
     }
 
     // Add a single author for a book
-    //@Transaction
-    fun add(bookId: Long, author: AuthorEntity) {
+    @Transaction
+    open fun add(bookId: Long, author: AuthorEntity) {
         // Find the author
         val list: List<AuthorEntity> = findByName(author.lastName, author.remainingName)
         author.id = if (list.isNotEmpty()) {
             list[0].id
         } else {
-            add(AuthorEntity(0, author.lastName, author.remainingName))
+            add(author)
         }
-        add(bookId, author.id)
+        add(BookAndAuthorEntity(0, author.id, bookId))
     }
 
     // Get all authors
@@ -448,13 +413,8 @@ abstract class AuthorDao {
     abstract fun add(author: AuthorEntity) : Long
 
     // add a book and author relationship
-    @Insert
-    abstract fun add(bookAndAuthor: BookAndAuthorEntity): Long
-
-    // add a book and author relationship
-    fun add(authorId: Long, bookId: Long) {
-        add(BookAndAuthorEntity(0, authorId, bookId))
-    }
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    protected abstract fun add(bookAndAuthor: BookAndAuthorEntity): Long
 }
 
 @Dao
@@ -462,19 +422,19 @@ abstract class CategoryDao {
     @Insert
     abstract fun add(category: CategoryEntity): Long
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract fun add(bookCategory: BookAndCategoryEntity) : Long
 
     // Add multiple categories for a book
-    //@Transaction
-    fun add(bookId: Long, categories: List<CategoryEntity>) {
+    @Transaction
+    open fun add(bookId: Long, categories: List<CategoryEntity>) {
         for (cat in categories)
             add(bookId, cat)
     }
 
     // Add a single categories for a book
-    //@Transaction
-    fun add(bookId: Long, category: CategoryEntity) {
+    @Transaction
+    open fun add(bookId: Long, category: CategoryEntity) {
         // Find the author
         val list: List<CategoryEntity> = findByName(category.category)
         category.id = if (list.isNotEmpty()) {
@@ -497,38 +457,106 @@ abstract class CategoryDao {
 
 @Dao
 abstract class BookDao(private val db: BookDatabase) {
-    //@Query(value = "SELECT * FROM ($BOOK_VIEWS_TABLE"
-    //        + " LEFT JOIN $BOOK_AUTHORS_VIEW"
-    //        + " ON ($BOOK_ID_COLUMN = $BOOK_VIEWS_BOOK_ID_COLUMN) )"
-    //        + " WHERE $BOOK_VIEWS_VIEW_ID_COLUMN = :view.id"
-    //        + " ORDER BY :view.sort")
-    //fun getBooksForView(view: ViewEntity): List<BookView>
-
     // Add a book to the data base
     @Insert
-    abstract fun add(book: BookEntity): Long
+    protected abstract fun add(book: BookEntity): Long
+
+    @Update
+    protected abstract fun update(book: BookEntity)
+
+    protected data class Ids(
+        @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
+        @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
+        @ColumnInfo(name = SOURCE_ID_COLUMN) val sourceId: String?,
+        @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?
+    )
+
+    @RawQuery
+    protected abstract fun findConflict(query: SupportSQLiteQuery): Ids?
+
+    private fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Long {
+        if (volumeId == null && ISBN == null)
+            return -1L
+        val args = ArrayList<String?>(3)
+
+        var query =
+            "SELECT $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN FROM $BOOK_TABLE" +
+            " WHERE"
+
+        if (volumeId != null) {
+            query += " ( $VOLUME_ID_COLUMN = ? AND $SOURCE_ID_COLUMN = ? )"
+            args.add(volumeId)
+            args.add(sourceId)
+        }
+
+        if (ISBN != null) {
+            if (volumeId != null)
+                query += " OR"
+            query += " $ISBN_COLUMN = ?"
+            args.add(ISBN)
+        }
+
+        query += " LIMIT 1"
+
+        val ids = findConflict(SimpleSQLiteQuery(query, args.toArray()))
+
+        return ids?.id ?: -1
+    }
+
+    @Transaction
+    protected open fun addOrUpdate(book: BookEntity) {
+        val time = Calendar.getInstance().time
+        book.modified = time
+        if (book.volumeId != null || book.sourceId != null) {
+            book.volumeId = book.volumeId?: ""
+            book.sourceId = book.sourceId?: ""
+        }
+        book.id = findConflict(book.volumeId, book.sourceId, book.ISBN)
+        if (book.id == -1L) {
+            book.added = time
+            book.id = 0
+            book.id = add(book)
+        } else {
+            update(book)
+        }
+    }
 
     // Add book from description
-    //@Transaction
-    fun add(book: BookAndAuthors, viewId: Long? = null, selected: Boolean = false, open: Boolean = false): Long {
-        val time = Calendar.getInstance().time.time
-        book.book.added = time
-        book.book.modified = time
-        book.book.id = add(book.book)
+    @Transaction
+    open fun addOrUpdate(book: BookAndAuthors) {
+        addOrUpdate(book.book)
 
         db.getCategoryDao().add(book.book.id, book.categories)
         db.getAuthorDao().add(book.book.id, book.authors)
-
-        if (viewId != null)
-            db.getViewDao().add(viewId, book.book.id, selected, open)
-
-        return book.book.id
+        db.getTagDao().add(book.book.id, book.tags)
     }
 
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
-            + " WHERE $BOOK_ID_COLUMN = :bookId")
+            + " WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
     abstract fun getBook(bookId: Long): BookAndAuthors?
+
+    @Transaction
+    @Query(value = "SELECT * FROM $BOOK_TABLE"
+            + " WHERE $ISBN_COLUMN = :ISBN LIMIT 1")
+    abstract fun getBookByISBN(ISBN: String): BookAndAuthors?
+
+    @Transaction
+    @Query(value = "SELECT * FROM $BOOK_TABLE"
+            + " WHERE $VOLUME_ID_COLUMN = :volumeId LIMIT 1")
+    abstract fun getBookByVolume(volumeId: String): BookAndAuthors?
+
+    @Transaction
+    @RawQuery
+    protected abstract fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>
+
+    @Transaction
+    @RawQuery(observedEntities = [BookAndAuthors::class])
+    protected abstract fun getBooksRawLive(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>>
+
+    fun getBooks(): LiveData<List<BookAndAuthors>> {
+        return getBooksRawLive(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
+    }
 }
 
 @Database(
@@ -536,16 +564,14 @@ abstract class BookDao(private val db: BookDatabase) {
         BookEntity::class,
         AuthorEntity::class,
         BookAndAuthorEntity::class,
-        ViewEntity::class,
-        BookAndViewEntity::class,
+        TagEntity::class,
+        BookAndTagEntity::class,
         CategoryEntity::class,
         BookAndCategoryEntity::class
     ],
     version = 1,
-    exportSchema = false,
-    views = [BookView::class]
+    exportSchema = false
 )
-
 abstract class BookDatabase : RoomDatabase() {
     companion object {
         private const val DATABASE_FILENAME = "books_database.db"
@@ -564,7 +590,7 @@ abstract class BookDatabase : RoomDatabase() {
             mDb = null
         }
 
-        fun create(context: Context): BookDatabase {
+        private fun create(context: Context): BookDatabase {
             return Room.databaseBuilder(
                 context, BookDatabase::class.java, DATABASE_FILENAME
             ).build()
@@ -572,7 +598,7 @@ abstract class BookDatabase : RoomDatabase() {
     }
 
     abstract fun getBookDao(): BookDao
-    abstract fun getViewDao(): ViewDao
+    abstract fun getTagDao(): TagDao
     abstract fun getAuthorDao(): AuthorDao
     abstract fun getCategoryDao(): CategoryDao
 }

@@ -242,6 +242,7 @@ class ScanFragment : Fragment() {
             setTargetRotation(viewFinder.display.rotation)
         }.build()
 
+        val repo = BookRepository.repo;
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor, BarcodeScanner(
                 fun(codes: Array<String>) {
@@ -254,14 +255,21 @@ class ScanFragment : Fragment() {
                     for (isbn in codes) {
                         lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
                             override fun bookLookupResult(result: Array<BookAndAuthors>?, more: Boolean) {
-                                val titles = Array(result?.size ?: 0) {
-                                    result!![it].book.title
-                                }.joinToString("\n")
-                                Toast.makeText(
-                                    context,
-                                    "Book title $titles",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                                if (result != null) {
+                                    val titles = Array(result.size) {
+                                        result[it].book.title
+                                    }.joinToString("\n")
+                                    Toast.makeText(
+                                        context,
+                                        "Book title $titles",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                    for (book in result) {
+                                        book.book.ISBN = isbn
+                                        repo.addOrUpdateBook(book)
+                                    }
+                                }
                             }
 
                             override fun bookLookupError(error: String?) {

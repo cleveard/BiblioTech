@@ -12,6 +12,8 @@ import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
 import java.net.URL
+import java.util.*
+import kotlin.collections.ArrayList
 
 internal class GoogleBookLookup {
     internal interface LookupDelegate {
@@ -172,18 +174,16 @@ internal class GoogleBookLookup {
         }
 
         @Throws(Exception::class)
-        private fun findISBN(identifiers: JSONArray): String {
-            var result = ""
+        private fun findISBN(identifiers: JSONArray): String? {
+            var result: String? = null
             var i = identifiers.length()
             while (--i >= 0) {
                 val id = identifiers.getJSONObject(i)
-                val type =
-                    id.getString(kType)
-                if (type == kISBN_13) return id.getString(
-                    kIdentifier
-                )
-                if (type == kISBN_10) result =
-                    id.getString(kIdentifier)
+                val type = id.getString(kType)
+                if (type == kISBN_13)
+                    return id.getString(kIdentifier)
+                if (type == kISBN_10)
+                    result = id.getString(kIdentifier)
             }
             return result
         }
@@ -242,13 +242,12 @@ internal class GoogleBookLookup {
                 book = BookEntity(
                     id = 0,
                     volumeId = getJsonValue(json, kVolumeID, ""),
+                    sourceId = "books.google.com",
                     ISBN = run {
                         if (volume.has(kIndustryIdentifiers))
-                            findISBN(
-                                volume.getJSONArray(kIndustryIdentifiers)
-                            )
+                            findISBN(volume.getJSONArray(kIndustryIdentifiers))
                         else
-                            ""
+                            null
                     },
                     title = getJsonValue(volume, kTitle, ""),
                     subTitle = getJsonValue(volume, kSubTitle, ""),
@@ -257,15 +256,16 @@ internal class GoogleBookLookup {
                     bookCount = 1,
                     linkUrl = getJsonValue(volume, kVolumeLink, ""),
                     rating = getJsonValue(volume, kRating, 1.0),
-                    added = 0,
-                    modified = 0,
+                    added = Date(0),
+                    modified = Date(0),
                     smallThumb = getThumbnail(volume, kSmallThumb),
                     largeThumb = getThumbnail(volume, kThumb)
                 ),
                 authors = getJsonValue<AuthorEntity, String>(volume, kAuthors) {
                     separateAuthor(it)
                 },
-                categories = categories
+                categories = categories,
+                tags = ArrayList()
             )
         }
     }

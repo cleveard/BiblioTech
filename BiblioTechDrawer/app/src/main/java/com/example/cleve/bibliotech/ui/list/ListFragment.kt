@@ -31,7 +31,7 @@ class ListFragment : Fragment() {
         recycler.layoutManager = LinearLayoutManager(activity)
         adapter = ListAdapter(container!!.context)
         BookRepository.repo.books.observe(this,
-            Observer<List<BookInView>> { list -> adapter.submitList(list) })
+            Observer<List<BookAndAuthors>> { list -> adapter.submitList(list) })
         recycler.adapter = adapter
 
 

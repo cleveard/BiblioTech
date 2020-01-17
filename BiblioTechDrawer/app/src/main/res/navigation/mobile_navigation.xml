@@ -8,12 +8,14 @@
     <fragment
         android:id="@+id/nav_list"
         android:name="com.example.cleve.bibliotech.ui.list.ListFragment"
+        android:label="@string/menu_list"
         tools:layout="@layout/fragment_list">
     </fragment>
 
     <fragment
         android:id="@+id/nav_scan"
         android:name="com.example.cleve.bibliotech.ui.scan.ScanFragment"
+        android:label="@string/menu_scan"
         tools:layout="@layout/fragment_scan" />
 
     <fragment
