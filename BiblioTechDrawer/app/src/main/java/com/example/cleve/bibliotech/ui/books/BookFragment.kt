@@ -1,4 +1,4 @@
-package com.example.cleve.bibliotech.ui.list
+package com.example.cleve.bibliotech.ui.books
 
 import com.example.cleve.bibliotech.db.*
 import android.os.Bundle
@@ -12,24 +12,24 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.*
 
-class ListFragment : Fragment() {
+class BooksFragment : Fragment() {
 
-    private lateinit var listViewModel: ListViewModel
-    private lateinit var adapter: ListAdapter
+    private lateinit var booksViewModel: BooksViewModel
+    private lateinit var adapter: BooksAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        listViewModel =
-            ViewModelProviders.of(this).get(ListViewModel::class.java)
-        val root = inflater.inflate(R.layout.fragment_list, container, false)
+        booksViewModel =
+            ViewModelProviders.of(this).get(BooksViewModel::class.java)
+        val root = inflater.inflate(R.layout.fragment_books, container, false)
 
         val recycler = root.findViewById<RecyclerView>(R.id.book_list)
 
         recycler.layoutManager = LinearLayoutManager(activity)
-        adapter = ListAdapter(container!!.context)
+        adapter = BooksAdapter(container!!.context)
         BookRepository.repo.books.observe(this,
             Observer<List<BookAndAuthors>> { list -> adapter.submitList(list) })
         recycler.adapter = adapter

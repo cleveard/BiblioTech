@@ -1,4 +1,4 @@
-package com.example.cleve.bibliotech.ui.list
+package com.example.cleve.bibliotech.ui.books
 
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.*
@@ -24,8 +24,8 @@ import java.net.URL
 import java.util.concurrent.LinkedBlockingQueue
 
 
-internal class ListAdapter(private val context: Context) :
-    ListAdapter<BookAndAuthors, com.example.cleve.bibliotech.ui.list.ListAdapter.ViewHolder>(DIFF_CALLBACK) {
+internal class BooksAdapter(private val context: Context) :
+    ListAdapter<BookAndAuthors, com.example.cleve.bibliotech.ui.books.BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private fun getNoThumb(context: Context): Drawable? {
         if (m_nothumb == null) {

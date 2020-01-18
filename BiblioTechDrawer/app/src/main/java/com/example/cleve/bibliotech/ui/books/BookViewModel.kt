@@ -1,10 +1,10 @@
-package com.example.cleve.bibliotech.ui.list
+package com.example.cleve.bibliotech.ui.books
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 
-class ListViewModel : ViewModel() {
+class BooksViewModel : ViewModel() {
 
     private val _text = MutableLiveData<String>().apply {
         value = "This is home Fragment"

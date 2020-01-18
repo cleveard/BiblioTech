@@ -7,7 +7,7 @@
     android:descendantFocusability="blocksDescendants"
     android:focusable="false"
     android:focusableInTouchMode="false">
-    tools:context=".ListFragment"
+    tools:context=".BooksFragment"
 
     <LinearLayout
         android:id="@+id/LinearLayout1"
