@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.ViewFlipper
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -227,7 +228,11 @@ internal class BooksAdapter(private val context: Context) :
         contactView.setOnClickListener {
             toggleViewVisibility(it)
         }
-        contactView.findViewById<View>(R.id.selected).setOnClickListener {
+        contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
+            if (it is ViewFlipper) {
+                val child = it.displayedChild
+                it.displayedChild = 1 - child
+            }
         }
 
         // Return a new holder instance
@@ -247,9 +252,17 @@ internal class BooksAdapter(private val context: Context) :
         book.book.description.setField(holder.itemView, R.id.book_desc)
         book.book.volumeId.setField(holder.itemView, R.id.book_volid)
         book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
-        val box = holder.itemView.findViewById<View>(R.id.selected) as CheckBox
-        box.setChecked(false)
+        val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
+        box.displayedChild = 0
         changeViewVisibility(false, holder.itemView)
+
+        /* fun ImageView.setImageBitmapAndResize(bitmap: Bitmap) {
+            this.setImageBitmap(bitmap)
+            this.layoutParams.height = bitmap.height;
+            this.layoutParams.width = bitmap.width;
+            this.invalidate()
+            this.requestLayout();
+        } */
 
         thumbSmall.setImageDrawable(getNoThumb(context))
         thumbLarge.setImageResource(0)
