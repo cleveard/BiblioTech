@@ -139,8 +139,18 @@ internal class GoogleBookLookup {
         private const val kPageCount = "pageCount"
         private const val kDescription = "description"
         private const val kImageLinks = "imageLinks"
-        private const val kSmallThumb = "smallThumbnail"
-        private const val kThumb = "thumbnail"
+        private val kSmallThumb = arrayOf(
+            "thumbnail",
+            "smallThumbnail"
+        )
+        private val kThumb = arrayOf(
+            "large",
+            "medium",
+            "small",
+            "thumbnail",
+            "extraLarge",
+            "smallThumbnail"
+        )
         private const val kAuthors = "authors"
         private const val kCategories = "categories"
         private const val kMainCategory = "mainCategory"
@@ -165,12 +175,17 @@ internal class GoogleBookLookup {
             return list
         }
 
-        private fun getThumbnail(json: JSONObject, thumb: String) : String {
+        private fun getThumbnail(json: JSONObject, thumbs: Array<String>) : String {
             if (!json.has(kImageLinks))
                 return ""
 
             val links = json.getJSONObject(kImageLinks)
-            return getJsonValue(links, thumb, "")
+            for (thumb in thumbs) {
+                val link = getJsonValue(links, thumb, "")
+                if (link != "")
+                    return link
+            }
+            return ""
         }
 
         @Throws(Exception::class)
