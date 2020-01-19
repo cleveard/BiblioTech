@@ -200,16 +200,8 @@ class AutoFitPreviewBuilder private constructor(
         // Buffers are rotated relative to the device's 'natural' orientation: swap width and height
         val bufferRatio = bufferDimens.height / bufferDimens.width.toFloat()
 
-        val scaledWidth: Int
-        val scaledHeight: Int
-        // Match longest sides together -- i.e. apply center-crop transformation
-        if (viewFinderDimens.width > viewFinderDimens.height) {
-            scaledHeight = viewFinderDimens.width
-            scaledWidth = (viewFinderDimens.width * bufferRatio).roundToInt()
-        } else {
-            scaledHeight = viewFinderDimens.height
-            scaledWidth = (viewFinderDimens.height * bufferRatio).roundToInt()
-        }
+        val scaledWidth: Int = viewFinderDimens.width
+        val scaledHeight: Int = (viewFinderDimens.width / bufferRatio).roundToInt()
 
         // Compute the relative scale value
         val xScale = scaledWidth / viewFinderDimens.width.toFloat()
@@ -217,6 +209,9 @@ class AutoFitPreviewBuilder private constructor(
 
         // Scale input buffers to fill the view finder
         matrix.preScale(xScale, yScale, centerX, centerY)
+
+        // Center the camera in the view
+        matrix.postTranslate(0f,(viewFinderDimens.height - scaledHeight) / 2f)
 
         // Finally, apply transformations to our TextureView
         textureView.setTransform(matrix)
