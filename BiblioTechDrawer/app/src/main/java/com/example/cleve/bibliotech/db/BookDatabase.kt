@@ -464,23 +464,25 @@ abstract class BookDao(private val db: BookDatabase) {
     @Update
     protected abstract fun update(book: BookEntity)
 
+    @TypeConverters(Converters::class)
     protected data class Ids(
         @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
         @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
         @ColumnInfo(name = SOURCE_ID_COLUMN) val sourceId: String?,
-        @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?
+        @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?,
+        @ColumnInfo(name = DATE_ADDED_COLUMN) val added: Date
     )
 
     @RawQuery
     protected abstract fun findConflict(query: SupportSQLiteQuery): Ids?
 
-    private fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Long {
+    private fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Ids? {
         if (volumeId == null && ISBN == null)
-            return -1L
+            return null
         val args = ArrayList<String?>(3)
 
         var query =
-            "SELECT $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN FROM $BOOK_TABLE" +
+            "SELECT $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN, $DATE_ADDED_COLUMN FROM $BOOK_TABLE" +
             " WHERE"
 
         if (volumeId != null) {
@@ -498,25 +500,25 @@ abstract class BookDao(private val db: BookDatabase) {
 
         query += " LIMIT 1"
 
-        val ids = findConflict(SimpleSQLiteQuery(query, args.toArray()))
-
-        return ids?.id ?: -1
+        return findConflict(SimpleSQLiteQuery(query, args.toArray()))
     }
 
     @Transaction
     protected open fun addOrUpdate(book: BookEntity) {
         val time = Calendar.getInstance().time
+        book.added = time
         book.modified = time
         if (book.volumeId != null || book.sourceId != null) {
             book.volumeId = book.volumeId?: ""
             book.sourceId = book.sourceId?: ""
         }
-        book.id = findConflict(book.volumeId, book.sourceId, book.ISBN)
-        if (book.id == -1L) {
-            book.added = time
+        val ids = findConflict(book.volumeId, book.sourceId, book.ISBN)
+        if (ids == null) {
             book.id = 0
             book.id = add(book)
         } else {
+            book.id = ids.id
+            book.added = ids.added
             update(book)
         }
     }

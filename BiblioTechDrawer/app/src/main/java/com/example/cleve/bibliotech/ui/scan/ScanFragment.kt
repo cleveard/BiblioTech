@@ -246,11 +246,15 @@ class ScanFragment : Fragment() {
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor, BarcodeScanner(
                 fun(codes: Array<String>) {
-                    Toast.makeText(
-                        context,
-                        "ISBN is ${codes.joinToString(", ")}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    run {
+                        val toast = Toast.makeText(
+                            context,
+                            "ISBN is ${codes.joinToString(", ")}",
+                            Toast.LENGTH_LONG
+                        )
+                        toast.setGravity(Gravity.TOP or Gravity.CENTER, 0, 240)
+                        toast.show()
+                    }
 
                     for (isbn in codes) {
                         lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
@@ -259,11 +263,13 @@ class ScanFragment : Fragment() {
                                     val titles = Array(result.size) {
                                         result[it].book.title
                                     }.joinToString("\n")
-                                    Toast.makeText(
+                                    val toast = Toast.makeText(
                                         context,
                                         "Book title $titles",
                                         Toast.LENGTH_LONG
-                                    ).show()
+                                    )
+                                    toast.setGravity(Gravity.TOP or Gravity.CENTER, 0, 240)
+                                    toast.show()
 
                                     for (book in result) {
                                         book.book.ISBN = isbn

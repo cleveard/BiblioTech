@@ -1,19 +1,20 @@
 package com.example.cleve.bibliotech.ui.books
 
+import android.content.ActivityNotFoundException
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.*
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
+import android.net.Uri
 import android.os.AsyncTask
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.CheckBox
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.ViewFlipper
+import android.widget.*
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -22,8 +23,11 @@ import java.lang.StringBuilder
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
 import java.net.URL
+import java.text.SimpleDateFormat
 import java.util.concurrent.LinkedBlockingQueue
 
+
+private val format = SimpleDateFormat("MM/dd/yy")
 
 internal class BooksAdapter(private val context: Context) :
     ListAdapter<BookAndAuthors, com.example.cleve.bibliotech.ui.books.BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
@@ -45,26 +49,22 @@ internal class BooksAdapter(private val context: Context) :
         text.text = this ?: ""
     }
 
-    private fun List<AuthorEntity>?.setField(parent: View, id: Int) {
+    private fun <T> List<T>?.setField(parent: View, id: Int, separator: String,
+                                      toString: (T) -> String) {
         val text = parent.findViewById<TextView>(id)
         if (this == null)
             text.text = ""
         else {
-            val authors = StringBuilder()
-            for (a in this) {
-                if (authors.isNotEmpty())
-                    authors.append("\n")
-                if (a.lastName != "") {
-                    if (a.remainingName != "")
-                        authors.append(a.remainingName).append(" ").append(a.lastName)
-                    else
-                        authors.append(a.lastName)
-                } else if (a.remainingName != "")
-                    authors.append(a.remainingName)
-                else
-                    continue
+            val value = StringBuilder()
+            for (entry in this) {
+                val s = toString(entry)
+                if (s.isNotEmpty()) {
+                    if (value.isNotEmpty())
+                        value.append(separator)
+                    value.append(s)
+                }
             }
-            text.text = authors
+            text.text = value
         }
     }
 
@@ -234,6 +234,16 @@ internal class BooksAdapter(private val context: Context) :
                 it.displayedChild = 1 - child
             }
         }
+        contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
+            if (it is TextView) {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.getText().toString()))
+                    context.startActivity(intent)
+                } catch (e: ActivityNotFoundException) {
+                    Log.e("BiblioTech", "Failed to launch browser")
+                }
+            }
+        }
 
         // Return a new holder instance
         return ViewHolder(contactView)
@@ -248,10 +258,31 @@ internal class BooksAdapter(private val context: Context) :
             holder.itemView.findViewById<ImageView>(R.id.book_thumb)
         book.book.title.setField(holder.itemView, R.id.book_list_title)
         book.book.subTitle.setField(holder.itemView, R.id.book_list_subtitle)
-        book.authors.setField(holder.itemView, R.id.book_list_authors)
+        book.authors.setField(holder.itemView, R.id.book_list_authors, ", ") {
+            if (it.lastName != "") {
+                if (it.remainingName != "")
+                    "${it.remainingName} ${it.lastName}"
+                else
+                    it.lastName
+            } else if (it.remainingName != "")
+                it.remainingName
+            else
+                ""
+        }
+        book.categories.setField(holder.itemView, R.id.book_catagories, ", ") {
+            it.category
+        }
+        book.tags.setField(holder.itemView, R.id.book_tags, ", ") {
+            it.name
+        }
         book.book.description.setField(holder.itemView, R.id.book_desc)
         book.book.volumeId.setField(holder.itemView, R.id.book_volid)
         book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
+        book.book.linkUrl.setField(holder.itemView, R.id.book_list_link)
+        book.book.pageCount.toString().setField(holder.itemView, R.id.book_list_pages)
+        holder.itemView.findViewById<RatingBar>(R.id.book_list_rating).rating = book.book.rating.toFloat()
+        format.format(book.book.added).setField(holder.itemView, R.id.book_list_added)
+        format.format(book.book.modified).setField(holder.itemView, R.id.book_list_modified)
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
         box.displayedChild = 0
         changeViewVisibility(false, holder.itemView)

@@ -2,8 +2,8 @@
     <string name="app_name">BiblioTech</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
-    <string name="nav_header_title">Android Studio</string>
-    <string name="nav_header_subtitle">android.studio@android.com</string>
+    <string name="nav_header_title">BiblioTech</string>
+    <string name="nav_header_subtitle">Books for Everyon</string>
     <string name="nav_header_desc">Navigation header</string>
     <string name="action_settings">Settings</string>
 
@@ -20,4 +20,13 @@
     <string name="isbn">ISBN:</string>
 
     <string name="capture_accept_alt">Capture</string>
+    <string name="title_desc">Book Title</string>
+    <string name="subtitle_desc">Book Subtitle</string>
+    <string name="authors_desc">Book Authors</string>
+    <string name="authors_by">By:</string>
+    <string name="pages">Pages</string>
+    <string name="modified">Modified:</string>
+    <string name="added">Added:</string>
+    <string name="categories">Categories:</string>
+    <string name="tags">Tags:</string>
 </resources>
