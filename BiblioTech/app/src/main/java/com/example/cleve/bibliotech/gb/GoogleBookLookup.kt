@@ -3,6 +3,7 @@ package com.example.cleve.bibliotech.gb
 import com.example.cleve.bibliotech.db.*
 import android.os.AsyncTask
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedReader
@@ -106,25 +107,30 @@ internal class GoogleBookLookup {
 
         override fun onPostExecute(result: List<BookAndAuthors>?) {
             super.onPostExecute(result)
-            mResults.bookLookupResult(result, false)
             val parent = mParent.get()
             if (parent != null)
                 parent.mLookup = null
+            mResults.bookLookupResult(result, false)
         }
 
         @Throws(Exception::class)
         fun parseResponse(json: JSONObject, list: MutableList<BookAndAuthors>): Boolean {
             val kind = json.getString(kKind)
             if (kind == kBooksVolumes) {
-                val items = json.getJSONArray(kItems)
-                val count = items.length()
-                // If count is 0, then nothing left to do
-                if (count == 0) return false
-                for (i in 0 .. count - 1) {
-                    list.add(parseJSON(items.getJSONObject(i)))
+                try {
+                    val items = json.getJSONArray(kItems)
+                    val count = items.length()
+                    // If count is 0, then nothing left to do
+                    if (count == 0) return false
+                    for (i in 0..count - 1) {
+                        list.add(parseJSON(items.getJSONObject(i)))
+                    }
+                    val totalItems = json.getInt(kItemCount)
+                    return totalItems > list.size && list.size < 20;
+                } catch (e: JSONException) {
+                    // Stop on a JSON exception.
+                    return false;
                 }
-                val totalItems = json.getInt(kItemCount)
-                return totalItems > list.size;
             }
             throw Exception("Invalid Response")
         }

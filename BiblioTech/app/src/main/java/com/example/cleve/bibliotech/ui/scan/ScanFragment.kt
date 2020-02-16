@@ -6,17 +6,18 @@ package com.example.cleve.bibliotech.ui.scan
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.gb.*
 import android.Manifest
+import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.DialogInterface
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.*
-import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.camera.core.*
@@ -153,8 +154,8 @@ class ScanFragment : Fragment() {
         inflater.inflate(R.layout.fragment_scan, container, false)
 
     private fun clearView() {
-        container.findViewById<TextView>(R.id.scan_isbn).text = "";
-        container.findViewById<TextView>(R.id.scan_title).text = "";
+        container.findViewById<TextView>(R.id.scan_isbn).text = ""
+        container.findViewById<TextView>(R.id.scan_title).text = ""
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -233,25 +234,62 @@ class ScanFragment : Fragment() {
             setTargetRotation(viewFinder.display.rotation)
         }.build()
 
-        val repo = BookRepository.repo;
+        fun selectBook(list: List<BookAndAuthors>, callback: (BookAndAuthors) -> Unit) {
+            if (list.size == 1) {
+                callback(list[0])
+                return
+            }
+
+            var checked = -1
+            val builder = AlertDialog.Builder(activity)
+            builder.setTitle(R.string.select_title)
+                // Specify the list array, the items to be selected by default (null for none),
+                // and the listener through which to receive callbacks when items are selected
+                .setSingleChoiceItems(Array(list.size) {
+                        list[it].book.title
+                    }, -1
+                ) { _, which ->
+                    checked = which
+                }
+                // Set the action buttons
+                .setPositiveButton(R.string.ok
+                ) { _, _ ->
+                    // User clicked OK, so save the selectedItems results somewhere
+                    // or return them to the component that opened the dialog
+                    if (checked >= 0 && checked < list.size)
+                        callback(list[checked])
+                }
+                .setNegativeButton(R.string.cancel
+                ) { _, _ ->
+                }
+
+            builder.create().show()
+        }
+
+        val repo = BookRepository.repo
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor, BarcodeScanner(
                 fun(codes: Array<String>) {
-                    container.findViewById<TextView>(R.id.scan_isbn).text = "${codes.joinToString(", ")}"
+                    container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
 
                     for (isbn in codes) {
+                        var second = false
                         lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
                             override fun bookLookupResult(result: List<BookAndAuthors>?, more: Boolean) {
-                                if (result != null) {
-                                    val titles = Array(result.size) {
-                                        result[it].book.title
-                                    }.joinToString("\n")
-                                    container.findViewById<TextView>(R.id.scan_title).text = titles;
-
-                                    for (book in result) {
-                                        book.book.ISBN = isbn
-                                        repo.addOrUpdateBook(book)
+                                if (result == null || result.isEmpty()) {
+                                    if (!second) {
+                                        second = true
+                                        lookup.generalLookup(this, isbn)
                                     }
+                                    return
+                                }
+
+                                selectBook(result) {
+                                    container.findViewById<TextView>(R.id.scan_title).text =
+                                        it.book.title
+
+                                    it.book.ISBN = isbn
+                                    repo.addOrUpdateBook(it)
                                 }
                             }
 
