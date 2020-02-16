@@ -17,6 +17,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.*
 import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.camera.core.*
 import androidx.camera.core.ImageCapture.CaptureMode
@@ -46,20 +47,6 @@ private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
 /** Helper type alias used for analysis use case callbacks */
 typealias BarcodeListener = (codes: Array<String>) -> Unit
-
-/**
- * Simulate a button click, including a small delay while it is being pressed to trigger the
- * appropriate animations.
- */
-fun ImageButton.simulateClick(delay: Long = 50) {
-    performClick()
-    isPressed = true
-    invalidate()
-    postDelayed({
-        invalidate()
-        isPressed = false
-    }, delay)
-}
 
 class ScanFragment : Fragment() {
 
@@ -110,12 +97,12 @@ class ScanFragment : Fragment() {
     private val volumeDownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getIntExtra(KEY_EVENT_EXTRA, KeyEvent.KEYCODE_UNKNOWN)) {
-                // When the volume down button is pressed, simulate a shutter button click
+                // When the volume down button is pressed, scan the bar code
                 KeyEvent.KEYCODE_VOLUME_DOWN,
                 KeyEvent.KEYCODE_VOLUME_UP -> {
-                    val shutter = container
-                        .findViewById<ImageButton>(R.id.camera_accept_button)
-                    shutter.simulateClick()
+                    clearView()
+                    focus()
+                    previewing = true
                 }
             }
         }
@@ -165,11 +152,18 @@ class ScanFragment : Fragment() {
         savedInstanceState: Bundle?): View? =
         inflater.inflate(R.layout.fragment_scan, container, false)
 
+    private fun clearView() {
+        container.findViewById<TextView>(R.id.scan_isbn).text = "";
+        container.findViewById<TextView>(R.id.scan_title).text = "";
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         container = view as ConstraintLayout
         viewFinder = container.findViewById(R.id.view_finder)
         broadcastManager = LocalBroadcastManager.getInstance(view.context)
+
+        clearView()
 
         // Set up the intent filter that will receive events from our main activity
         val filter = IntentFilter().apply { addAction(KEY_EVENT_ACTION) }
@@ -184,9 +178,6 @@ class ScanFragment : Fragment() {
         viewFinder.post {
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
-
-            // Build UI controls and bind all camera use cases
-            updateCameraUi()
 
             if (hasPermissions(requireContext()))
                 bindCameraUseCases()
@@ -246,30 +237,16 @@ class ScanFragment : Fragment() {
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor, BarcodeScanner(
                 fun(codes: Array<String>) {
-                    run {
-                        val toast = Toast.makeText(
-                            context,
-                            "ISBN is ${codes.joinToString(", ")}",
-                            Toast.LENGTH_LONG
-                        )
-                        toast.setGravity(Gravity.TOP or Gravity.CENTER, 0, 240)
-                        toast.show()
-                    }
+                    container.findViewById<TextView>(R.id.scan_isbn).text = "${codes.joinToString(", ")}"
 
                     for (isbn in codes) {
                         lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
-                            override fun bookLookupResult(result: Array<BookAndAuthors>?, more: Boolean) {
+                            override fun bookLookupResult(result: List<BookAndAuthors>?, more: Boolean) {
                                 if (result != null) {
                                     val titles = Array(result.size) {
                                         result[it].book.title
                                     }.joinToString("\n")
-                                    val toast = Toast.makeText(
-                                        context,
-                                        "Book title $titles",
-                                        Toast.LENGTH_LONG
-                                    )
-                                    toast.setGravity(Gravity.TOP or Gravity.CENTER, 0, 240)
-                                    toast.show()
+                                    container.findViewById<TextView>(R.id.scan_title).text = titles;
 
                                     for (book in result) {
                                         book.book.ISBN = isbn
@@ -314,23 +291,6 @@ class ScanFragment : Fragment() {
             return AspectRatio.RATIO_4_3
         }
         return AspectRatio.RATIO_16_9
-    }
-
-    /** Method used to re-draw the camera UI controls, called every time configuration changes */
-    private fun updateCameraUi() {
-
-        // Remove previous UI if any
-        container.findViewById<ConstraintLayout>(R.id.camera_ui_container)?.let {
-            container.removeView(it)
-        }
-
-        // Inflate a new view containing all UI for controlling the camera
-        val controls = View.inflate(requireContext(), R.layout.camera_ui_container, container)
-
-        controls.findViewById<ImageButton>(R.id.camera_accept_button).setOnClickListener {
-            focus()
-            previewing = true
-        }
     }
 
     private fun focus(): Boolean {
