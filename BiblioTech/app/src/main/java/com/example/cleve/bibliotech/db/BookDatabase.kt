@@ -1,6 +1,8 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import android.os.Parcel
+import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
@@ -318,7 +320,7 @@ open class BookAndAuthors(
         )
     )
     var tags: List<TagEntity>
-) {
+) : Parcelable {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -327,6 +329,8 @@ open class BookAndAuthors(
 
         if (book != other.book) return false
         if (authors != other.authors) return false
+        if (categories != other.categories) return false
+        if (tags != other.tags) return false
 
         return true
     }
@@ -334,7 +338,157 @@ open class BookAndAuthors(
     override fun hashCode(): Int {
         var result = book.hashCode()
         result = 31 * result + authors.hashCode()
+        result = 31 * result + categories.hashCode()
+        result = 31 * result + tags.hashCode()
         return result
+    }
+
+    override fun writeToParcel(dest: Parcel, flags: Int) {
+        writeBook(dest, book)
+        dest.writeInt(authors.size)
+        for (i in authors) {
+            writeAuthor(dest, i)
+        }
+        dest.writeInt(categories.size)
+        for (i in categories) {
+            writeCategory(dest, i)
+        }
+        dest.writeInt(tags.size)
+        for (i in tags) {
+            writeTag(dest, i)
+        }
+    }
+
+    override fun describeContents(): Int {
+        return 0
+    }
+
+    private fun writeBook(dest: Parcel, book: BookEntity) {
+        dest.writeLong(book.id)
+        dest.writeString(book.volumeId)
+        dest.writeString(book.sourceId)
+        dest.writeString(book.ISBN)
+        dest.writeString(book.title)
+        dest.writeString(book.subTitle)
+        dest.writeString(book.description)
+        dest.writeInt(book.pageCount)
+        dest.writeInt(book.bookCount)
+        dest.writeString(book.linkUrl)
+        dest.writeDouble(book.rating)
+        dest.writeLong(book.added.time)
+        dest.writeLong(book.modified.time)
+        dest.writeString(book.smallThumb)
+        dest.writeString(book.largeThumb)
+    }
+
+    private fun writeAuthor(dest: Parcel, author: AuthorEntity) {
+        dest.writeLong(author.id)
+        dest.writeString(author.lastName)
+        dest.writeString(author.remainingName)
+    }
+
+    private fun writeCategory(dest: Parcel, category: CategoryEntity) {
+        dest.writeLong(category.id)
+        dest.writeString(category.category)
+    }
+
+    private fun writeTag(dest: Parcel, tag: TagEntity) {
+        dest.writeLong(tag.id)
+        dest.writeString(tag.name)
+    }
+
+    companion object {
+        @JvmField
+        val CREATOR = object : Parcelable.Creator<BookAndAuthors> {
+            override fun createFromParcel(src: Parcel): BookAndAuthors {
+                val book = readBook(src)
+                var count = src.readInt()
+                val authors = ArrayList<AuthorEntity>(count)
+                for (i in 0 until count) {
+                    authors.add(readAuthor(src))
+                }
+                count = src.readInt()
+                val categories = ArrayList<CategoryEntity>(count)
+                for (i in 0 until count) {
+                    categories.add(readCategory(src))
+                }
+                count = src.readInt()
+                val tags = ArrayList<TagEntity>(count)
+                for (i in 0 until count) {
+                    tags.add(readTag(src))
+                }
+
+                return BookAndAuthors(book, authors, categories, tags)
+            }
+
+            override fun newArray(size: Int): Array<BookAndAuthors?> {
+                return arrayOfNulls(size)
+            }
+        }
+
+        private fun readBook(src: Parcel): BookEntity {
+            val id = src.readLong()
+            val volumeId = src.readString()
+            val sourceId = src.readString()
+            val iSBN = src.readString()
+            val title = src.readString()
+            val subTitle = src.readString()
+            val description = src.readString()
+            val pageCount = src.readInt()
+            val bookCount = src.readInt()
+            val linkUrl = src.readString()
+            val rating = src.readDouble()
+            val added = Date(src.readLong())
+            val modified = Date(src.readLong())
+            val smallThumb = src.readString()
+            val largeThumb = src.readString()
+            return BookEntity(
+                id = id,
+                volumeId = volumeId,
+                sourceId = sourceId,
+                ISBN = iSBN,
+                title = title?:"",
+                subTitle = subTitle?:"",
+                description = description?:"",
+                pageCount = pageCount,
+                bookCount = bookCount,
+                linkUrl = linkUrl?:"",
+                rating = rating,
+                added = added,
+                modified = modified,
+                smallThumb = smallThumb,
+                largeThumb = largeThumb
+            )
+        }
+
+        private fun readAuthor(src: Parcel): AuthorEntity {
+            val id = src.readLong()
+            val lastName = src.readString()
+            val remainingName = src.readString()
+            return AuthorEntity(
+                id = id,
+                lastName = lastName?:"",
+                remainingName = remainingName?:""
+            )
+        }
+
+        private fun readCategory(src: Parcel): CategoryEntity {
+            val id = src.readLong()
+            val category = src.readString()
+            return CategoryEntity(
+                id = id,
+                category = category?:""
+            )
+        }
+
+        private fun readTag(src: Parcel): TagEntity {
+            val id = src.readLong()
+            val name = src.readString()
+            return TagEntity(
+                id = id,
+                name = name?:""
+            )
+        }
     }
 }
 

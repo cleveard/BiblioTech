@@ -7,23 +7,24 @@ import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.gb.*
 import android.Manifest
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.content.DialogInterface
 import android.hardware.display.DisplayManager
 import android.os.Bundle
+import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.*
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.camera.core.*
 import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.cleve.bibliotech.*
@@ -33,6 +34,7 @@ import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
+import java.io.Serializable
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.Executor
@@ -234,36 +236,13 @@ class ScanFragment : Fragment() {
             setTargetRotation(viewFinder.display.rotation)
         }.build()
 
-        fun selectBook(list: List<BookAndAuthors>, callback: (BookAndAuthors) -> Unit) {
+        fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors) -> Unit) {
             if (list.size == 1) {
                 callback(list[0])
                 return
             }
 
-            var checked = -1
-            val builder = AlertDialog.Builder(activity)
-            builder.setTitle(R.string.select_title)
-                // Specify the list array, the items to be selected by default (null for none),
-                // and the listener through which to receive callbacks when items are selected
-                .setSingleChoiceItems(Array(list.size) {
-                        list[it].book.title
-                    }, -1
-                ) { _, which ->
-                    checked = which
-                }
-                // Set the action buttons
-                .setPositiveButton(R.string.ok
-                ) { _, _ ->
-                    // User clicked OK, so save the selectedItems results somewhere
-                    // or return them to the component that opened the dialog
-                    if (checked >= 0 && checked < list.size)
-                        callback(list[checked])
-                }
-                .setNegativeButton(R.string.cancel
-                ) { _, _ ->
-                }
-
-            builder.create().show()
+            SelectBookDialogFragment.createDialog(list, spec, totalItems, callback).show(fragmentManager!!, "select_book")
         }
 
         val repo = BookRepository.repo
@@ -275,16 +254,16 @@ class ScanFragment : Fragment() {
                     for (isbn in codes) {
                         var second = false
                         lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
-                            override fun bookLookupResult(result: List<BookAndAuthors>?, more: Boolean) {
+                            override fun bookLookupResult(result: List<BookAndAuthors>?, itemCount: Int) {
                                 if (result == null || result.isEmpty()) {
                                     if (!second) {
                                         second = true
-                                        lookup.generalLookup(this, isbn)
+                                        lookup.generalLookup(this, isbn, 0, 20)
                                     }
                                     return
                                 }
 
-                                selectBook(result) {
+                                selectBook(result, isbn, itemCount) {
                                     container.findViewById<TextView>(R.id.scan_title).text =
                                         it.book.title
 
@@ -456,6 +435,131 @@ class ScanFragment : Fragment() {
         /** Convenience method used to check if all permissions required by this app are granted */
         fun hasPermissions(context: Context) = PERMISSIONS_REQUIRED.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    internal  class SelectBookDialogFragment private constructor() : DialogFragment() {
+        companion object {
+            private const val kList = "list"
+            private const val kSpec = "spec"
+            private const val kItemCount = "itemCount"
+            private const val kCallback = "callback"
+            fun createDialog(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors) -> Unit) : DialogFragment {
+                val bundle = Bundle()
+                bundle.putParcelableArrayList(kList, list as ArrayList<out Parcelable>?)
+                bundle.putString(kSpec, spec)
+                bundle.putInt(kItemCount, totalItems)
+                bundle.putSerializable(kCallback, callback as Serializable)
+                val dialog = SelectBookDialogFragment()
+                dialog.arguments = bundle
+                return dialog
+            }
+        }
+        // Use this instance of the interface to deliver action events
+        private lateinit var list: List<BookAndAuthors>
+        private lateinit var spec: String
+        private lateinit var callback: (BookAndAuthors) -> Unit
+        private lateinit var content: View
+        private var page = 0
+        private var itemCount = 0
+        private var pageCount = 0
+        private var book: BookAndAuthors? = null
+
+        override fun onCreateDialog(savedInstanceState: Bundle?) : Dialog {
+            val args = arguments!!
+            list = args.getParcelableArrayList(kList)!!
+            pageCount = list.size
+            val i = args.getInt(kItemCount)
+            itemCount = if (i > 0) i else pageCount
+            if (pageCount < itemCount)
+                spec = args.getString(kSpec)!!
+            callback = args.getSerializable(kCallback) as (BookAndAuthors) -> Unit
+            book = null
+            page = 0
+
+            content = parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
+            content.findViewById<RadioGroup>(R.id.title_buttons).setOnCheckedChangeListener { _, which ->
+                book = list[which]
+            }
+            content.findViewById<Button>(R.id.page_start).setOnClickListener {
+                getBookPage(0)
+            }
+            content.findViewById<Button>(R.id.page_end).setOnClickListener {
+                getBookPage(itemCount)
+            }
+            content.findViewById<Button>(R.id.page_previous).setOnClickListener {
+                getBookPage(page - pageCount)
+            }
+            content.findViewById<Button>(R.id.page_next).setOnClickListener {
+                getBookPage(page + pageCount)
+            }
+            populateTitles()
+            val builder = AlertDialog.Builder(activity)
+            builder.setTitle(R.string.select_title)
+                // Specify the list array, the items to be selected by default (null for none),
+                // and the listener through which to receive callbacks when items are selected
+                .setView(content)
+                // Set the action buttons
+                .setPositiveButton(
+                    R.string.ok
+                ) { _, _ ->
+                    val curBook = book
+                    if (curBook != null)
+                        callback(curBook)
+                }
+                .setNegativeButton(
+                    R.string.cancel
+                ) { _, _ ->
+                }
+            return builder.create()
+        }
+
+        private fun populateTitles() {
+            val group = content.findViewById<RadioGroup>(R.id.title_buttons)
+
+            group.removeAllViews()
+
+            for (i in list.indices) {
+                val button = RadioButton(context)
+                button.text = list[i].book.title
+                group.addView(button, i)
+            }
+        }
+
+        private fun getBookPage(index: Int) {
+            // If one page, then nothing to do
+            if (itemCount <= pageCount)
+                return
+
+            // Find the start index of the page with index on it
+            var start = index
+            if (start < 0)
+                start = 0
+            else if (start >= itemCount)
+                start = itemCount - 1
+            start -= start % pageCount
+
+            // If the page doesn't change return
+            if (start == page)
+                return
+
+            (parentFragment as ScanFragment).lookup.generalLookup(object : GoogleBookLookup.LookupDelegate {
+                override fun bookLookupResult(result: List<BookAndAuthors>?, itemCount: Int) {
+                    if (result != null) {
+                        page = start
+                        list = result
+                        populateTitles()
+                    }
+                }
+
+                override fun bookLookupError(error: String?) {
+                    Toast.makeText(
+                        context,
+                        "Error finding book: ${error ?: "Unknown error"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }, spec, start, pageCount)
         }
     }
 }
