@@ -3,7 +3,7 @@
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="nav_header_title">BiblioTech</string>
-    <string name="nav_header_subtitle">Books for Everyon</string>
+    <string name="nav_header_subtitle">Books for Everyone</string>
     <string name="nav_header_desc">Navigation header</string>
     <string name="action_settings">Settings</string>
 
@@ -33,4 +33,10 @@
     <string name="select_title">Select the Book Title</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="delete_books">Delete books</string>
+    <string name="delete_1">Delete %1$d book?</string>
+    <string name="delete_n">Delete %1$d books?</string>
+    <string name="select_all">ALL</string>
+    <string name="select_none">NONE</string>
 </resources>

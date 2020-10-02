@@ -225,13 +225,14 @@ internal class BooksAdapter(private val context: Context) :
 
         // Inflate the custom layout
         val contactView: View = inflater.inflate(R.layout.book_layout, parent, false)
+        val holder = ViewHolder(contactView)
         contactView.setOnClickListener {
             toggleViewVisibility(it)
         }
         contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
             if (it is ViewFlipper) {
-                val child = it.displayedChild
-                it.displayedChild = 1 - child
+                val book = getItem(holder.adapterPosition)
+                BookRepository.repo.select(holder.adapterPosition, !book.selected)
             }
         }
         contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
@@ -246,7 +247,7 @@ internal class BooksAdapter(private val context: Context) :
         }
 
         // Return a new holder instance
-        return ViewHolder(contactView)
+        return holder
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
@@ -284,7 +285,7 @@ internal class BooksAdapter(private val context: Context) :
         format.format(book.book.added).setField(holder.itemView, R.id.book_list_added)
         format.format(book.book.modified).setField(holder.itemView, R.id.book_list_modified)
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
-        box.displayedChild = 0
+        box.displayedChild = if (book.selected) 1 else 0
         changeViewVisibility(false, holder.itemView)
 
         /* fun ImageView.setImageBitmapAndResize(bitmap: Bitmap) {

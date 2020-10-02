@@ -321,6 +321,13 @@ open class BookAndAuthors(
     )
     var tags: List<TagEntity>
 ) : Parcelable {
+    @Ignore var selected: Boolean = false
+
+    constructor(book: BookEntity, selected: Boolean, authors: List<AuthorEntity>,
+                categories: List<CategoryEntity>, tags: List<TagEntity>) : this(book, authors, categories, tags) {
+        this.selected = selected;
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -345,6 +352,7 @@ open class BookAndAuthors(
 
     override fun writeToParcel(dest: Parcel, flags: Int) {
         writeBook(dest, book)
+        dest.writeInt(if (selected) 1 else 0)
         dest.writeInt(authors.size)
         for (i in authors) {
             writeAuthor(dest, i)
@@ -402,6 +410,7 @@ open class BookAndAuthors(
         val CREATOR = object : Parcelable.Creator<BookAndAuthors> {
             override fun createFromParcel(src: Parcel): BookAndAuthors {
                 val book = readBook(src)
+                val selected = src.readInt() != 0
                 var count = src.readInt()
                 val authors = ArrayList<AuthorEntity>(count)
                 for (i in 0 until count) {
@@ -418,7 +427,7 @@ open class BookAndAuthors(
                     tags.add(readTag(src))
                 }
 
-                return BookAndAuthors(book, authors, categories, tags)
+                return BookAndAuthors(book, selected, authors, categories, tags)
             }
 
             override fun newArray(size: Int): Array<BookAndAuthors?> {
@@ -506,6 +515,17 @@ abstract class TagDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract fun add(bookAndTag: BookAndTagEntity): Long
 
+    // Delete tags for a book
+    @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_BOOK_ID_COLUMN = :bookId")
+    protected abstract fun deleteBook(bookId: Long): Int
+
+    // Delete books for a tag
+    @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId")
+    protected abstract fun deleteTag(tagId: Long): Int
+
+    @Delete
+    protected abstract fun deleteTag(tag: TagEntity)
+
     // Add a single tag for a book
     @Transaction
     open fun add(bookId: Long, tag: TagEntity) {
@@ -521,14 +541,36 @@ abstract class TagDao {
 
     @Transaction
     open fun add(bookId: Long, tags: List<TagEntity>) {
+        deleteBook(bookId)
         for (tag in tags)
             add(bookId, tag)
     }
 
-    // Find an author by name
+    @Transaction
+    open fun delete(book: BookAndAuthors, deleteTags: Boolean = false) {
+        deleteBook(book.book.id)
+        if (deleteTags) {
+            for (tag in book.tags) {
+                val list: List<BookAndTagEntity> = findById(tag.id, 1)
+                if (list.isEmpty())
+                    deleteTag(tag)
+            }
+        }
+    }
+
+    @Transaction
+    open fun delete(tag: TagEntity) {
+        deleteTag(tag.id)
+        deleteTag(tag)
+    }
+
+    // Find an tag by name
     @Query(value = "SELECT * FROM $TAGS_TABLE"
             + " WHERE $TAGS_NAME_COLUMN = :name")
     abstract fun findByName(name: String): List<TagEntity>
+
+    @Query("SELECT * FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId LIMIT :limit")
+    abstract fun findById(tagId: Long, limit: Int = -1): List<BookAndTagEntity>
 }
 
 @Dao
@@ -536,6 +578,7 @@ abstract class AuthorDao {
     // Add multiple authors for a book
     @Transaction
     open fun add(bookId: Long, authors: List<AuthorEntity>) {
+        deleteBook(bookId)
         for (author in authors)
             add(bookId, author)
     }
@@ -553,6 +596,17 @@ abstract class AuthorDao {
         add(BookAndAuthorEntity(0, author.id, bookId))
     }
 
+    // Delete authors for a book
+    @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_BOOK_ID_COLUMN = :bookId")
+    abstract fun deleteBook(bookId: Long): Int
+
+    // Delete books for an author
+    @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId")
+    protected abstract fun deleteAuthor(authorId: Long): Int
+
+    @Delete
+    protected abstract fun delete(author: AuthorEntity)
+
     // Get all authors
     @Query(value = "SELECT * FROM $AUTHORS_TABLE ORDER BY $LAST_NAME_COLUMN")
     abstract fun getAll(): List<AuthorEntity>
@@ -562,6 +616,9 @@ abstract class AuthorDao {
         + " WHERE $LAST_NAME_COLUMN = :last AND $REMAINING_COLUMN = :remaining")
     abstract fun findByName(last: String, remaining: String): List<AuthorEntity>
 
+    @Query("SELECT * FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId LIMIT :limit")
+    abstract fun findById(authorId: Long, limit: Int = -1): List<BookAndAuthorEntity>
+
     // add an author
     @Insert
     abstract fun add(author: AuthorEntity) : Long
@@ -569,6 +626,18 @@ abstract class AuthorDao {
     // add a book and author relationship
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract fun add(bookAndAuthor: BookAndAuthorEntity): Long
+
+    @Transaction
+    open fun delete(book: BookAndAuthors, deleteAuthors: Boolean = true) {
+        deleteBook(book.book.id)
+        if (deleteAuthors) {
+            for (author in book.authors) {
+                val list: List<BookAndAuthorEntity> = findById(author.id, 1)
+                if (list.isEmpty())
+                    delete(author)
+            }
+        }
+    }
 }
 
 @Dao
@@ -582,6 +651,7 @@ abstract class CategoryDao {
     // Add multiple categories for a book
     @Transaction
     open fun add(bookId: Long, categories: List<CategoryEntity>) {
+        deleteBook(bookId)
         for (cat in categories)
             add(bookId, cat)
     }
@@ -603,10 +673,36 @@ abstract class CategoryDao {
         ))
     }
 
+    // Delete categories for a book
+    @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_BOOK_ID_COLUMN = :bookId")
+    abstract fun deleteBook(bookId: Long): Int
+
+    // Delete books for a category
+    @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId")
+    protected abstract fun deleteCategory(categoryId: Long): Int
+
+    @Delete
+    protected abstract fun delete(category: CategoryEntity)
+
     // Find an author by name
     @Query(value = "SELECT * FROM $CATEGORIES_TABLE"
             + " WHERE $CATEGORY_COLUMN = :category")
     abstract fun findByName(category: String): List<CategoryEntity>
+
+    @Query("SELECT * FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId LIMIT :limit")
+    abstract fun findById(categoryId: Long, limit: Int = -1): List<BookAndCategoryEntity>
+
+    @Transaction
+    open fun delete(book: BookAndAuthors, deleteCategories: Boolean = true) {
+        deleteBook(book.book.id)
+        if (deleteCategories) {
+            for (category in book.categories) {
+                val list: List<BookAndCategoryEntity> = findById(category.id, 1)
+                if (list.isEmpty())
+                    delete(category)
+            }
+        }
+    }
 }
 
 @Dao
@@ -614,6 +710,9 @@ abstract class BookDao(private val db: BookDatabase) {
     // Add a book to the data base
     @Insert
     protected abstract fun add(book: BookEntity): Long
+
+    @Delete
+    protected abstract fun delete(book: BookEntity)
 
     @Update
     protected abstract fun update(book: BookEntity)
@@ -685,6 +784,17 @@ abstract class BookDao(private val db: BookDatabase) {
         db.getCategoryDao().add(book.book.id, book.categories)
         db.getAuthorDao().add(book.book.id, book.authors)
         db.getTagDao().add(book.book.id, book.tags)
+    }
+
+    // Delete book from description
+    @Transaction
+    open fun delete(book: BookAndAuthors) {
+        db.getTagDao().delete(book)
+        db.getAuthorDao().delete(book)
+        db.getCategoryDao().delete(book)
+
+        delete(book.book)
+
     }
 
     @Transaction
