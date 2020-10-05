@@ -35,7 +35,7 @@ class DeleteModalAction(val fragment: Fragment, val repo: BookRepository): Modal
      * Delete the selected books
      * @param item The MenuItem that initiated this action
      */
-    fun delete(item: MenuItem): Boolean {
+    fun delete(@Suppress("UNUSED_PARAMETER") item: MenuItem): Boolean {
         // Get the list of books and selection count
         val list: List<BookAndAuthors>? = repo.books.value
         val count = repo.selectCount

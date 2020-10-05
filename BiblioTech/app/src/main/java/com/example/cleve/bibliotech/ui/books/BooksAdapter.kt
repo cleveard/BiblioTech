@@ -231,8 +231,8 @@ internal class BooksAdapter(private val context: Context) :
         }
         contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
             if (it is ViewFlipper) {
-                val book = getItem(holder.adapterPosition)
-                BookRepository.repo.select(holder.adapterPosition, !book.selected)
+                val book = getItem(holder.layoutPosition)
+                BookRepository.repo.select(holder.layoutPosition, !book.selected)
             }
         }
         contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
@@ -303,8 +303,9 @@ internal class BooksAdapter(private val context: Context) :
             book.book.smallThumb,
             kSmallThumb
         ) {
-            if (it != null) {
-                val item = getItem(holder.adapterPosition)
+            val pos = holder.layoutPosition;
+            if (it != null && pos >= 0) {
+                val item = getItem(pos)
                 if (item.book.id == id)
                     thumbSmall.setImageBitmap(it)
             }
@@ -314,8 +315,9 @@ internal class BooksAdapter(private val context: Context) :
             book.book.largeThumb,
             kThumb
         ) {
-            if (it != null) {
-                val item = getItem(holder.adapterPosition)
+            val pos = holder.layoutPosition;
+            if (it != null && pos >= 0) {
+                val item = getItem(pos)
                 if (item.book.id == id)
                     thumbLarge.setImageBitmap(it)
             }

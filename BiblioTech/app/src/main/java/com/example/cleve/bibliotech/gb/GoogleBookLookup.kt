@@ -2,13 +2,13 @@ package com.example.cleve.bibliotech.gb
 
 import com.example.cleve.bibliotech.db.*
 import android.os.AsyncTask
+import androidx.paging.PagingSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
-import java.io.BufferedInputStream
-import java.io.BufferedReader
-import java.io.InputStream
-import java.io.InputStreamReader
+import java.io.*
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.MalformedURLException
@@ -22,6 +22,49 @@ internal class GoogleBookLookup {
         fun bookLookupError(error: String?)
     }
 
+    class LookupException(message: String?) : java.lang.Exception(message)
+
+    class BookQueryPagingSource(private val query: String, private val itemCount: Int, private var list: List<BookAndAuthors>? = null) : PagingSource<Int, BookAndAuthors>() {
+        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, BookAndAuthors> {
+            val loadSize = params.loadSize.coerceAtMost(40)
+            val index = params.key?:0
+            val spec = buildUrl(
+                kVolumesCollection,
+                "${query}&startIndex=${index}&maxResults=${loadSize}"
+            )
+            val result: List<BookAndAuthors>?
+            if (index == 0 && list != null) {
+                result = list
+                list = null
+            } else {
+                var errorResult: String? = null
+                result = withContext(Dispatchers.Default) {
+                    queryBooks(spec, object : LookupDelegate {
+                        override fun bookLookupError(error: String?) {
+                            errorResult = error ?: ""
+                        }
+
+                        override fun bookLookupResult(
+                            result: List<BookAndAuthors>?,
+                            itemCount: Int
+                        ) {
+                            // Not called by queryBooks
+                        }
+                    })?.list
+                }
+                if (errorResult != null)
+                    return LoadResult.Error(LookupException(errorResult))
+            }
+
+            val nextKey = if (result == null || index + result.size >= itemCount) null else index + result.size
+            return LoadResult.Page(
+                data = result?: emptyList(),
+                prevKey = null,
+                nextKey = nextKey
+            )
+        }
+    }
+
     private var mLookup: LookupTask? = null
     private fun lookup(
         results: LookupDelegate,
@@ -31,13 +74,7 @@ internal class GoogleBookLookup {
         if (mLookup != null) return false
         mLookup = LookupTask(this, results)
         mLookup!!.execute(
-            String.format(
-                "%s/%s?q=%s%s",
-                kURL,
-                collection,
-                parameters,
-                kKey
-            )
+            buildUrl(collection, parameters)
         )
         return true
     }
@@ -64,44 +101,7 @@ internal class GoogleBookLookup {
         AsyncTask<String?, Void?, LookupResult?>() {
         val mParent = WeakReference(parent)
         override fun doInBackground(vararg params: String?): LookupResult? {
-            val spec = params[0]
-            var bookClient: HttpURLConnection? = null
-            try {
-                val url = URL(spec)
-                bookClient = url.openConnection() as HttpURLConnection
-                val content: InputStream =
-                    BufferedInputStream(bookClient.inputStream)
-                val status = bookClient.responseCode
-                if (status != 200) throw Exception(
-                    String.format(
-                        "HTTP Error %d",
-                        status
-                    )
-                )
-                val input = InputStreamReader(content)
-                val reader = BufferedReader(input)
-                val responseBuilder = StringBuilder()
-                var lineIn: String?
-                while (reader.readLine().also { lineIn = it } != null) {
-                    responseBuilder.append(lineIn)
-                }
-                val responseString = responseBuilder.toString()
-                val json = JSONObject(responseString)
-                return parseResponse(json)
-            } catch (e: MalformedURLException) {
-                mResults.bookLookupError(
-                    String.format(
-                        "Error: %s: %s",
-                        e.toString(),
-                        params[0]
-                    )
-                )
-            } catch (e: Exception) {
-                mResults.bookLookupError(String.format("Error: %s", e.toString()))
-            } finally {
-                bookClient?.disconnect()
-            }
-            return null
+            return queryBooks(params[0], mResults)
         }
 
         override fun onPostExecute(result: LookupResult?) {
@@ -113,30 +113,6 @@ internal class GoogleBookLookup {
                 mResults.bookLookupResult(null, 0)
             else
                 mResults.bookLookupResult(result.list, result.itemCount)
-        }
-
-        @Throws(Exception::class)
-        fun parseResponse(json: JSONObject): LookupResult? {
-            val list: MutableList<BookAndAuthors> = ArrayList(1)
-            val kind = json.getString(kKind)
-            if (kind == kBooksVolumes) {
-                try {
-                    val items = json.getJSONArray(kItems)
-                    val count = items.length()
-                    // If count is 0, then nothing left to do
-                    if (count == 0)
-                        return null
-                    for (i in 0..count - 1) {
-                        list.add(parseJSON(items.getJSONObject(i)))
-                    }
-                    val totalItems = json.getInt(kItemCount)
-                    return LookupResult(list, totalItems)
-                } catch (e: JSONException) {
-                    // Stop on a JSON exception.
-                    return null;
-                }
-            }
-            throw Exception("Invalid Response")
         }
 
     }
@@ -307,5 +283,80 @@ internal class GoogleBookLookup {
                 tags = ArrayList()
             )
         }
+
+        @Throws(Exception::class)
+        private fun parseResponse(json: JSONObject): LookupResult? {
+            val list: MutableList<BookAndAuthors> = ArrayList(1)
+            val kind = json.getString(kKind)
+            if (kind == kBooksVolumes) {
+                try {
+                    val items = json.getJSONArray(kItems)
+                    val count = items.length()
+                    // If count is 0, then nothing left to do
+                    if (count == 0)
+                        return null
+                    for (i in 0 until count) {
+                        list.add(parseJSON(items.getJSONObject(i)))
+                    }
+                    val totalItems = json.getInt(kItemCount)
+                    return LookupResult(list, totalItems)
+                } catch (e: JSONException) {
+                    // Stop on a JSON exception.
+                    return null
+                }
+            }
+            throw Exception("Invalid Response")
+        }
+
+        private fun buildUrl(collection: String, parameters: String): String {
+            return String.format(
+                "%s/%s?q=%s%s",
+                kURL,
+                collection,
+                parameters,
+                kKey
+            )
+        }
+
+        private fun queryBooks(spec: String?, reportError: LookupDelegate) : LookupResult? {
+            var bookClient: HttpURLConnection? = null
+            try {
+                val url = URL(spec)
+                bookClient = url.openConnection() as HttpURLConnection
+                val status = bookClient.responseCode
+                if (status != 200) throw Exception(
+                    String.format(
+                        "HTTP Error %d",
+                        status
+                    )
+                )
+                val content: InputStream =
+                    BufferedInputStream(bookClient.inputStream)
+                val input = InputStreamReader(content)
+                val reader = BufferedReader(input)
+                val responseBuilder = StringBuilder()
+                var lineIn: String?
+                while (reader.readLine().also { lineIn = it } != null) {
+                    responseBuilder.append(lineIn)
+                }
+                val responseString = responseBuilder.toString()
+                val json = JSONObject(responseString)
+                return parseResponse(json)
+            } catch (e: MalformedURLException) {
+                reportError.bookLookupError(
+                    String.format(
+                        "Error: %s: %s",
+                        e.toString(),
+                        spec
+                    )
+                )
+            } catch (e: Exception) {
+                reportError.bookLookupError(String.format("Error: %s", e.toString()))
+            } finally {
+                bookClient?.disconnect()
+            }
+            return null
+       }
+
     }
 }

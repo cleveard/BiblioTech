@@ -8,10 +8,7 @@ import com.example.cleve.bibliotech.gb.*
 import android.Manifest
 import android.app.AlertDialog
 import android.app.Dialog
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.content.*
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.os.Bundle
@@ -26,15 +23,29 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingDataAdapter
+import androidx.paging.cachedIn
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.*
 import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.ui.books.BooksAdapter
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.io.Serializable
+import java.lang.Exception
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.Executor
@@ -460,40 +471,84 @@ class ScanFragment : Fragment() {
         private lateinit var spec: String
         private lateinit var callback: (BookAndAuthors) -> Unit
         private lateinit var content: View
-        private var page = 0
         private var itemCount = 0
-        private var pageCount = 0
+        private lateinit var pagerJob: Job
         private var book: BookAndAuthors? = null
+        private var selectedPosition = -1
+        private var selectedView: RadioButton? = null
+
+        inner class BookPagingAdapter : PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(
+            BooksAdapter.DIFF_CALLBACK
+        ) {
+            private val onRadioClick = View.OnClickListener { v ->
+                try {
+                    val button = v as RadioButton
+                    val position = v.tag as Int
+                    if (position != selectedPosition) {
+                        selectedView?.setChecked(false)
+                        button.setChecked(true)
+                        selectedPosition = position
+                        selectedView = button
+                        book = getItem(position)
+                    }
+                }
+                catch(e: Exception) {
+                }
+            }
+
+            override fun onCreateViewHolder(
+                parent: ViewGroup,
+                viewType: Int
+            ): BooksAdapter.ViewHolder {
+                val button = RadioButton(context)
+                val viewHolder = BooksAdapter.ViewHolder(button)
+                button.setOnClickListener(onRadioClick)
+                return viewHolder
+            }
+
+            override fun onBindViewHolder(holder: BooksAdapter.ViewHolder, position: Int) {
+                val book = getItem(position)
+                val button = holder.itemView as RadioButton
+                if (button == selectedView && position != selectedPosition)
+                    selectedView = null
+                button.text = book?.book?.title?: ""
+                button.tag = position
+                button.setChecked(position == selectedPosition)
+            }
+        }
 
         override fun onCreateDialog(savedInstanceState: Bundle?) : Dialog {
             val args = arguments!!
             list = args.getParcelableArrayList(kList)!!
-            pageCount = list.size
+            val pageCount = list.size
             val i = args.getInt(kItemCount)
             itemCount = if (i > 0) i else pageCount
-            if (pageCount < itemCount)
-                spec = args.getString(kSpec)!!
+            spec = args.getString(kSpec)!!
+            @Suppress("UNCHECKED_CAST")
             callback = args.getSerializable(kCallback) as (BookAndAuthors) -> Unit
             book = null
-            page = 0
 
             content = parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
-            content.findViewById<RadioGroup>(R.id.title_buttons).setOnCheckedChangeListener { _, which ->
-                book = list[which]
+
+            val scope = MainScope()
+            val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
+            val pager = Pager(
+                config
+            ) {
+                GoogleBookLookup.BookQueryPagingSource(spec, itemCount, list)
             }
-            content.findViewById<Button>(R.id.page_start).setOnClickListener {
-                getBookPage(0)
+            val flow = pager.flow.cachedIn(scope)
+            val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
+            val adapter = BookPagingAdapter()
+            titles.layoutManager = LinearLayoutManager(activity)
+            titles.adapter = adapter
+
+            pagerJob = scope.launch {
+                flow.collectLatest {
+                    data -> adapter.submitData(data)
+                }
             }
-            content.findViewById<Button>(R.id.page_end).setOnClickListener {
-                getBookPage(itemCount)
-            }
-            content.findViewById<Button>(R.id.page_previous).setOnClickListener {
-                getBookPage(page - pageCount)
-            }
-            content.findViewById<Button>(R.id.page_next).setOnClickListener {
-                getBookPage(page + pageCount)
-            }
-            populateTitles()
+
             val builder = AlertDialog.Builder(activity)
             builder.setTitle(R.string.select_title)
                 // Specify the list array, the items to be selected by default (null for none),
@@ -514,52 +569,10 @@ class ScanFragment : Fragment() {
             return builder.create()
         }
 
-        private fun populateTitles() {
-            val group = content.findViewById<RadioGroup>(R.id.title_buttons)
-
-            group.removeAllViews()
-
-            for (i in list.indices) {
-                val button = RadioButton(context)
-                button.text = list[i].book.title
-                group.addView(button, i)
-            }
-        }
-
-        private fun getBookPage(index: Int) {
-            // If one page, then nothing to do
-            if (itemCount <= pageCount)
-                return
-
-            // Find the start index of the page with index on it
-            var start = index
-            if (start < 0)
-                start = 0
-            else if (start >= itemCount)
-                start = itemCount - 1
-            start -= start % pageCount
-
-            // If the page doesn't change return
-            if (start == page)
-                return
-
-            (parentFragment as ScanFragment).lookup.generalLookup(object : GoogleBookLookup.LookupDelegate {
-                override fun bookLookupResult(result: List<BookAndAuthors>?, itemCount: Int) {
-                    if (result != null) {
-                        page = start
-                        list = result
-                        populateTitles()
-                    }
-                }
-
-                override fun bookLookupError(error: String?) {
-                    Toast.makeText(
-                        context,
-                        "Error finding book: ${error ?: "Unknown error"}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }, spec, start, pageCount)
+        override fun onDismiss(dialog: DialogInterface) {
+            super.onDismiss(dialog)
+            pagerJob.cancel()
         }
     }
+
 }
