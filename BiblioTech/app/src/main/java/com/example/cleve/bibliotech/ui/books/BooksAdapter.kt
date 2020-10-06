@@ -5,11 +5,8 @@ import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.*
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.os.AsyncTask
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -18,19 +15,14 @@ import android.widget.*
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import java.io.*
 import java.lang.StringBuilder
-import java.net.HttpURLConnection
-import java.net.MalformedURLException
-import java.net.URL
 import java.text.SimpleDateFormat
-import java.util.concurrent.LinkedBlockingQueue
 
 
 private val format = SimpleDateFormat("MM/dd/yy")
 
 internal class BooksAdapter(private val context: Context) :
-    ListAdapter<BookAndAuthors, com.example.cleve.bibliotech.ui.books.BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+    ListAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private fun getNoThumb(context: Context): Drawable? {
         if (m_nothumb == null) {
@@ -68,121 +60,9 @@ internal class BooksAdapter(private val context: Context) :
         }
     }
 
-    internal class QueueEntry private constructor(
-        bookId: Long,
-        private val mUrl: String,
-        suffix: String,
-        private val mCallback: (Bitmap?) -> Unit
-    ) : AsyncTask<Void?, Void?, Bitmap?>() {
-        private var mCache: String = "BiblioTech.Thumb.$bookId$suffix"
-        private var mThumbFile: File? = null
-        override fun doInBackground(vararg arg0: Void?): Bitmap? {
-            try {
-                mThumbFile = File(MainActivity.cache, mCache)
-                var fileInCache = mThumbFile!!.exists()
-                if (!fileInCache) {
-                    fileInCache = downloadThumbnail()
-                }
-                if (fileInCache) {
-                    return openThumbFile()
-                }
-            } catch (e: Exception) {
-            }
-            if (mThumbFile!!.exists()) {
-                try {
-                    mThumbFile!!.delete()
-                } catch (e: Exception) {
-                }
-            }
-            return null
-        }
-
-        override fun onPostExecute(result: Bitmap?) {
-            super.onPostExecute(result)
-            if (result != null) {
-                mCallback(result)
-            }
-            mThumbQueue.remove()
-            startAsync()
-        }
-
-        private fun downloadThumbnail(): Boolean {
-            var result = false
-            var connection: HttpURLConnection? = null
-            var output: BufferedOutputStream? = null
-            var stream: InputStream? = null
-            var buffered: BufferedInputStream? = null
-            try {
-                val url = URL(mUrl)
-                connection = url.openConnection() as HttpURLConnection
-                output = BufferedOutputStream(FileOutputStream(mThumbFile!!))
-                stream = connection.inputStream
-                buffered = BufferedInputStream(stream!!)
-                val kBufSize = 4096
-                val buf = ByteArray(kBufSize)
-                var size: Int
-                while (buffered.read(buf).also { size = it } >= 0) {
-                    if (size > 0) output.write(buf, 0, size)
-                }
-                result = true
-            } catch (e: MalformedURLException) {
-            } catch (e: IOException) {
-            }
-            if (output != null) {
-                try {
-                    output.close()
-                } catch (e: IOException) {
-                    result = false
-                }
-            }
-            if (buffered != null) {
-                try {
-                    buffered.close()
-                } catch (e: IOException) {
-                }
-            }
-            if (stream != null) {
-                try {
-                    stream.close()
-                } catch (e: IOException) {
-                }
-            }
-            connection?.disconnect()
-            return result
-        }
-
-        private fun openThumbFile(): Bitmap {
-            return BitmapFactory.decodeFile(mThumbFile!!.absolutePath)
-        }
-
-        companion object {
-            fun getThumbnail(
-                bookId: Long,
-                url: String?,
-                suffix: String,
-                callback: (Bitmap?) -> Unit
-            ) {
-                if (url != null && url.isNotEmpty()) {
-                    mThumbQueue.add(QueueEntry(bookId, url, suffix, callback))
-                    if (mThumbQueue.size == 1) startAsync()
-                } else {
-                    callback(null)
-                }
-            }
-
-            fun startAsync() {
-                val entry = mThumbQueue.peek()
-                entry?.execute()
-            }
-        }
-
-    }
-
     companion object {
         private var m_nothumb: Drawable? = null
         private const val kNoThumbResource = "nothumb"
-        private const val kSmallThumb = ".small.png"
-        const val kThumb = ".png"
         private fun changeViewVisibility(
             visible: Boolean,
             arg1: View
@@ -197,9 +77,6 @@ internal class BooksAdapter(private val context: Context) :
             changeViewVisibility(visible, arg1)
             return visible
         }
-
-        private val mThumbQueue =
-            LinkedBlockingQueue<QueueEntry>(50)
 
         val DIFF_CALLBACK =
             object: DiffUtil.ItemCallback<BookAndAuthors>() {
@@ -238,7 +115,7 @@ internal class BooksAdapter(private val context: Context) :
         contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
             if (it is TextView) {
                 try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.getText().toString()))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.text.toString()))
                     context.startActivity(intent)
                 } catch (e: ActivityNotFoundException) {
                     Log.e("BiblioTech", "Failed to launch browser")
@@ -298,24 +175,22 @@ internal class BooksAdapter(private val context: Context) :
 
         thumbSmall.setImageDrawable(getNoThumb(context))
         thumbLarge.setImageResource(0)
-        QueueEntry.getThumbnail(
-            book.book.id,
-            book.book.smallThumb,
-            kSmallThumb
+        BookRepository.repo.getThumbnail(
+            book.book,
+            false
         ) {
-            val pos = holder.layoutPosition;
+            val pos = holder.layoutPosition
             if (it != null && pos >= 0) {
                 val item = getItem(pos)
                 if (item.book.id == id)
                     thumbSmall.setImageBitmap(it)
             }
         }
-        QueueEntry.getThumbnail(
-            book.book.id,
-            book.book.largeThumb,
-            kThumb
+        BookRepository.repo.getThumbnail(
+            book.book,
+            true
         ) {
-            val pos = holder.layoutPosition;
+            val pos = holder.layoutPosition
             if (it != null && pos >= 0) {
                 val item = getItem(pos)
                 if (item.book.id == id)

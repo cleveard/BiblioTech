@@ -1,6 +1,8 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Parcel
 import android.os.Parcelable
 import androidx.lifecycle.LiveData
@@ -8,6 +10,14 @@ import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.example.cleve.bibliotech.MainActivity
+import java.io.*
+import java.lang.Exception
+import java.net.HttpURLConnection
+import java.net.MalformedURLException
+import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -50,6 +60,9 @@ private const val BOOK_TAGS_TABLE = "book_tags"
 private const val BOOK_TAGS_ID_COLUMN = "book_tags_id"
 private const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"
 private const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"
+
+private const val kSmallThumb = ".small.png"
+private const val kThumb = ".png"
 
 private val SORT_ORDER: HashMap<String, Comparator<BookAndAuthors>> = hashMapOf(
     BookEntity.SORT_BY_AUTHOR_LAST_FIRST to compareBy(
@@ -325,7 +338,7 @@ open class BookAndAuthors(
 
     constructor(book: BookEntity, selected: Boolean, authors: List<AuthorEntity>,
                 categories: List<CategoryEntity>, tags: List<TagEntity>) : this(book, authors, categories, tags) {
-        this.selected = selected;
+        this.selected = selected
     }
 
     override fun equals(other: Any?): Boolean {
@@ -780,6 +793,8 @@ abstract class BookDao(private val db: BookDatabase) {
     @Transaction
     open fun addOrUpdate(book: BookAndAuthors) {
         addOrUpdate(book.book)
+        deleteThumbFile(book.book.id, true)
+        deleteThumbFile(book.book.id, false)
 
         db.getCategoryDao().add(book.book.id, book.categories)
         db.getAuthorDao().add(book.book.id, book.authors)
@@ -793,6 +808,8 @@ abstract class BookDao(private val db: BookDatabase) {
         db.getAuthorDao().delete(book)
         db.getCategoryDao().delete(book)
 
+        deleteThumbFile(book.book.id, true)
+        deleteThumbFile(book.book.id, false)
         delete(book.book)
 
     }
@@ -822,6 +839,133 @@ abstract class BookDao(private val db: BookDatabase) {
 
     fun getBooks(): LiveData<List<BookAndAuthors>> {
         return getBooksRawLive(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
+    }
+
+    // Thumbnails
+    @Query("SELECT $SMALL_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+    protected abstract fun getSmallThumbnailUrl(bookId: Long): String?
+
+    @Query("SELECT $LARGE_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+    protected abstract fun getLargeThumbnailUrl(bookId: Long): String?
+
+    private fun getThumbFile(bookId: Long, large: Boolean): File {
+        return File(MainActivity.cache, "BiblioTech.Thumb.$bookId${if (large) kThumb else kSmallThumb}")
+    }
+
+    private fun deleteThumbFile(bookId: Long, large: Boolean) {
+        try {
+            getThumbFile(bookId, large).delete()
+        } catch (e: Exception) {}
+    }
+
+    fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+        // Get the file path
+        val file = getThumbFile(bookId, large)
+        // Load the bitmap return null, if the load succeeds return the bitmap
+        val result = loadBitmap(file)
+        if (result != null)
+                return result
+        // If the file already exists, then don't try to download it again
+        if (file.exists())
+            return null
+
+        var tmpFile: File
+        do {
+            // Get the URL to the image, return null if it fails
+            val url = getThumbUrl(bookId, file, large)?: return null
+
+            // Download the bitmap, return null if files
+            tmpFile = downloadBitmap(url, file)?: return null
+
+            // Move the downloaded bitmap to the proper file, retry if it fails
+        } while (!moveFile(tmpFile, file))
+
+        return loadBitmap(file)
+    }
+
+    // Load bitmap from a file
+    // If the file doesn't exist, return null.
+    private fun loadBitmap(file: File): Bitmap? {
+        return BitmapFactory.decodeFile(file.absolutePath)
+    }
+
+    @Transaction
+    protected open fun getThumbUrl(bookId: Long, file: File, large: Boolean): URL? {
+        // Query the data base to get the URL. Return null if there isn't one
+        val urlString = if (large) getLargeThumbnailUrl(bookId) else getSmallThumbnailUrl(bookId)
+        urlString?: return null
+        try {
+            // Make sure the url is valid
+            val url = URL(urlString)
+            // Create a new file. If it is deleted while downloading the bitmap
+            // Then, the data base was updated and we try to get the bitmap again
+            file.createNewFile()
+            return url
+        } catch (e: Exception) {}
+        return null
+    }
+
+    @Transaction
+    protected open fun moveFile(from: File, to: File): Boolean {
+        // If the file, which we created before was deleted, then
+        // the book was updated, and we need to try getting the thumbnail again
+        if (!to.exists())
+            return false
+
+        try {
+            // Move the tmp file to the real file
+            Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Exception) {}
+        return true
+    }
+
+    private fun downloadBitmap(url: URL, file: File): File? {
+        var result = false
+        var connection: HttpURLConnection? = null
+        var output: BufferedOutputStream? = null
+        var stream: InputStream? = null
+        var buffered: BufferedInputStream? = null
+        val tmpFile = File.createTempFile("tmp_bitmap", null, file.parentFile)?: return null
+        try {
+            connection = url.openConnection() as HttpURLConnection
+            output = BufferedOutputStream(FileOutputStream(tmpFile))
+            stream = connection.inputStream
+            buffered = BufferedInputStream(stream!!)
+            val kBufSize = 4096
+            val buf = ByteArray(kBufSize)
+            var size: Int
+            while (buffered.read(buf).also { size = it } >= 0) {
+                if (size > 0) output.write(buf, 0, size)
+            }
+            result = true
+        } catch (e: MalformedURLException) {
+        } catch (e: IOException) {
+        }
+        if (output != null) {
+            try {
+                output.close()
+            } catch (e: IOException) {
+                result = false
+            }
+        }
+        if (buffered != null) {
+            try {
+                buffered.close()
+            } catch (e: IOException) {
+            }
+        }
+        if (stream != null) {
+            try {
+                stream.close()
+            } catch (e: IOException) {
+            }
+        }
+        connection?.disconnect()
+        if (result)
+            return tmpFile
+
+        tmpFile.delete()
+        return null
     }
 }
 
