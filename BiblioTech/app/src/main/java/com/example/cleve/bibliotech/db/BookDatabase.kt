@@ -11,6 +11,8 @@ import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.MainActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.*
 import java.lang.Exception
 import java.net.HttpURLConnection
@@ -518,30 +520,30 @@ open class BookAndAuthors(
 abstract class TagDao {
     // Get the list of tags
     @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
-    abstract fun get(): List<TagEntity>
+    abstract suspend fun get(): List<TagEntity>
 
     // Add a tag
     @Insert
-    abstract fun add(tag: TagEntity): Long
+    abstract suspend fun add(tag: TagEntity): Long
 
     // Add a tag to a book
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    protected abstract fun add(bookAndTag: BookAndTagEntity): Long
+    protected abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
 
     // Delete tags for a book
     @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_BOOK_ID_COLUMN = :bookId")
-    protected abstract fun deleteBook(bookId: Long): Int
+    protected abstract suspend fun deleteBook(bookId: Long): Int
 
     // Delete books for a tag
     @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId")
-    protected abstract fun deleteTag(tagId: Long): Int
+    protected abstract suspend fun deleteTag(tagId: Long): Int
 
     @Delete
-    protected abstract fun deleteTag(tag: TagEntity)
+    protected abstract suspend fun deleteTag(tag: TagEntity)
 
     // Add a single tag for a book
     @Transaction
-    open fun add(bookId: Long, tag: TagEntity) {
+    open suspend fun add(bookId: Long, tag: TagEntity) {
         // Find the author
         val list: List<TagEntity> = findByName(tag.name)
         tag.id = if (list.isNotEmpty()) {
@@ -553,14 +555,14 @@ abstract class TagDao {
     }
 
     @Transaction
-    open fun add(bookId: Long, tags: List<TagEntity>) {
+    open suspend fun add(bookId: Long, tags: List<TagEntity>) {
         deleteBook(bookId)
         for (tag in tags)
             add(bookId, tag)
     }
 
     @Transaction
-    open fun delete(book: BookAndAuthors, deleteTags: Boolean = false) {
+    open suspend fun delete(book: BookAndAuthors, deleteTags: Boolean = false) {
         deleteBook(book.book.id)
         if (deleteTags) {
             for (tag in book.tags) {
@@ -572,7 +574,7 @@ abstract class TagDao {
     }
 
     @Transaction
-    open fun delete(tag: TagEntity) {
+    open suspend fun delete(tag: TagEntity) {
         deleteTag(tag.id)
         deleteTag(tag)
     }
@@ -580,17 +582,17 @@ abstract class TagDao {
     // Find an tag by name
     @Query(value = "SELECT * FROM $TAGS_TABLE"
             + " WHERE $TAGS_NAME_COLUMN = :name")
-    abstract fun findByName(name: String): List<TagEntity>
+    abstract suspend fun findByName(name: String): List<TagEntity>
 
     @Query("SELECT * FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId LIMIT :limit")
-    abstract fun findById(tagId: Long, limit: Int = -1): List<BookAndTagEntity>
+    abstract suspend fun findById(tagId: Long, limit: Int = -1): List<BookAndTagEntity>
 }
 
 @Dao
 abstract class AuthorDao {
     // Add multiple authors for a book
     @Transaction
-    open fun add(bookId: Long, authors: List<AuthorEntity>) {
+    open suspend fun add(bookId: Long, authors: List<AuthorEntity>) {
         deleteBook(bookId)
         for (author in authors)
             add(bookId, author)
@@ -598,7 +600,7 @@ abstract class AuthorDao {
 
     // Add a single author for a book
     @Transaction
-    open fun add(bookId: Long, author: AuthorEntity) {
+    open suspend fun add(bookId: Long, author: AuthorEntity) {
         // Find the author
         val list: List<AuthorEntity> = findByName(author.lastName, author.remainingName)
         author.id = if (list.isNotEmpty()) {
@@ -611,37 +613,37 @@ abstract class AuthorDao {
 
     // Delete authors for a book
     @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_BOOK_ID_COLUMN = :bookId")
-    abstract fun deleteBook(bookId: Long): Int
+    abstract suspend fun deleteBook(bookId: Long): Int
 
     // Delete books for an author
     @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId")
-    protected abstract fun deleteAuthor(authorId: Long): Int
+    protected abstract suspend fun deleteAuthor(authorId: Long): Int
 
     @Delete
-    protected abstract fun delete(author: AuthorEntity)
+    protected abstract suspend fun delete(author: AuthorEntity)
 
     // Get all authors
     @Query(value = "SELECT * FROM $AUTHORS_TABLE ORDER BY $LAST_NAME_COLUMN")
-    abstract fun getAll(): List<AuthorEntity>
+    abstract suspend fun getAll(): List<AuthorEntity>
 
     // Find an author by name
     @Query(value = "SELECT * FROM $AUTHORS_TABLE"
         + " WHERE $LAST_NAME_COLUMN = :last AND $REMAINING_COLUMN = :remaining")
-    abstract fun findByName(last: String, remaining: String): List<AuthorEntity>
+    abstract suspend fun findByName(last: String, remaining: String): List<AuthorEntity>
 
     @Query("SELECT * FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId LIMIT :limit")
-    abstract fun findById(authorId: Long, limit: Int = -1): List<BookAndAuthorEntity>
+    abstract suspend fun findById(authorId: Long, limit: Int = -1): List<BookAndAuthorEntity>
 
     // add an author
     @Insert
-    abstract fun add(author: AuthorEntity) : Long
+    abstract suspend fun add(author: AuthorEntity) : Long
 
     // add a book and author relationship
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    protected abstract fun add(bookAndAuthor: BookAndAuthorEntity): Long
+    protected abstract suspend fun add(bookAndAuthor: BookAndAuthorEntity): Long
 
     @Transaction
-    open fun delete(book: BookAndAuthors, deleteAuthors: Boolean = true) {
+    open suspend fun delete(book: BookAndAuthors, deleteAuthors: Boolean = true) {
         deleteBook(book.book.id)
         if (deleteAuthors) {
             for (author in book.authors) {
@@ -656,14 +658,14 @@ abstract class AuthorDao {
 @Dao
 abstract class CategoryDao {
     @Insert
-    abstract fun add(category: CategoryEntity): Long
+    abstract suspend fun add(category: CategoryEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    abstract fun add(bookCategory: BookAndCategoryEntity) : Long
+    abstract suspend fun add(bookCategory: BookAndCategoryEntity) : Long
 
     // Add multiple categories for a book
     @Transaction
-    open fun add(bookId: Long, categories: List<CategoryEntity>) {
+    open suspend fun add(bookId: Long, categories: List<CategoryEntity>) {
         deleteBook(bookId)
         for (cat in categories)
             add(bookId, cat)
@@ -671,7 +673,7 @@ abstract class CategoryDao {
 
     // Add a single categories for a book
     @Transaction
-    open fun add(bookId: Long, category: CategoryEntity) {
+    open suspend fun add(bookId: Long, category: CategoryEntity) {
         // Find the author
         val list: List<CategoryEntity> = findByName(category.category)
         category.id = if (list.isNotEmpty()) {
@@ -688,25 +690,25 @@ abstract class CategoryDao {
 
     // Delete categories for a book
     @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_BOOK_ID_COLUMN = :bookId")
-    abstract fun deleteBook(bookId: Long): Int
+    abstract suspend fun deleteBook(bookId: Long): Int
 
     // Delete books for a category
     @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId")
-    protected abstract fun deleteCategory(categoryId: Long): Int
+    protected abstract suspend fun deleteCategory(categoryId: Long): Int
 
     @Delete
-    protected abstract fun delete(category: CategoryEntity)
+    protected abstract suspend fun delete(category: CategoryEntity)
 
     // Find an author by name
     @Query(value = "SELECT * FROM $CATEGORIES_TABLE"
             + " WHERE $CATEGORY_COLUMN = :category")
-    abstract fun findByName(category: String): List<CategoryEntity>
+    abstract suspend fun findByName(category: String): List<CategoryEntity>
 
     @Query("SELECT * FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId LIMIT :limit")
-    abstract fun findById(categoryId: Long, limit: Int = -1): List<BookAndCategoryEntity>
+    abstract suspend fun findById(categoryId: Long, limit: Int = -1): List<BookAndCategoryEntity>
 
     @Transaction
-    open fun delete(book: BookAndAuthors, deleteCategories: Boolean = true) {
+    open suspend fun delete(book: BookAndAuthors, deleteCategories: Boolean = true) {
         deleteBook(book.book.id)
         if (deleteCategories) {
             for (category in book.categories) {
@@ -722,13 +724,13 @@ abstract class CategoryDao {
 abstract class BookDao(private val db: BookDatabase) {
     // Add a book to the data base
     @Insert
-    protected abstract fun add(book: BookEntity): Long
+    protected abstract suspend fun add(book: BookEntity): Long
 
     @Delete
-    protected abstract fun delete(book: BookEntity)
+    protected abstract suspend fun delete(book: BookEntity)
 
     @Update
-    protected abstract fun update(book: BookEntity)
+    protected abstract suspend fun update(book: BookEntity)
 
     @TypeConverters(Converters::class)
     protected data class Ids(
@@ -740,9 +742,9 @@ abstract class BookDao(private val db: BookDatabase) {
     )
 
     @RawQuery
-    protected abstract fun findConflict(query: SupportSQLiteQuery): Ids?
+    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): Ids?
 
-    private fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Ids? {
+    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Ids? {
         if (volumeId == null && ISBN == null)
             return null
         val args = ArrayList<String?>(3)
@@ -770,7 +772,7 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     @Transaction
-    protected open fun addOrUpdate(book: BookEntity) {
+    protected open suspend fun addOrUpdate(book: BookEntity) {
         val time = Calendar.getInstance().time
         book.added = time
         book.modified = time
@@ -791,7 +793,7 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Add book from description
     @Transaction
-    open fun addOrUpdate(book: BookAndAuthors) {
+    open suspend fun addOrUpdate(book: BookAndAuthors) {
         addOrUpdate(book.book)
         deleteThumbFile(book.book.id, true)
         deleteThumbFile(book.book.id, false)
@@ -803,7 +805,7 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Delete book from description
     @Transaction
-    open fun delete(book: BookAndAuthors) {
+    open suspend fun delete(book: BookAndAuthors) {
         db.getTagDao().delete(book)
         db.getAuthorDao().delete(book)
         db.getCategoryDao().delete(book)
@@ -817,48 +819,54 @@ abstract class BookDao(private val db: BookDatabase) {
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
             + " WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
-    abstract fun getBook(bookId: Long): BookAndAuthors?
+    abstract suspend fun getBook(bookId: Long): BookAndAuthors?
 
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
             + " WHERE $ISBN_COLUMN = :ISBN LIMIT 1")
-    abstract fun getBookByISBN(ISBN: String): BookAndAuthors?
+    abstract suspend fun getBookByISBN(ISBN: String): BookAndAuthors?
 
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
             + " WHERE $VOLUME_ID_COLUMN = :volumeId LIMIT 1")
-    abstract fun getBookByVolume(volumeId: String): BookAndAuthors?
+    abstract suspend fun getBookByVolume(volumeId: String): BookAndAuthors?
 
     @Transaction
     @RawQuery
-    protected abstract fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>
+    protected abstract suspend fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>
 
     @Transaction
     @RawQuery(observedEntities = [BookAndAuthors::class])
-    protected abstract fun getBooksRawLive(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>>
+    protected abstract fun getBooksRawLiveSS(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>>
 
-    fun getBooks(): LiveData<List<BookAndAuthors>> {
+    protected suspend fun getBooksRawLive(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>> {
+        return CoroutinesRoom.execute(db, false) {
+            getBooksRawLiveSS(query)
+        }
+    }
+
+    suspend fun getBooks(): LiveData<List<BookAndAuthors>> {
         return getBooksRawLive(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
     }
 
     // Thumbnails
     @Query("SELECT $SMALL_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
-    protected abstract fun getSmallThumbnailUrl(bookId: Long): String?
+    protected abstract suspend fun getSmallThumbnailUrl(bookId: Long): String?
 
     @Query("SELECT $LARGE_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
-    protected abstract fun getLargeThumbnailUrl(bookId: Long): String?
+    protected abstract suspend fun getLargeThumbnailUrl(bookId: Long): String?
 
     private fun getThumbFile(bookId: Long, large: Boolean): File {
         return File(MainActivity.cache, "BiblioTech.Thumb.$bookId${if (large) kThumb else kSmallThumb}")
     }
 
-    private fun deleteThumbFile(bookId: Long, large: Boolean) {
+    private suspend fun deleteThumbFile(bookId: Long, large: Boolean) {
         try {
-            getThumbFile(bookId, large).delete()
+            withContext(Dispatchers.IO) { getThumbFile(bookId, large).delete() }
         } catch (e: Exception) {}
     }
 
-    fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+    suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
         // Get the file path
         val file = getThumbFile(bookId, large)
         // Load the bitmap return null, if the load succeeds return the bitmap
@@ -885,28 +893,32 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Load bitmap from a file
     // If the file doesn't exist, return null.
-    private fun loadBitmap(file: File): Bitmap? {
-        return BitmapFactory.decodeFile(file.absolutePath)
+    private suspend fun loadBitmap(file: File): Bitmap? {
+        return withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.absolutePath) }
     }
 
     @Transaction
-    protected open fun getThumbUrl(bookId: Long, file: File, large: Boolean): URL? {
+    protected open suspend fun getThumbUrl(bookId: Long, file: File, large: Boolean): URL? {
         // Query the data base to get the URL. Return null if there isn't one
         val urlString = if (large) getLargeThumbnailUrl(bookId) else getSmallThumbnailUrl(bookId)
         urlString?: return null
-        try {
-            // Make sure the url is valid
-            val url = URL(urlString)
-            // Create a new file. If it is deleted while downloading the bitmap
-            // Then, the data base was updated and we try to get the bitmap again
-            file.createNewFile()
-            return url
-        } catch (e: Exception) {}
-        return null
+        @Suppress("BlockingMethodInNonBlockingContext")
+        return withContext(Dispatchers.IO)  {
+            var url: URL? = null
+            try {
+                // Make sure the url is valid
+                val tmpUrl = URL(urlString)
+                // Create a new file. If it is deleted while downloading the bitmap
+                // Then, the data base was updated and we try to get the bitmap again
+                file.createNewFile()
+                url = tmpUrl
+            } catch (e: Exception) {}
+            url
+        }
     }
 
     @Transaction
-    protected open fun moveFile(from: File, to: File): Boolean {
+    protected open suspend fun moveFile(from: File, to: File): Boolean {
         // If the file, which we created before was deleted, then
         // the book was updated, and we need to try getting the thumbnail again
         if (!to.exists())
@@ -914,58 +926,63 @@ abstract class BookDao(private val db: BookDatabase) {
 
         try {
             // Move the tmp file to the real file
-            Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            @Suppress("BlockingMethodInNonBlockingContext")
+            withContext(Dispatchers.IO) {
+                Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
         } catch (e: Exception) {}
         return true
     }
 
-    private fun downloadBitmap(url: URL, file: File): File? {
-        var result = false
-        var connection: HttpURLConnection? = null
-        var output: BufferedOutputStream? = null
-        var stream: InputStream? = null
-        var buffered: BufferedInputStream? = null
-        val tmpFile = File.createTempFile("tmp_bitmap", null, file.parentFile)?: return null
-        try {
-            connection = url.openConnection() as HttpURLConnection
-            output = BufferedOutputStream(FileOutputStream(tmpFile))
-            stream = connection.inputStream
-            buffered = BufferedInputStream(stream!!)
-            val kBufSize = 4096
-            val buf = ByteArray(kBufSize)
-            var size: Int
-            while (buffered.read(buf).also { size = it } >= 0) {
-                if (size > 0) output.write(buf, 0, size)
-            }
-            result = true
-        } catch (e: MalformedURLException) {
-        } catch (e: IOException) {
-        }
-        if (output != null) {
+    private suspend fun downloadBitmap(url: URL, file: File): File? {
+        @Suppress("BlockingMethodInNonBlockingContext")
+        return withContext(Dispatchers.IO) {
+            var result = false
+            var connection: HttpURLConnection? = null
+            var output: BufferedOutputStream? = null
+            var stream: InputStream? = null
+            var buffered: BufferedInputStream? = null
+            val tmpFile = File.createTempFile("tmp_bitmap", null, file.parentFile) ?: return@withContext null
             try {
-                output.close()
-            } catch (e: IOException) {
-                result = false
-            }
-        }
-        if (buffered != null) {
-            try {
-                buffered.close()
+                connection = url.openConnection() as HttpURLConnection
+                output = BufferedOutputStream(FileOutputStream(tmpFile))
+                stream = connection.inputStream
+                buffered = BufferedInputStream(stream!!)
+                val kBufSize = 4096
+                val buf = ByteArray(kBufSize)
+                var size: Int
+                while (buffered.read(buf).also { size = it } >= 0) {
+                    if (size > 0) output.write(buf, 0, size)
+                }
+                result = true
+            } catch (e: MalformedURLException) {
             } catch (e: IOException) {
             }
-        }
-        if (stream != null) {
-            try {
-                stream.close()
-            } catch (e: IOException) {
+            if (output != null) {
+                try {
+                    output.close()
+                } catch (e: IOException) {
+                    result = false
+                }
             }
-        }
-        connection?.disconnect()
-        if (result)
-            return tmpFile
+            if (buffered != null) {
+                try {
+                    buffered.close()
+                } catch (e: IOException) {
+                }
+            }
+            if (stream != null) {
+                try {
+                    stream.close()
+                } catch (e: IOException) {
+                }
+            }
+            connection?.disconnect()
+            if (result)
+                return@withContext tmpFile
 
-        tmpFile.delete()
-        return null
+            null
+        }
     }
 }
 

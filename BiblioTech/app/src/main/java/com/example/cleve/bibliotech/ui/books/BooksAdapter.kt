@@ -15,6 +15,7 @@ import android.widget.*
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.launch
 import java.lang.StringBuilder
 import java.text.SimpleDateFormat
 
@@ -127,6 +128,22 @@ internal class BooksAdapter(private val context: Context) :
         return holder
     }
 
+    fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
+        BookRepository.repo.scope.launch {
+            BookRepository.repo.getThumbnail(
+                bookId,
+                large
+            )?.also {
+                val pos = holder.layoutPosition
+                if (it != null && pos >= 0) {
+                    val item = getItem(pos)
+                    if (item.book.id == bookId)
+                        holder.itemView.findViewById<ImageView>(viewId).setImageBitmap(it)
+                }
+            }
+        }
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val book: BookAndAuthors = getItem(position)
         val id = book.book.id
@@ -175,27 +192,7 @@ internal class BooksAdapter(private val context: Context) :
 
         thumbSmall.setImageDrawable(getNoThumb(context))
         thumbLarge.setImageResource(0)
-        BookRepository.repo.getThumbnail(
-            book.book,
-            false
-        ) {
-            val pos = holder.layoutPosition
-            if (it != null && pos >= 0) {
-                val item = getItem(pos)
-                if (item.book.id == id)
-                    thumbSmall.setImageBitmap(it)
-            }
-        }
-        BookRepository.repo.getThumbnail(
-            book.book,
-            true
-        ) {
-            val pos = holder.layoutPosition
-            if (it != null && pos >= 0) {
-                val item = getItem(pos)
-                if (item.book.id == id)
-                    thumbLarge.setImageBitmap(it)
-            }
-        }
+        bindThumb(book.book.id, false, holder, R.id.book_list_thumb)
+        bindThumb(book.book.id, true, holder, R.id.book_thumb)
     }
 }

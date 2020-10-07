@@ -2,13 +2,12 @@ package com.example.cleve.bibliotech.db
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.Looper
 import android.util.Range
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import java.util.concurrent.Executor
-import java.util.concurrent.Executors
+import androidx.lifecycle.Observer
+import kotlinx.coroutines.*
 
 class BookRepository {
     companion object {
@@ -20,23 +19,15 @@ class BookRepository {
                 BookDatabase.initialize(context)
                 mRepo = BookRepository()
             }
-            mRepo?.mainThreadExecutor = ContextCompat.getMainExecutor(context)
-            mRepo?.mainThread = Looper.getMainLooper().thread
         }
         fun close() {
+            mRepo?.also{
+                it.scope.cancel()
+                mRepo = null
+            }
             BookDatabase.close()
-            mRepo = null
         }
     }
-
-    fun interface ExecutorCallback<T> {
-        fun run(value: T?, error: Throwable?)
-    }
-
-    fun interface RunnableWithReturn<T> {
-        fun run(): T
-    }
-
 
     private val _selectChanges = MutableLiveData<List<Range<Int>>>(ArrayList())
     val selectChanges: LiveData<List<Range<Int>>>
@@ -45,50 +36,39 @@ class BookRepository {
     val selectCount: Int
         get() = _selectCount
     private val db = BookDatabase.db
-    private var executor = object {
-        val pool = Executors.newFixedThreadPool(3)
-        fun execute(runnable: Runnable) {
-            if (mainThread == Thread.currentThread())
-                pool.execute(runnable)
-            else
-                runnable.run()
-        }
 
-        fun <T> execute(run: RunnableWithReturn<T>, done: ExecutorCallback<T>) {
-            if (mainThread == Thread.currentThread()) {
-                pool.execute {
-                    var value: T? = null
-                    var error: Throwable? = null
-                    try {
-                        value = run.run()
-                    } catch (e: java.lang.Exception) {
-                        error = e
-                    }
-                    mainThreadExecutor.execute {
-                        done.run(value, error)
-                    }
-                }
-            } else {
-                var value: T? = null
-                var error: Throwable? = null
-                try {
-                    value = run.run()
-                } catch (e: java.lang.Exception) {
-                    error = e
-                }
-                done.run(value, error)
-            }
+    val scope = MainScope()
+    private lateinit var _books: LiveData<List<BookAndAuthors>>
+    var books: LiveData<List<BookAndAuthors>>
+        get() {
+            return _books
+        }
+        set(books: LiveData<List<BookAndAuthors>>) {
+            _books = books
+            for (o in observers)
+                o.onChanged(_books)
+        }
+    private val observers = HashSet<Observer<LiveData<List<BookAndAuthors>>>>()
+    init {
+        scope.launch {
+            books = db.getBookDao().getBooks()
         }
     }
-    private lateinit var mainThreadExecutor: Executor
-    private lateinit var mainThread: Thread
 
-    val books = db.getBookDao().getBooks()
+    fun observeBooks(observer: Observer<LiveData<List<BookAndAuthors>>>) {
+        observers.add(observer)
+        if (this::_books.isInitialized)
+            observer.onChanged(_books)
+    }
+
+    fun removeObserver(observer: Observer<LiveData<List<BookAndAuthors>>>) {
+        observers.remove(observer)
+        if (this::_books.isInitialized)
+            observer.onChanged(_books)
+    }
 
     fun addOrUpdateBook(book: BookAndAuthors) {
-        executor.execute {
-            db.getBookDao().addOrUpdate(book)
-        }
+        scope.launch { db.getBookDao().addOrUpdate(book) }
     }
 
     fun delete(book: BookAndAuthors) {
@@ -96,21 +76,17 @@ class BookRepository {
             book.selected = false
             _selectCount--
         }
-        executor.execute {
-            db.getBookDao().delete(book)
-        }
+        scope.launch { db.getBookDao().delete(book) }
     }
 
-    fun getThumbnail(
-        book: BookEntity,
-        large: Boolean,
-        callback: (Bitmap?) -> Unit
-    ) {
-        executor.execute( {
-            db.getBookDao().getThumbnail(book.id, large)
-        }) { value, _ ->
-            callback(value)
-        }
+    suspend fun getThumbnail(
+        bookId: Long,
+        large: Boolean
+    ): Bitmap? {
+        try {
+            return db.getBookDao().getThumbnail(bookId, large)
+        } catch (e: Exception) {}
+        return null
     }
 
     fun select(index: Int, select: Boolean): Int {

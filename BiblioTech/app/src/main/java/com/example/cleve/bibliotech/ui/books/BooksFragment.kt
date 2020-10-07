@@ -30,14 +30,15 @@ class BooksFragment : Fragment() {
 
         recycler.layoutManager = LinearLayoutManager(activity)
         adapter = BooksAdapter(container!!.context)
-        BookRepository.repo.books.observe(this,
-            Observer<List<BookAndAuthors>> { list -> adapter.submitList(list) })
-        BookRepository.repo.selectChanges.observe(this,
-            Observer<List<Range<Int>>> { list -> run {
-                    for (range in list)
-                        adapter.notifyItemRangeChanged(range.lower, range.upper + 1 - range.lower)
-                }
-            })
+        BookRepository.repo.observeBooks {
+            it.observe(this) { list -> adapter.submitList(list) }
+        }
+        BookRepository.repo.selectChanges.observe(this) {
+            list -> run {
+                for (range in list)
+                    adapter.notifyItemRangeChanged(range.lower, range.upper + 1 - range.lower)
+            }
+        }
         recycler.adapter = adapter
         setHasOptionsMenu(true)
 
