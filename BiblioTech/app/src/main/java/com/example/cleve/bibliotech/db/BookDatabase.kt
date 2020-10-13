@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Parcel
 import android.os.Parcelable
-import androidx.lifecycle.LiveData
+import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
@@ -353,6 +353,7 @@ open class BookAndAuthors(
         if (authors != other.authors) return false
         if (categories != other.categories) return false
         if (tags != other.tags) return false
+        if (selected != other.selected) return false
 
         return true
     }
@@ -362,6 +363,7 @@ open class BookAndAuthors(
         result = 31 * result + authors.hashCode()
         result = 31 * result + categories.hashCode()
         result = 31 * result + tags.hashCode()
+        result = 31 * result + selected.hashCode()
         return result
     }
 
@@ -531,8 +533,29 @@ abstract class TagDao {
     protected abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
 
     // Delete tags for a book
-    @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_BOOK_ID_COLUMN = :bookId")
-    protected abstract suspend fun deleteBook(bookId: Long): Int
+    @RawQuery(observedEntities = [BookAndTagEntity::class])
+    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
+
+    @Transaction
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $BOOK_TAGS_TABLE",
+            BOOK_TAGS_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { delete(it) }?: 0
+    }
+
+    // Query tags for a book
+    @RawQuery(observedEntities = [BookAndTagEntity::class])
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT $BOOK_TAGS_TAG_ID_COLUMN FROM $BOOK_TAGS_TABLE",
+            BOOK_TAGS_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { queryBookIds(it) }
+    }
 
     // Delete books for a tag
     @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId")
@@ -556,20 +579,25 @@ abstract class TagDao {
 
     @Transaction
     open suspend fun add(bookId: Long, tags: List<TagEntity>) {
-        deleteBook(bookId)
+        deleteBooks(arrayOf(bookId))
         for (tag in tags)
             add(bookId, tag)
     }
 
     @Transaction
-    open suspend fun delete(book: BookAndAuthors, deleteTags: Boolean = false) {
-        deleteBook(book.book.id)
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteTags: Boolean = false) {
         if (deleteTags) {
-            for (tag in book.tags) {
-                val list: List<BookAndTagEntity> = findById(tag.id, 1)
-                if (list.isEmpty())
-                    deleteTag(tag)
+            val tags = queryBookIds(bookIds, invert)
+            deleteBooks(bookIds, invert)
+            tags?.let {
+                for (tag in it) {
+                    val list: List<BookAndTagEntity> = findById(tag, 1)
+                    if (list.isEmpty())
+                        deleteTag(tag)
+                }
             }
+        } else {
+            deleteBooks(bookIds)
         }
     }
 
@@ -593,7 +621,7 @@ abstract class AuthorDao {
     // Add multiple authors for a book
     @Transaction
     open suspend fun add(bookId: Long, authors: List<AuthorEntity>) {
-        deleteBook(bookId)
+        deleteBooks(arrayOf(bookId), false)
         for (author in authors)
             add(bookId, author)
     }
@@ -612,8 +640,29 @@ abstract class AuthorDao {
     }
 
     // Delete authors for a book
-    @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_BOOK_ID_COLUMN = :bookId")
-    abstract suspend fun deleteBook(bookId: Long): Int
+    @RawQuery(observedEntities = [BookAndAuthorEntity::class])
+    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
+
+    @Transaction
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $BOOK_AUTHORS_TABLE",
+            BOOK_AUTHORS_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { delete(it) }?: 0
+    }
+
+    // Query authors for a book
+    @RawQuery(observedEntities = [BookAndAuthorEntity::class])
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT $BOOK_AUTHORS_AUTHOR_ID_COLUMN FROM $BOOK_AUTHORS_TABLE",
+            BOOK_AUTHORS_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { queryBookIds(it) }
+    }
 
     // Delete books for an author
     @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId")
@@ -621,10 +670,6 @@ abstract class AuthorDao {
 
     @Delete
     protected abstract suspend fun delete(author: AuthorEntity)
-
-    // Get all authors
-    @Query(value = "SELECT * FROM $AUTHORS_TABLE ORDER BY $LAST_NAME_COLUMN")
-    abstract suspend fun getAll(): List<AuthorEntity>
 
     // Find an author by name
     @Query(value = "SELECT * FROM $AUTHORS_TABLE"
@@ -643,14 +688,19 @@ abstract class AuthorDao {
     protected abstract suspend fun add(bookAndAuthor: BookAndAuthorEntity): Long
 
     @Transaction
-    open suspend fun delete(book: BookAndAuthors, deleteAuthors: Boolean = true) {
-        deleteBook(book.book.id)
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteAuthors: Boolean = true) {
         if (deleteAuthors) {
-            for (author in book.authors) {
-                val list: List<BookAndAuthorEntity> = findById(author.id, 1)
-                if (list.isEmpty())
-                    delete(author)
+            val authors = queryBookIds(bookIds, invert)
+            deleteBooks(bookIds, invert)
+            authors?.let {
+                for (author in it) {
+                    val list: List<BookAndAuthorEntity> = findById(author, 1)
+                    if (list.isEmpty())
+                        deleteAuthor(author)
+                }
             }
+        } else {
+            deleteBooks(bookIds, invert)
         }
     }
 }
@@ -666,7 +716,7 @@ abstract class CategoryDao {
     // Add multiple categories for a book
     @Transaction
     open suspend fun add(bookId: Long, categories: List<CategoryEntity>) {
-        deleteBook(bookId)
+        deleteBooks(arrayOf(bookId), false)
         for (cat in categories)
             add(bookId, cat)
     }
@@ -689,8 +739,29 @@ abstract class CategoryDao {
     }
 
     // Delete categories for a book
-    @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_BOOK_ID_COLUMN = :bookId")
-    abstract suspend fun deleteBook(bookId: Long): Int
+    @RawQuery(observedEntities = [BookAndCategoryEntity::class])
+    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
+
+    @Transaction
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $BOOK_CATEGORIES_TABLE",
+            BOOK_CATEGORIES_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { delete(it) }?: 0
+    }
+
+    // Query categories for a book
+    @RawQuery(observedEntities = [BookAndCategoryEntity::class])
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT $BOOK_CATEGORIES_CATEGORY_ID_COLUMN FROM $BOOK_CATEGORIES_TABLE",
+            BOOK_CATEGORIES_BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { queryBookIds(it) }
+    }
 
     // Delete books for a category
     @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId")
@@ -708,14 +779,19 @@ abstract class CategoryDao {
     abstract suspend fun findById(categoryId: Long, limit: Int = -1): List<BookAndCategoryEntity>
 
     @Transaction
-    open suspend fun delete(book: BookAndAuthors, deleteCategories: Boolean = true) {
-        deleteBook(book.book.id)
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteCategories: Boolean = true) {
         if (deleteCategories) {
-            for (category in book.categories) {
-                val list: List<BookAndCategoryEntity> = findById(category.id, 1)
-                if (list.isEmpty())
-                    delete(category)
+            val categories = queryBookIds(bookIds, invert)
+            deleteBooks(bookIds)
+            categories?.let {
+                for (category in it) {
+                    val list: List<BookAndCategoryEntity> = findById(category, 1)
+                    if (list.isEmpty())
+                        deleteCategory(category)
+                }
             }
+        } else {
+            deleteBooks(bookIds)
         }
     }
 }
@@ -726,6 +802,33 @@ abstract class BookDao(private val db: BookDatabase) {
     @Insert
     protected abstract suspend fun add(book: BookEntity): Long
 
+    @RawQuery(observedEntities = [BookAndAuthors::class])
+    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
+
+    @Transaction
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $BOOK_TABLE",
+            BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { delete(it) }?: 0
+    }
+
+    protected data class BookId(
+        @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long
+    )
+    // Query authors for a book
+    @RawQuery(observedEntities = [BookEntity::class])
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<BookId>?
+
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<BookId>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE",
+            BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let { queryBookIds(it) }
+    }
+
     @Delete
     protected abstract suspend fun delete(book: BookEntity)
 
@@ -733,7 +836,7 @@ abstract class BookDao(private val db: BookDatabase) {
     protected abstract suspend fun update(book: BookEntity)
 
     @TypeConverters(Converters::class)
-    protected data class Ids(
+    protected data class ConflictIds(
         @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
         @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
         @ColumnInfo(name = SOURCE_ID_COLUMN) val sourceId: String?,
@@ -742,9 +845,9 @@ abstract class BookDao(private val db: BookDatabase) {
     )
 
     @RawQuery
-    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): Ids?
+    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): ConflictIds?
 
-    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): Ids? {
+    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): ConflictIds? {
         if (volumeId == null && ISBN == null)
             return null
         val args = ArrayList<String?>(3)
@@ -805,14 +908,18 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Delete book from description
     @Transaction
-    open suspend fun delete(book: BookAndAuthors) {
-        db.getTagDao().delete(book)
-        db.getAuthorDao().delete(book)
-        db.getCategoryDao().delete(book)
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean) {
+        db.getTagDao().delete(bookIds, invert)
+        db.getAuthorDao().delete(bookIds, invert, true)
+        db.getCategoryDao().delete(bookIds, invert, true)
 
-        deleteThumbFile(book.book.id, true)
-        deleteThumbFile(book.book.id, false)
-        delete(book.book)
+        queryBookIds(bookIds, invert)?.let {
+            for (book in it) {
+                deleteThumbFile(book.id, true)
+                deleteThumbFile(book.id, false)
+            }
+        }
+        deleteBooks(bookIds, invert)
 
     }
 
@@ -831,22 +938,14 @@ abstract class BookDao(private val db: BookDatabase) {
             + " WHERE $VOLUME_ID_COLUMN = :volumeId LIMIT 1")
     abstract suspend fun getBookByVolume(volumeId: String): BookAndAuthors?
 
-    @Transaction
     @RawQuery
-    protected abstract suspend fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>
+    protected abstract suspend fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>?
 
-    @Transaction
     @RawQuery(observedEntities = [BookAndAuthors::class])
-    protected abstract fun getBooksRawLiveSS(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>>
+    abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>
 
-    protected suspend fun getBooksRawLive(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>> {
-        return CoroutinesRoom.execute(db, false) {
-            getBooksRawLiveSS(query)
-        }
-    }
-
-    suspend fun getBooks(): LiveData<List<BookAndAuthors>> {
-        return getBooksRawLive(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
+    fun getBooks(query: String = "SELECT * FROM $BOOK_TABLE"): PagingSource<Int, BookAndAuthors> {
+        return getBooks(SimpleSQLiteQuery(query))
     }
 
     // Thumbnails
@@ -1021,6 +1120,21 @@ abstract class BookDatabase : RoomDatabase() {
             return Room.databaseBuilder(
                 context, BookDatabase::class.java, DATABASE_FILENAME
             ).build()
+        }
+
+        internal fun buildQueryForIds(command: String, column: String, ids: Array<Any>, invert: Boolean): SupportSQLiteQuery? {
+            if (!invert && ids.isEmpty())
+                return null
+            val builder = StringBuilder()
+            builder.append(command)
+            if (!ids.isEmpty()) {
+                builder.append(" WHERE ").append(column)
+                if (invert)
+                    builder.append(" NOT")
+                builder.append(" IN ( ")
+                builder.append(Array(ids.size) { "?" }.joinToString()).append(" )")
+            }
+            return SimpleSQLiteQuery(builder.toString(), ids)
         }
     }
 

@@ -35,8 +35,15 @@
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
     <string name="delete_books">Delete books</string>
-    <string name="delete_1">Delete %1$d book?</string>
-    <string name="delete_n">Delete %1$d books?</string>
-    <string name="select_all">ALL</string>
-    <string name="select_none">NONE</string>
+    <plurals name="ask_delete">
+        <item quantity="one">Delete %d book?</item>
+        <item quantity="other">Delete %d books?</item>
+    </plurals>
+    <string name="delete_unknown">Delete books?</string>
+    <string name="all">ALL</string>
+    <string name="none">NONE</string>
+    <string name="swap">SWAP</string>
+    <string name="select_all">Select All</string>
+    <string name="select_none">Select None</string>
+    <string name="select_invert">Swap Selection</string>
 </resources>

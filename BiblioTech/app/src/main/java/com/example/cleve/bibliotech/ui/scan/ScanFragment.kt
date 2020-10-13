@@ -6,6 +6,7 @@ package com.example.cleve.bibliotech.ui.scan
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.gb.*
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.*
@@ -23,7 +24,8 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.ViewModelProviders
+import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
@@ -34,12 +36,12 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.*
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.ui.books.BooksAdapter
+import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.collectLatest
@@ -64,7 +66,7 @@ typealias BarcodeListener = (codes: Array<String>) -> Unit
 
 class ScanFragment : Fragment() {
 
-    private lateinit var scanViewModel: ScanViewModel
+    private lateinit var booksViewModel: BooksViewModel
     private lateinit var container: ConstraintLayout
     private lateinit var viewFinder: TextureView
     private lateinit var broadcastManager: LocalBroadcastManager
@@ -163,8 +165,11 @@ class ScanFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?): View? =
-        inflater.inflate(R.layout.fragment_scan, container, false)
+        savedInstanceState: Bundle?): View? {
+        booksViewModel =
+            ViewModelProviders.of(activity!!).get(BooksViewModel::class.java)
+        return inflater.inflate(R.layout.fragment_scan, container, false)
+    }
 
     private fun clearView() {
         container.findViewById<TextView>(R.id.scan_isbn).text = ""
@@ -279,7 +284,9 @@ class ScanFragment : Fragment() {
                                         it.book.title
 
                                     it.book.ISBN = isbn
-                                    repo.addOrUpdateBook(it)
+                                    booksViewModel.viewModelScope.launch {
+                                        repo.addOrUpdateBook(it)
+                                    }
                                 }
                             }
 
@@ -357,11 +364,6 @@ class ScanFragment : Fragment() {
         private var lastAnalyzedTimestamp = 0L
         var framesPerSecond: Double = -1.0
             private set
-
-        /**
-         * Used to add listeners that will be called with each barcode scanned
-         */
-        fun onFrameAnalyzed(listener: BarcodeListener) = listeners.add(listener)
 
         /**
          * Helper extension function used to extract a byte array from an image plane buffer
@@ -485,8 +487,8 @@ class ScanFragment : Fragment() {
                     val button = v as RadioButton
                     val position = v.tag as Int
                     if (position != selectedPosition) {
-                        selectedView?.setChecked(false)
-                        button.setChecked(true)
+                        selectedView?.isChecked = false
+                        button.isChecked = true
                         selectedPosition = position
                         selectedView = button
                         book = getItem(position)
@@ -513,10 +515,11 @@ class ScanFragment : Fragment() {
                     selectedView = null
                 button.text = book?.book?.title?: ""
                 button.tag = position
-                button.setChecked(position == selectedPosition)
+                button.isChecked = position == selectedPosition
             }
         }
 
+        @SuppressLint("InflateParams")
         override fun onCreateDialog(savedInstanceState: Bundle?) : Dialog {
             val args = arguments!!
             list = args.getParcelableArrayList(kList)!!

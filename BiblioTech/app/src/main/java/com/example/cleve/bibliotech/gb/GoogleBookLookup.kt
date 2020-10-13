@@ -97,7 +97,7 @@ internal class GoogleBookLookup {
 
     private data class LookupResult(val list: List<BookAndAuthors>, val itemCount: Int)
 
-    private class LookupTask internal constructor(parent: GoogleBookLookup, val mResults: LookupDelegate) :
+    private class LookupTask constructor(parent: GoogleBookLookup, val mResults: LookupDelegate) :
         AsyncTask<String?, Void?, LookupResult?>() {
         val mParent = WeakReference(parent)
         override fun doInBackground(vararg params: String?): LookupResult? {

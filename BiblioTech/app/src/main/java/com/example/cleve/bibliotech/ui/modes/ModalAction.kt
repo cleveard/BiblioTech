@@ -1,18 +1,16 @@
 package com.example.cleve.bibliotech.ui.modes
 
 import android.app.Activity
-import android.graphics.Rect
 import androidx.appcompat.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.reflect.KFunction
 
 /**
  * Base class for modal actions using ActionMode
  * @param title The title for the modal action
- * @param subTitel The sub-title for the modal action
+ * @param subTitle The sub-title for the modal action
  * @param id The id of the menu to use for the modal action
  * @param actions Array of actions to perform when menu items are selected.
  */
@@ -36,17 +34,17 @@ open class ModalAction(protected val title: String, protected val subTitle: Stri
     protected var mode: ActionMode? = null
 
     /**
-     * {@inheritdoc}
+     * {@inheritDoc}
      * Look up the action in the array of actions and call it. Return false if not found.
      */
     override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
         val itemId = item.itemId
-        val action = map.firstOrNull() { it.id == itemId }?.action
-        return if (action == null) false else action.call(this, item)
+        val action = map.firstOrNull { it.id == itemId }?.action
+        return action?.call(this, item) ?: false
     }
 
     /**
-     * {@inheritdoc}
+     * {@inheritDoc}
      * Inflate the menu and set it up.
      */
     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
@@ -54,19 +52,19 @@ open class ModalAction(protected val title: String, protected val subTitle: Stri
         mode.title = title
         mode.subtitle = subTitle
         this.mode = mode
-        return true;
+        return true
     }
 
     /**
-     * {@inheritdoc}
-     * Nothing to do here. Subclasses can handle special preperations
+     * {@inheritDoc}
+     * Nothing to do here. Subclasses can handle special preparations
      */
     override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
         return true
     }
 
     /**
-     * {@inheritdoc}
+     * {@inheritDoc}
      * Clear the ActionMode from this object
      */
     override fun onDestroyActionMode(mode: ActionMode) {
@@ -78,7 +76,7 @@ open class ModalAction(protected val title: String, protected val subTitle: Stri
      * @param activity The current activity
      */
     fun start(activity: Activity?): ActionMode {
-        val a = activity as? AppCompatActivity;
+        val a = activity as? AppCompatActivity
         return a?.startSupportActionMode(this)!!
     }
 

@@ -14,12 +14,9 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
-import android.view.Menu
-import android.view.MenuItem
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.io.File
 import com.example.cleve.bibliotech.db.*
-import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 
 const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"

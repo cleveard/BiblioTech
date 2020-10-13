@@ -12,9 +12,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.example.cleve.bibliotech.utils.BaseBooksViewModel
 import kotlinx.coroutines.launch
 import java.lang.StringBuilder
 import java.text.SimpleDateFormat
@@ -22,8 +24,13 @@ import java.text.SimpleDateFormat
 
 private val format = SimpleDateFormat("MM/dd/yy")
 
-internal class BooksAdapter(private val context: Context) :
-    ListAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+internal open class BooksAdapter(context: Context, private val viewModel: BaseBooksViewModel) :
+    PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+
+    init {
+        // Initialize the no thumbnail image
+        getNoThumb(context)
+    }
 
     private fun getNoThumb(context: Context): Drawable? {
         if (m_nothumb == null) {
@@ -109,8 +116,9 @@ internal class BooksAdapter(private val context: Context) :
         }
         contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
             if (it is ViewFlipper) {
-                val book = getItem(holder.layoutPosition)
-                BookRepository.repo.select(holder.layoutPosition, !book.selected)
+                getItem(holder.layoutPosition)?.apply {
+                    viewModel.selection.toggle(book.id)
+                }
             }
         }
         contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
@@ -128,25 +136,25 @@ internal class BooksAdapter(private val context: Context) :
         return holder
     }
 
-    fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
-        BookRepository.repo.scope.launch {
+    private fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
+        viewModel.viewModelScope.launch {
             BookRepository.repo.getThumbnail(
                 bookId,
                 large
             )?.also {
                 val pos = holder.layoutPosition
-                if (it != null && pos >= 0) {
-                    val item = getItem(pos)
-                    if (item.book.id == bookId)
-                        holder.itemView.findViewById<ImageView>(viewId).setImageBitmap(it)
+                if (pos >= 0) {
+                    getItem(pos)?.apply {
+                        if (book.id == bookId)
+                            holder.itemView.findViewById<ImageView>(viewId).setImageBitmap(it)
+                    }
                 }
             }
         }
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val book: BookAndAuthors = getItem(position)
-        val id = book.book.id
+        val book: BookAndAuthors = getItem(position)?: return
         val thumbSmall =
             holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)
         val thumbLarge =
@@ -164,7 +172,7 @@ internal class BooksAdapter(private val context: Context) :
             else
                 ""
         }
-        book.categories.setField(holder.itemView, R.id.book_catagories, ", ") {
+        book.categories.setField(holder.itemView, R.id.book_categories, ", ") {
             it.category
         }
         book.tags.setField(holder.itemView, R.id.book_tags, ", ") {
@@ -190,7 +198,7 @@ internal class BooksAdapter(private val context: Context) :
             this.requestLayout();
         } */
 
-        thumbSmall.setImageDrawable(getNoThumb(context))
+        thumbSmall.setImageDrawable(m_nothumb)
         thumbLarge.setImageResource(0)
         bindThumb(book.book.id, false, holder, R.id.book_list_thumb)
         bindThumb(book.book.id, true, holder, R.id.book_thumb)

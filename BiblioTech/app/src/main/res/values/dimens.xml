@@ -6,7 +6,7 @@
     <dimen name="nav_header_height">176dp</dimen>
     <dimen name="fab_margin">16dp</dimen>
 
-    <dimen name="book_list_title_size">18dp</dimen>
+    <dimen name="book_list_title_size">18sp</dimen>
 
     <dimen name="round_button_large">92dp</dimen>
     <dimen name="shutter_button_margin">80dp</dimen>

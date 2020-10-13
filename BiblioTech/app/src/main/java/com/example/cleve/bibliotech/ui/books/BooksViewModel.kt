@@ -1,13 +1,14 @@
 package com.example.cleve.bibliotech.ui.books
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
+import com.example.cleve.bibliotech.db.BookRepository
+import com.example.cleve.bibliotech.utils.BaseBooksViewModel
 
-class BooksViewModel : ViewModel() {
+class BooksViewModel : BaseBooksViewModel() {
 
-    private val _text = MutableLiveData<String>().apply {
-        value = "This is home Fragment"
+    val repo: BookRepository = BookRepository.repo
+    internal lateinit var adapter: BooksAdapter
+
+    override fun invalidateUI() {
+        adapter.refresh()
     }
-    val text: LiveData<String> = _text
 }

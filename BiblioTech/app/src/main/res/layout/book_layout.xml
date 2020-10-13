@@ -130,7 +130,7 @@
             android:text="@string/pages" />
 
         <TextView
-            android:id="@+id/book_catagories_label"
+            android:id="@+id/book_categories_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/book_list_link"
@@ -139,17 +139,17 @@
             android:text="@string/categories" />
 
         <TextView
-            android:id="@+id/book_catagories"
+            android:id="@+id/book_categories"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignBaseline="@+id/book_catagories_label"
-            android:layout_toRightOf="@+id/book_catagories_label" />
+            android:layout_alignBaseline="@+id/book_categories_label"
+            android:layout_toRightOf="@+id/book_categories_label" />
 
         <TextView
             android:id="@+id/book_tags_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@id/book_catagories"
+            android:layout_below="@id/book_categories"
             android:layout_alignParentLeft="true"
             android:layout_marginRight="3dp"
             android:text="@string/tags" />
@@ -168,7 +168,6 @@
             android:layout_alignBaseline="@+id/book_isbn"
             android:layout_alignParentLeft="true"
             android:layout_marginRight="3dp"
-            android:text="@string/id" />
             android:text="@string/id" />
 
         <TextView
