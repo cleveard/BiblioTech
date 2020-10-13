@@ -85,6 +85,11 @@ class Converters {
     }
 }
 
+interface Selectable {
+    val id: Long
+    var selected: Boolean
+}
+
 @TypeConverters(Converters::class)
 @Entity(tableName = BOOK_TABLE,
     indices = [
@@ -177,6 +182,14 @@ data class AuthorEntity(
     }
 }
 
+open class Author(
+    @Embedded var author: AuthorEntity
+) : Selectable {
+    @Ignore override var selected = false
+    override val id: Long
+        get() = author.id
+}
+
 @Entity(tableName = BOOK_AUTHORS_TABLE,
     foreignKeys = [
         ForeignKey(entity = BookEntity::class,
@@ -227,6 +240,14 @@ data class CategoryEntity(
     }
 }
 
+open class Category(
+    @Embedded var category: CategoryEntity
+) : Selectable {
+    @Ignore override var selected = false
+    override val id: Long
+        get() = category.id
+}
+
 @Entity(tableName = BOOK_CATEGORIES_TABLE,
     foreignKeys = [
         ForeignKey(entity = BookEntity::class,
@@ -257,6 +278,14 @@ data class TagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = TAGS_NAME_COLUMN) var name: String
 )
+
+open class Tag(
+    @Embedded var tag: TagEntity
+) : Selectable {
+    @Ignore override var selected = false
+    override val id: Long
+        get() = tag.id
+}
 
 @Entity(tableName = BOOK_TAGS_TABLE,
     foreignKeys = [
@@ -335,13 +364,10 @@ open class BookAndAuthors(
         )
     )
     var tags: List<TagEntity>
-) : Parcelable {
-    @Ignore var selected: Boolean = false
-
-    constructor(book: BookEntity, selected: Boolean, authors: List<AuthorEntity>,
-                categories: List<CategoryEntity>, tags: List<TagEntity>) : this(book, authors, categories, tags) {
-        this.selected = selected
-    }
+) : Parcelable, Selectable {
+    @Ignore override var selected: Boolean = false
+    override val id: Long
+        get() { return book.id }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -369,7 +395,6 @@ open class BookAndAuthors(
 
     override fun writeToParcel(dest: Parcel, flags: Int) {
         writeBook(dest, book)
-        dest.writeInt(if (selected) 1 else 0)
         dest.writeInt(authors.size)
         for (i in authors) {
             writeAuthor(dest, i)
@@ -427,7 +452,6 @@ open class BookAndAuthors(
         val CREATOR = object : Parcelable.Creator<BookAndAuthors> {
             override fun createFromParcel(src: Parcel): BookAndAuthors {
                 val book = readBook(src)
-                val selected = src.readInt() != 0
                 var count = src.readInt()
                 val authors = ArrayList<AuthorEntity>(count)
                 for (i in 0 until count) {
@@ -444,7 +468,7 @@ open class BookAndAuthors(
                     tags.add(readTag(src))
                 }
 
-                return BookAndAuthors(book, selected, authors, categories, tags)
+                return BookAndAuthors(book, authors, categories, tags)
             }
 
             override fun newArray(size: Int): Array<BookAndAuthors?> {
@@ -522,7 +546,7 @@ open class BookAndAuthors(
 abstract class TagDao {
     // Get the list of tags
     @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
-    abstract suspend fun get(): List<TagEntity>
+    abstract suspend fun get(): List<Tag>?
 
     // Add a tag
     @Insert
@@ -618,6 +642,10 @@ abstract class TagDao {
 
 @Dao
 abstract class AuthorDao {
+    // Get the list of authors
+    @Query(value = "SELECT * FROM $AUTHORS_TABLE ORDER BY $LAST_NAME_COLUMN, $REMAINING_COLUMN")
+    abstract suspend fun get(): List<Author>?
+
     // Add multiple authors for a book
     @Transaction
     open suspend fun add(bookId: Long, authors: List<AuthorEntity>) {
@@ -707,6 +735,10 @@ abstract class AuthorDao {
 
 @Dao
 abstract class CategoryDao {
+    // Get the list of authors
+    @Query(value = "SELECT * FROM $CATEGORIES_TABLE ORDER BY $CATEGORY_COLUMN")
+    abstract suspend fun get(): List<Category>?
+
     @Insert
     abstract suspend fun add(category: CategoryEntity): Long
 
@@ -1127,7 +1159,7 @@ abstract class BookDatabase : RoomDatabase() {
                 return null
             val builder = StringBuilder()
             builder.append(command)
-            if (!ids.isEmpty()) {
+            if (ids.isNotEmpty()) {
                 builder.append(" WHERE ").append(column)
                 if (invert)
                     builder.append(" NOT")

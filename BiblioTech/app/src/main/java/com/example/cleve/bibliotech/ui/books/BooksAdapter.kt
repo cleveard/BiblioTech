@@ -16,7 +16,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
-import com.example.cleve.bibliotech.utils.BaseBooksViewModel
+import com.example.cleve.bibliotech.utils.BaseViewModel
 import kotlinx.coroutines.launch
 import java.lang.StringBuilder
 import java.text.SimpleDateFormat
@@ -24,7 +24,7 @@ import java.text.SimpleDateFormat
 
 private val format = SimpleDateFormat("MM/dd/yy")
 
-internal open class BooksAdapter(context: Context, private val viewModel: BaseBooksViewModel) :
+internal open class BooksAdapter(context: Context, private val viewModel: BaseViewModel<BookAndAuthors>) :
     PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     init {

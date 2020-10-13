@@ -35,7 +35,8 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * Delete the selected books
      * @param item The MenuItem that initiated this action
      */
-    fun delete(@Suppress("UNUSED_PARAMETER") item: MenuItem): Boolean {
+    @Suppress("UNUSED_PARAMETER")
+    fun delete(item: MenuItem): Boolean {
         delete(fragment.context!!, viewModel) {
             finish()
         }
@@ -56,7 +57,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * Invert selection
      * @param item The MenuItem used to start the action. Used to choose select All of None
      */
-    @Suppress("MemberVisibilityCanBePrivate")
+    @Suppress("UNUSED_PARAMETER")
     fun selectInvert(item: MenuItem): Boolean {
         viewModel.selection.invert()
         return true

@@ -5,12 +5,11 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.paging.PagingData
 import androidx.paging.map
-import com.example.cleve.bibliotech.db.BookAndAuthors
-import com.example.cleve.bibliotech.db.BookRepository
+import com.example.cleve.bibliotech.db.Selectable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-abstract class BaseBooksViewModel : ViewModel() {
+abstract class BaseViewModel<T> : ViewModel() where T: Selectable {
     // Handler for selection
     inner class Selection {
         private var _inverted: Boolean = false
@@ -68,10 +67,10 @@ abstract class BaseBooksViewModel : ViewModel() {
 
     abstract fun invalidateUI()
 
-    fun applySelectionTransform(flow: Flow<PagingData<BookAndAuthors>>): Flow<PagingData<BookAndAuthors>> {
+    fun applySelectionTransform(flow: Flow<PagingData<T>>): Flow<PagingData<T>> {
         return flow.map {
             it.map { b ->
-                b.apply { selected = selection.isSelected(book.id) }
+                b.apply { selected = selection.isSelected(id) }
             }
         }
     }
