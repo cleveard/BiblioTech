@@ -58,6 +58,7 @@ private const val BOOK_CATEGORIES_CATEGORY_ID_COLUMN = "book_categories_category
 private const val TAGS_TABLE = "tags"
 private const val TAGS_ID_COLUMN = "tags_id"
 private const val TAGS_NAME_COLUMN = "tags_name"
+private const val TAGS_DESC_COLUMN = "tags_desc"
 private const val BOOK_TAGS_TABLE = "book_tags"
 private const val BOOK_TAGS_ID_COLUMN = "book_tags_id"
 private const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"
@@ -158,8 +159,8 @@ data class BookEntity(
     ])
 data class AuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "") var lastName: String,
-    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "") var remainingName: String
+    @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var lastName: String,
+    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var remainingName: String
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -219,7 +220,7 @@ data class BookAndAuthorEntity(
     ])
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = CATEGORIES_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "") var category: String
+    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var category: String
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -276,8 +277,30 @@ data class BookAndCategoryEntity(
     ])
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = TAGS_NAME_COLUMN) var name: String
-)
+    @ColumnInfo(name = TAGS_NAME_COLUMN,collate = ColumnInfo.NOCASE) var name: String,
+    @ColumnInfo(name = TAGS_DESC_COLUMN,defaultValue = "") var desc: String
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TagEntity
+
+        if (id != other.id) return false
+        if (name != other.name) return false
+        if (desc != other.desc) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + name.hashCode()
+        result = 31 * result + desc.hashCode()
+        return result
+    }
+}
+
 
 open class Tag(
     @Embedded var tag: TagEntity
@@ -285,6 +308,24 @@ open class Tag(
     @Ignore override var selected = false
     override val id: Long
         get() = tag.id
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Tag
+
+        if (tag != other.tag) return false
+        if (selected != other.selected) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = tag.hashCode()
+        result = 31 * result + selected.hashCode()
+        return result
+    }
 }
 
 @Entity(tableName = BOOK_TAGS_TABLE,
@@ -445,6 +486,7 @@ open class BookAndAuthors(
     private fun writeTag(dest: Parcel, tag: TagEntity) {
         dest.writeLong(tag.id)
         dest.writeString(tag.name)
+        dest.writeString(tag.desc)
     }
 
     companion object {
@@ -534,9 +576,11 @@ open class BookAndAuthors(
         private fun readTag(src: Parcel): TagEntity {
             val id = src.readLong()
             val name = src.readString()
+            val desc = src.readString()
             return TagEntity(
                 id = id,
-                name = name?:""
+                name = name?:"",
+                desc = desc?:""
             )
         }
     }
