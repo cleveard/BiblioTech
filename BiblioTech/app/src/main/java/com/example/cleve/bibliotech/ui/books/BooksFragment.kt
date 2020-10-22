@@ -1,7 +1,5 @@
 package com.example.cleve.bibliotech.ui.books
 
-import android.graphics.PorterDuff
-import com.example.cleve.bibliotech.db.*
 import android.os.Bundle
 import android.view.*
 import androidx.fragment.app.Fragment
@@ -12,8 +10,10 @@ import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.cleve.bibliotech.*
+import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.db.BookRepository
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
+import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -64,6 +64,18 @@ class BooksFragment : Fragment() {
         return when (item.itemId) {
             R.id.action_delete -> {
                 DeleteModalAction.doDelete(this)
+                return true
+            }
+            R.id.action_add_tags -> {
+                TagModalAction.doAddTags(this)
+                return true
+            }
+            R.id.action_remove_tags -> {
+                TagModalAction.doRemoveTags(this)
+                return true
+            }
+            R.id.action_replace_tags -> {
+                TagModalAction.doReplaceTags(this)
                 return true
             }
             R.id.action_select_none -> {

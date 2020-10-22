@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.ui.books.BooksViewModel
+import com.example.cleve.bibliotech.utils.BaseViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -77,9 +78,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      */
     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
         val actionMode = super.onCreateActionMode(mode, menu)
-        deleteItem = menu.findItem(R.id.action_delete)
-        deleteItem?.iconTintList = fragment.context?.resources?.getColorStateList(R.color.enable_icon_tint, null)
-        deleteItem?.iconTintMode = PorterDuff.Mode.MULTIPLY
+        deleteItem = BaseViewModel.setupIcon(fragment.context, menu, R.id.action_delete)
         viewModel.selection.hasSelection.observe(fragment, this)
         return actionMode
     }
@@ -144,9 +143,9 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
                 val builder = AlertDialog.Builder(context)
                 builder.setMessage(
                     if (inverted)
-                        context.resources.getString(R.string.delete_unknown)
+                        context.resources.getString(R.string.delete_unknown_books)
                     else
-                        context.resources.getQuantityString(R.plurals.ask_delete, bookIds.size, bookIds.size)
+                        context.resources.getQuantityString(R.plurals.ask_delete_books, bookIds.size, bookIds.size)
                 )
                     // Set the action buttons
                     .setPositiveButton(
@@ -155,7 +154,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
                         // OK pressed delete the books
                         viewModel.viewModelScope.launch {
                             viewModel.selection.selectAll(false)
-                            viewModel.repo.delete(bookIds, inverted)
+                            viewModel.repo.deleteBooks(bookIds, inverted)
                             // Finish the acton
                             onFinished?.run()
                         }

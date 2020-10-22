@@ -33,17 +33,56 @@
     <string name="select_title">Select the Book Title</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
     <string name="delete">Delete</string>
     <string name="delete_books">Delete books</string>
-    <plurals name="ask_delete">
+    <plurals name="ask_delete_books">
         <item quantity="one">Delete %d book?</item>
         <item quantity="other">Delete %d books?</item>
     </plurals>
-    <string name="delete_unknown">Delete books?</string>
+    <string name="delete_unknown_books">Delete books?</string>
     <string name="all">ALL</string>
     <string name="none">NONE</string>
     <string name="swap">SWAP</string>
     <string name="select_all">Select All</string>
     <string name="select_none">Select None</string>
     <string name="select_invert">Swap Selection</string>
+    <string name="tag">Tag</string>
+    <string name="tag_books">Tag books</string>
+    <string name="add_tags">Add Tags</string>
+    <string name="remove_tags">Remove Tags</string>
+    <string name="replace_tags">Replace Tags</string>
+    <string name="new_tag">New Tag</string>
+    <string name="delete_tags">Delete Tags</string>
+    <string name="edit_tag">Edit Tag</string>
+    <plurals name="ask_delete_tags">
+        <item quantity="one">Delete %d tag?</item>
+        <item quantity="other">Delete %d tags?</item>
+    </plurals>
+    <string name="delete_tags_unknown">Delete tags?</string>
+    <string name="add_title">Add New Tag</string>
+    <string name="add_message">Enter the name and description for the new tag</string>
+    <string name="edit_title">Edit Tag</string>
+    <string name="edit_message">Chnange the name and description for the tag</string>
+    <string name="name">Name</string>
+    <string name="description">Description</string>
+    <string name="tag_conflict_title">Duplicate Tag</string>
+    <string name="tag_conflict_add_message">The name of the tag you are adding already exists.\n\nReplace the duplicate tag?</string>
+    <string name="tag_conflict_edit_message">The name of the tag you are editing already exists.\n\nMerge the duplicate tag with the one you are editing?</string>
+    <plurals name="ask_tag_books">
+        <item quantity="one">Tag %d books?</item>
+        <item quantity="other">Tag %d books?</item>
+    </plurals>
+    <string name="tag_books_unknown">Tag books?</string>
+    <plurals name="ask_untag_books">
+        <item quantity="one">Remove tags from %d books?</item>
+        <item quantity="other">Remove tags from %d books?</item>
+    </plurals>
+    <string name="untag_books_unknown">Remove tags from books?</string>
+    <plurals name="ask_repl_tag_books">
+        <item quantity="one">Replace tags fos %d books?</item>
+        <item quantity="other">Replace tags for %d books?</item>
+    </plurals>
+    <string name="repl_tag_books_unknown">Replace tags for books?</string>
 </resources>

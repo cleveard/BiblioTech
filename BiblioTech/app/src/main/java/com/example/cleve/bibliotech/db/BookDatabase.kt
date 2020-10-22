@@ -587,29 +587,200 @@ open class BookAndAuthors(
 }
 
 @Dao
-abstract class TagDao {
+abstract class TagDao(private val db: BookDatabase) {
     // Get the list of tags
     @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
-    abstract suspend fun get(): List<Tag>?
+    abstract fun get(): PagingSource<Int, Tag>
+
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId LIMIT 1")
+    abstract suspend fun get(tagId: Long): TagEntity?
 
     // Add a tag
-    @Insert
-    abstract suspend fun add(tag: TagEntity): Long
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    protected abstract suspend fun internalAdd(tag: TagEntity): Long
 
+
+    // Add a single tag for a book
+    @Transaction
+    open suspend fun add(bookId: Long, tag: TagEntity) {
+        // Find the author
+        val existing: TagEntity? = findByName(tag.name)
+        tag.id = existing?.id ?: add(tag)
+        db.getBookTagDao().add(BookAndTagEntity(0, tag.id, bookId))
+    }
+
+    @Transaction
+    open suspend fun add(bookId: Long, tags: List<TagEntity>, tagIds: Array<Any>? = null, invert: Boolean = false) {
+        // Add or find all of the tags
+        for (tag in tags) {
+            tag.id = findByName(tag.name)?.id ?: add(tag)
+        }
+
+        // Build a set of all tag ids for the book
+        val set = HashSet<Any>()
+        // Add ids from tagIds
+        tagIds?.let { set.addAll(tagIds) }
+        if (invert) {
+            // If tagIds is the unselected ids, then remove
+            // the ids in tags so they will be selected
+            for (tag in tags)
+                set.remove(tag.id)
+        } else {
+            // Otherwise add the ids in tags
+            tags.mapTo(set) { it.id }
+        }
+        val list = set.toArray()
+
+        // Delete the tags that we don't want to keep
+        db.getBookTagDao().deleteTagsForBooks(arrayOf(bookId), false, list, !invert)
+
+        // Add the tags that we want
+        val tagList = db.getTagDao().queryTagIds(list, invert)
+        db.getBookTagDao().addTagsToBook(bookId, tagList)
+    }
+
+    @Transaction
+    // Add/update a tag and resolve conflict
+    open suspend fun add(tag: TagEntity, callback: (suspend (conflict: TagEntity) -> Boolean)? = null): Long {
+        // Empty tag is not accepted
+        if (tag.name == "")
+            return 0
+        // See if there is a conflicting tag with the same name.
+        val conflict = findByName(tag.name)
+        if (conflict != null && conflict.id != tag.id) {
+            // Yep, ask caller what to do, null or false return means do nothing
+            if (callback == null || !callback(conflict))
+                return 0
+
+            // If the tag.id is 0, then this is a new tag. Replace the existing tag with the new one
+            if (tag.id == 0L) {
+                tag.id = conflict.id
+            } else {
+                // We will update the tag with the fewest books
+                // Get the list of book-tag links for tag and conflict
+                val tagBooks = db.getBookTagDao().queryTags(arrayOf(tag.id))
+                val tagCount = tagBooks?.size?: 0
+                val conflictBooks = db.getBookTagDao().queryTags(arrayOf(conflict.id))
+                val conflictCount = conflictBooks?.size?: 0
+                var addBooks = tagBooks     // Assume we will update the books for tag
+                val set = HashSet<Long>()   // Use this to check for duplicates
+                if (conflictCount > tagCount) {
+                    // Convert tag links to conflict
+                    // First delete original links
+                    if (tagCount > 0)
+                        db.getBookTagDao().deleteTagsForTags(arrayOf(tag.id))
+                    // Delete the original tag
+                    delete(tag.id)
+                    // Set the tag id to the conflict id
+                    tag.id = conflict.id
+                    // Keep track of books conflict id is already used
+                    set.addAll(conflictBooks!!.map { it.bookId })
+                } else {
+                    // Convert conflict links to tag link
+                    addBooks = conflictBooks
+                    // Delete the existing links for conflict
+                    if (conflictCount > 0)
+                        db.getBookTagDao().deleteTagsForTags(arrayOf(conflict.id))
+                    // Delete the conflicting tag
+                    delete(conflict.id)
+                    // Keep tack of book tag id is already used
+                    tagBooks?.let {list -> set.addAll(list.map { it.bookId }) }
+                }
+
+                // For all of the books that we need to add
+                addBooks?.let {books ->
+                    val list = ArrayList<Any>()     // keep track of book-tag links we need to delete
+                    for (book in books) {
+                        // If the book isn't already tagged, then tag it with the new id
+                        if (!set.contains(book.bookId)) {
+                            book.tagId = tag.id
+                            db.getBookTagDao().add(book)
+                        } else {
+                            // Delete this book-tag link
+                            list.add(book.id)
+                        }
+                    }
+
+                    // Delete all of the links we kept from above
+                    if (list.isNotEmpty())
+                        db.getBookTagDao().deleteTagsForBooks(list.toArray())
+                }
+            }
+        }
+
+        // Update or add the tag
+        return internalAdd(tag)
+    }
+
+    protected data class TagId(
+        @ColumnInfo(name = TAGS_ID_COLUMN) val id: Long
+    )
+
+    // Query authors for a book
+    @RawQuery(observedEntities = [TagEntity::class])
+    protected abstract suspend fun queryTagIds(query: SupportSQLiteQuery): List<TagId>?
+
+    suspend fun queryTagIds(tagIds: Array<Any>, invert: Boolean = false): List<Long>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE",
+            TAGS_ID_COLUMN,
+            tagIds,
+            invert)?.let {query -> queryTagIds(query)?.map { it.id } }
+    }
+
+    // Delete tags
+    @RawQuery(observedEntities = [TagEntity::class])
+    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
+
+    // Delete a tag
+    @Query("DELETE FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId")
+    abstract suspend fun delete(tagId: Long): Int
+
+    @Transaction
+    open suspend fun delete(tagIds: Array<Any>, invert: Boolean): Int? {
+        db.getBookTagDao().deleteTagsForTags(tagIds, invert)
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $TAGS_TABLE",
+            TAGS_ID_COLUMN,
+            tagIds,
+            invert)?.let { delete(it) }?: 0
+    }
+
+    // Find an tag by name
+    @Query(value = "SELECT * FROM $TAGS_TABLE"
+            + " WHERE $TAGS_NAME_COLUMN LIKE :name LIMIT 1")
+    abstract suspend fun findByName(name: String): TagEntity?
+}
+
+@Dao
+abstract class BookTagDao(private val db:BookDatabase) {
     // Add a tag to a book
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    protected abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
+    abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
 
     // Delete tags for a book
     @RawQuery(observedEntities = [BookAndTagEntity::class])
     protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
 
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+    open suspend fun deleteTagsForBooks(bookIds: Array<Any>, booksInvert: Boolean = false,
+                                        tagIds: Array<Any>? = null, tagsInvert: Boolean = true): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
             BOOK_TAGS_BOOK_ID_COLUMN,
             bookIds,
+            booksInvert,
+            BOOK_TAGS_TAG_ID_COLUMN,
+            tagIds,
+            tagsInvert)?.let { delete(it) }?: 0
+    }
+
+    @Transaction
+    open suspend fun deleteTagsForTags(tagIds: Array<Any>, invert: Boolean = false): Int {
+        return BookDatabase.buildQueryForIds(
+            "DELETE FROM $BOOK_TAGS_TABLE",
+            BOOK_TAGS_TAG_ID_COLUMN,
+            tagIds,
             invert)?.let { delete(it) }?: 0
     }
 
@@ -625,60 +796,68 @@ abstract class TagDao {
             invert)?.let { queryBookIds(it) }
     }
 
+    // Query tags for a book
+    @RawQuery(observedEntities = [BookAndTagEntity::class])
+    protected abstract suspend fun queryTags(query: SupportSQLiteQuery): List<BookAndTagEntity>?
+
+    suspend fun queryTags(tagIds: Array<Any>, invert: Boolean = false): List<BookAndTagEntity>? {
+        return BookDatabase.buildQueryForIds(
+            "SELECT * FROM $BOOK_TAGS_TABLE",
+            BOOK_TAGS_TAG_ID_COLUMN,
+            tagIds,
+            invert)?.let { queryTags(it) }
+    }
+
     // Delete books for a tag
     @Query("DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId")
     protected abstract suspend fun deleteTag(tagId: Long): Int
 
-    @Delete
-    protected abstract suspend fun deleteTag(tag: TagEntity)
-
     // Add a single tag for a book
     @Transaction
-    open suspend fun add(bookId: Long, tag: TagEntity) {
-        // Find the author
-        val list: List<TagEntity> = findByName(tag.name)
-        tag.id = if (list.isNotEmpty()) {
-            list[0].id
-        } else {
-            add(tag)
+    open suspend fun addTagToBook(bookId: Long, tagId: Long) {
+        add(BookAndTagEntity(0, tagId, bookId))
+    }
+
+    @Transaction
+    open suspend fun addTagsToBook(bookId: Long, tagIds: List<Long>?) {
+        if (tagIds != null) {
+            for (tag in tagIds)
+                addTagToBook(bookId, tag)
         }
-        add(BookAndTagEntity(0, tag.id, bookId))
     }
 
     @Transaction
-    open suspend fun add(bookId: Long, tags: List<TagEntity>) {
-        deleteBooks(arrayOf(bookId))
-        for (tag in tags)
-            add(bookId, tag)
+    open suspend fun addTagsToBooks(bookIds: List<Long>?, tagIds: List<Long>?) {
+        if (bookIds != null) {
+            for (book in bookIds)
+                addTagsToBook(book, tagIds)
+        }
     }
 
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteTags: Boolean = false) {
+    open suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>,
+                                    booksInvert: Boolean = false, tagsInvert: Boolean = false) {
+        val bookList = db.getBookDao().queryBookIds(bookIds, booksInvert)
+        val tagList = db.getTagDao().queryTagIds(tagIds, tagsInvert)
+        addTagsToBooks(bookList, tagList)
+    }
+
+    @Transaction
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean, deleteTags: Boolean = false) {
         if (deleteTags) {
             val tags = queryBookIds(bookIds, invert)
-            deleteBooks(bookIds, invert)
+            deleteTagsForBooks(bookIds, invert)
             tags?.let {
                 for (tag in it) {
                     val list: List<BookAndTagEntity> = findById(tag, 1)
                     if (list.isEmpty())
-                        deleteTag(tag)
+                        db.getTagDao().delete(tag)
                 }
             }
         } else {
-            deleteBooks(bookIds)
+            deleteTagsForBooks(bookIds, invert)
         }
     }
-
-    @Transaction
-    open suspend fun delete(tag: TagEntity) {
-        deleteTag(tag.id)
-        deleteTag(tag)
-    }
-
-    // Find an tag by name
-    @Query(value = "SELECT * FROM $TAGS_TABLE"
-            + " WHERE $TAGS_NAME_COLUMN = :name")
-    abstract suspend fun findByName(name: String): List<TagEntity>
 
     @Query("SELECT * FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId LIMIT :limit")
     abstract suspend fun findById(tagId: Long, limit: Int = -1): List<BookAndTagEntity>
@@ -897,12 +1076,12 @@ abstract class BookDao(private val db: BookDatabase) {
     @RawQuery(observedEntities = [BookEntity::class])
     protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<BookId>?
 
-    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<BookId>? {
+    suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE",
             BOOK_ID_COLUMN,
             bookIds,
-            invert)?.let { queryBookIds(it) }
+            invert)?.let {query -> queryBookIds(query)?.map { it.id } }
     }
 
     @Delete
@@ -972,27 +1151,27 @@ abstract class BookDao(private val db: BookDatabase) {
 
     // Add book from description
     @Transaction
-    open suspend fun addOrUpdate(book: BookAndAuthors) {
+    open suspend fun addOrUpdate(book: BookAndAuthors, tagIds: Array<Any>? = null, invert: Boolean = false) {
         addOrUpdate(book.book)
         deleteThumbFile(book.book.id, true)
         deleteThumbFile(book.book.id, false)
 
         db.getCategoryDao().add(book.book.id, book.categories)
         db.getAuthorDao().add(book.book.id, book.authors)
-        db.getTagDao().add(book.book.id, book.tags)
+        db.getTagDao().add(book.book.id, book.tags, tagIds, invert)
     }
 
     // Delete book from description
     @Transaction
     open suspend fun delete(bookIds: Array<Any>, invert: Boolean) {
-        db.getTagDao().delete(bookIds, invert)
+        db.getBookTagDao().deleteBooks(bookIds, invert)
         db.getAuthorDao().delete(bookIds, invert, true)
         db.getCategoryDao().delete(bookIds, invert, true)
 
         queryBookIds(bookIds, invert)?.let {
             for (book in it) {
-                deleteThumbFile(book.id, true)
-                deleteThumbFile(book.id, false)
+                deleteThumbFile(book, true)
+                deleteThumbFile(book, false)
             }
         }
         deleteBooks(bookIds, invert)
@@ -1198,24 +1377,56 @@ abstract class BookDatabase : RoomDatabase() {
             ).build()
         }
 
-        internal fun buildQueryForIds(command: String, column: String, ids: Array<Any>, invert: Boolean): SupportSQLiteQuery? {
-            if (!invert && ids.isEmpty())
+        private fun getExpression(column: String?, ids: Array<Any>?, invert: Boolean?, args: MutableList<Any>): String? {
+            if (column == null || (invert != true && ids?.isEmpty() != false))
                 return null
+
             val builder = StringBuilder()
-            builder.append(command)
-            if (ids.isNotEmpty()) {
-                builder.append(" WHERE ").append(column)
-                if (invert)
+            if (ids?.isNotEmpty() == true) {
+                builder.append("( ")
+                builder.append(column)
+                if (invert == true)
                     builder.append(" NOT")
                 builder.append(" IN ( ")
-                builder.append(Array(ids.size) { "?" }.joinToString()).append(" )")
+                builder.append(Array(ids.size) { "?" }.joinToString()).append(" ) )")
+                args.addAll(ids)
             }
-            return SimpleSQLiteQuery(builder.toString(), ids)
+            return builder.toString()
+        }
+
+        internal fun buildQueryForIds(command: String, vararg condition: Any?): SupportSQLiteQuery? {
+            val builder = StringBuilder()
+            val args = ArrayList<Any>()
+            builder.append(command)
+            var prefix = " WHERE "
+            var select = false
+            for (i in 0..condition.size - 3 step 3) {
+                @Suppress("UNCHECKED_CAST")
+                getExpression(
+                    condition[i] as? String,
+                    condition[i + 1] as? Array<Any>,
+                    condition[i + 2] as? Boolean,
+                    args
+                )?.let {expr ->
+                    select = true
+                    if (expr != "") {
+                        builder.append(prefix)
+                        builder.append(expr)
+                        prefix = " AND "
+                    }
+                }
+            }
+
+            return if (select)
+                SimpleSQLiteQuery(builder.toString(), args.toArray())
+            else
+                return null
         }
     }
 
     abstract fun getBookDao(): BookDao
     abstract fun getTagDao(): TagDao
+    abstract fun getBookTagDao(): BookTagDao
     abstract fun getAuthorDao(): AuthorDao
     abstract fun getCategoryDao(): CategoryDao
 }

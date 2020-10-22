@@ -1,13 +1,13 @@
-package com.example.cleve.bibliotech.ui.books
+package com.example.cleve.bibliotech.ui.tags
 
-import com.example.cleve.bibliotech.db.BookAndAuthors
 import com.example.cleve.bibliotech.db.BookRepository
+import com.example.cleve.bibliotech.db.Tag
 import com.example.cleve.bibliotech.utils.GenericViewModel
 
-class BooksViewModel : GenericViewModel<BookAndAuthors>() {
+class TagViewModel: GenericViewModel<Tag>() {
 
     val repo: BookRepository = BookRepository.repo
-    internal lateinit var adapter: BooksAdapter
+    internal lateinit var adapter: TagsAdapter
 
     override fun invalidateUI() {
         adapter.refresh()

@@ -4,27 +4,35 @@
 
     <item
         android:id="@+id/action_delete"
-        android:enabled="true"
         android:icon="@android:drawable/ic_menu_delete"
         android:title="@string/delete"
-        android:visible="true"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_add_tags"
+        android:icon="@drawable/ic_menu_tag_24"
+        android:title="@string/add_tags"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_remove_tags"
+        android:icon="@drawable/ic_baseline_remove_24"
+        android:title="@string/remove_tags"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_replace_tags"
+        android:icon="@drawable/ic_baseline_arrow_right_alt_24"
+        android:title="@string/replace_tags"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_select_all"
-        android:enabled="true"
         android:title="@string/select_all"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_select_none"
-        android:enabled="true"
         android:title="@string/select_none"
-        android:visible="true"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_select_invert"
-        android:enabled="true"
         android:title="@string/select_invert"
-        android:visible="true"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings"

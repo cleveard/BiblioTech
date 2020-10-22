@@ -37,6 +37,7 @@ import com.example.cleve.bibliotech.*
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.ui.books.BooksAdapter
 import com.example.cleve.bibliotech.ui.books.BooksViewModel
+import com.example.cleve.bibliotech.ui.tags.TagViewModel
 import com.example.cleve.bibliotech.utils.AutoFitPreviewBuilder
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
@@ -67,6 +68,7 @@ typealias BarcodeListener = (codes: Array<String>) -> Unit
 class ScanFragment : Fragment() {
 
     private lateinit var booksViewModel: BooksViewModel
+    private lateinit var tagViewModel: TagViewModel
     private lateinit var container: ConstraintLayout
     private lateinit var viewFinder: TextureView
     private lateinit var broadcastManager: LocalBroadcastManager
@@ -168,6 +170,8 @@ class ScanFragment : Fragment() {
         savedInstanceState: Bundle?): View? {
         booksViewModel =
             ViewModelProviders.of(activity!!).get(BooksViewModel::class.java)
+        tagViewModel =
+            ViewModelProviders.of(activity!!).get(TagViewModel::class.java)
         return inflater.inflate(R.layout.fragment_scan, container, false)
     }
 
@@ -261,7 +265,7 @@ class ScanFragment : Fragment() {
             SelectBookDialogFragment.createDialog(list, spec, totalItems, callback).show(fragmentManager!!, "select_book")
         }
 
-        val repo = BookRepository.repo
+        val repo = booksViewModel.repo
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
             setAnalyzer(mainExecutor, BarcodeScanner(
                 fun(codes: Array<String>) {
@@ -285,7 +289,8 @@ class ScanFragment : Fragment() {
 
                                     it.book.ISBN = isbn
                                     booksViewModel.viewModelScope.launch {
-                                        repo.addOrUpdateBook(it)
+                                        repo.addOrUpdateBook(it, tagViewModel.selection.selection,
+                                            tagViewModel.selection.inverted)
                                     }
                                 }
                             }
