@@ -173,7 +173,7 @@ class TagsFragment : Fragment() {
 
     private fun addOrEdit(tagId: Long) {
         tagViewModel.viewModelScope.launch {
-            var tag: TagEntity? = null
+            var tag: TagEntity?
             if (tagId != 0L) {
                 tag = tagViewModel.repo.getTag(tagId)
                 if (tag == null)
@@ -209,7 +209,7 @@ class TagsFragment : Fragment() {
                         tag.desc = desc.text.toString()
 
                         tagViewModel.viewModelScope.launch {
-                            tagViewModel.repo.addOrUpdateTag(tag) {conflict ->
+                            tagViewModel.repo.addOrUpdateTag(tag) {_ ->
                                 suspendCoroutine { cont ->
                                     tagViewModel.viewModelScope.launch {
                                         var accept = false
