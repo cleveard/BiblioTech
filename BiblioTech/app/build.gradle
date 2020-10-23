@@ -9,6 +9,14 @@ apply plugin: 'androidx.navigation.safeargs.kotlin'
 apply plugin: "kotlin-kapt"
 
 android {
+    signingConfigs {
+        upload {
+            storeFile file('C:\\Users\\cleve\\keystores\\BiblioTech.jks')
+            storePassword 'Y_XUWirIc9ihek'
+            keyAlias 'upload'
+            keyPassword 'q-bLHU*u9I1Tu*'
+        }
+    }
     compileSdkVersion 29
     buildToolsVersion "29.0.2"
     defaultConfig {
@@ -27,6 +35,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+
+        debug {
+            applicationIdSuffix ".debug"
+            debuggable true
         }
     }
     sourceSets {

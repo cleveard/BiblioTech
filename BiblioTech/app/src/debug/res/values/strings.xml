@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">BiblioTech-Debug</string>
+    <string name="menu_books">Books Test</string>
+    <string name="menu_scan">Scan Test</string>
+</resources>
