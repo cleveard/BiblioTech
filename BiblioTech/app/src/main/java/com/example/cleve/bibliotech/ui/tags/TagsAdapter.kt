@@ -1,20 +1,23 @@
 package com.example.cleve.bibliotech.ui.tags
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import com.example.cleve.bibliotech.db.*
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.core.content.res.ResourcesCompat
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.utils.GenericViewModel
-import java.lang.Exception
 
 
 internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
     PagingDataAdapter<Tag, TagsAdapter.ViewHolder>(DIFF_CALLBACK) {
+
+    private var selectColor: Int = 0x00FFFF
 
     companion object {
         val DIFF_CALLBACK =
@@ -35,29 +38,18 @@ internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
 
     internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
 
-    private val onRadioClick = View.OnClickListener { v ->
-        try {
-            val button = v as CheckBox
-            (v.tag as? Long)?.let {id ->
-                viewModel.selection.select(id, button.isChecked)
-            }
-        }
-        catch(e: Exception) {
-        }
-    }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val context = parent.context
         val inflater = LayoutInflater.from(context)
 
+        selectColor = ResourcesCompat.getColor(context.resources, R.color.colorSelect, null)
+
         // Inflate the custom layout
         val contactView: View = inflater.inflate(R.layout.tags_layout, parent, false)
         val holder = ViewHolder(contactView)
-        val check = contactView.findViewById<CheckBox>(R.id.tag_name)
-        check.setOnClickListener {ck ->
-            ck as CheckBox
-            (ck.tag as? Long)?.let {id ->
-                viewModel.selection.select(id, ck.isChecked)
+        contactView.setOnClickListener {view ->
+            (view.tag as? Long)?.let {id ->
+                viewModel.selection.toggle(id)
             }
         }
 
@@ -66,13 +58,19 @@ internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val tag = getItem(position)
-        val check = holder.itemView.findViewById<CheckBox>(R.id.tag_name)
+        val name = holder.itemView.findViewById<TextView>(R.id.tag_name)
 
-        check.text = tag?.tag?.name ?: ""
+        name.text = tag?.tag?.name ?: ""
         val id = tag?.id ?: 0L
-        check.tag = id
-        check.isChecked = viewModel.selection.isSelected(id)
-        var desc = tag?.tag?.desc
+        holder.itemView.tag = id
+        val selected = viewModel.selection.isSelected(id)
+        holder.itemView.setBackgroundColor(
+            if (selected)
+                selectColor
+            else
+                Color.WHITE
+        )
+        val desc = tag?.tag?.desc
         val descView = holder.itemView.findViewById<TextView>(R.id.tags_desc)
         if (desc == null || desc == "") {
             descView.visibility = View.GONE
