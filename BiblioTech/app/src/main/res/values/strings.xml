@@ -86,6 +86,31 @@
     </plurals>
     <string name="repl_tag_books_unknown">Replace tags for books?</string>
     <string name="edit">Edit</string>
+    <string name="order">Order</string>
+    <string name="filter">Filter</string>
+    <string name="criteria">Criteria</string>
     <string name="drawer">Drawer</string>
     <string name="saved_filters">Saved Filters</string>
+    <!-- The array "order_by_enum" maps the localized names in "order_by" to the
+         enum name that is represented. Make sure the two arrays are kept in sync -->
+    <string-array name="order_by">
+        <item>Last Name</item>
+        <item>First Name</item>
+        <item>Title</item>
+        <item>Category</item>
+        <item>Tag</item>
+        <item>Added</item>
+        <item>Modified</item>
+    </string-array>
+    <string-array name="order_by_enum" translatable="false">
+        <item>LastName</item>
+        <item>FirstName</item>
+        <item>Title</item>
+        <item>Category</item>
+        <item>Tag</item>
+        <item>Added</item>
+        <item>Modified</item>
+    </string-array>
+    <string name="order_by">Order</string>
+    <string name="header">Header</string>
 </resources>

@@ -52,7 +52,6 @@ class BooksFragment : Fragment() {
                     child.setOnClickListener(clickHandler)
                     actionButtons[child.id] = child
                 }
-                setActionClickListener(child)
             }
         }
     }
