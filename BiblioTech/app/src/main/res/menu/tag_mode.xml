@@ -4,17 +4,17 @@
 
     <item
         android:id="@+id/action_add_tags"
-        android:icon="@drawable/ic_menu_tag_24"
+        android:icon="@drawable/ic_add_tags_24"
         android:title="@string/add_tags"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_remove_tags"
-        android:icon="@drawable/ic_baseline_remove_24"
+        android:icon="@drawable/ic_remove_tags_24"
         android:title="@string/remove_tags"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_replace_tags"
-        android:icon="@drawable/ic_baseline_arrow_right_alt_24"
+        android:icon="@drawable/ic_replace_tags_24"
         android:title="@string/replace_tags"
         app:showAsAction="ifRoom" />
 </menu>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/design_default_color_background">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/action_drawer_view"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="8dp">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/edit_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:text="@string/edit"
+            android:textSize="24sp"
+            tools:layout_editor_absoluteX="8dp"
+            tools:layout_editor_absoluteY="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/action_delete"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:paddingStart="20dp"
+            android:text=""
+            app:cornerRadius="4dp"
+            app:icon="@android:drawable/ic_menu_delete"
+            app:iconGravity="textStart"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/edit_label"
+            app:strokeColor="@color/colorPrimaryDark" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/action_add_tags"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                android:paddingTop="8dp"
+                android:paddingStart="24dp"
+                android:text=""
+                app:cornerRadius="4dp"
+                app:icon="@drawable/ic_add_tags_24"
+                app:iconGravity="textStart"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/action_delete"
+                app:strokeColor="@color/colorPrimaryDark" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/action_remove_tags"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:paddingTop="8dp"
+            android:paddingStart="24dp"
+            android:text=""
+            app:cornerRadius="4dp"
+            app:icon="@drawable/ic_remove_tags_24"
+            app:iconGravity="textStart"
+            app:layout_constraintBaseline_toBaselineOf="@id/action_add_tags"
+            app:layout_constraintStart_toEndOf="@id/action_add_tags"
+            app:strokeColor="@color/colorPrimaryDark" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/action_replace_tags"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:paddingTop="8dp"
+            android:paddingStart="24dp"
+            android:text=""
+            app:cornerRadius="4dp"
+            app:icon="@drawable/ic_replace_tags_24"
+            app:iconGravity="textStart"
+            app:layout_constraintBaseline_toBaselineOf="@id/action_add_tags"
+            app:layout_constraintStart_toEndOf="@id/action_remove_tags"
+            app:strokeColor="@color/colorPrimaryDark" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</ScrollView>

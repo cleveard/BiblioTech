@@ -85,4 +85,6 @@
         <item quantity="other">Replace tags for %d books?</item>
     </plurals>
     <string name="repl_tag_books_unknown">Replace tags for books?</string>
+    <string name="edit">Edit</string>
+    <string name="drawer">Drawer</string>
 </resources>
