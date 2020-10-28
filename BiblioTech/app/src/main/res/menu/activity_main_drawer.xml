@@ -14,18 +14,10 @@
             android:title="@string/menu_scan" />
     </group>
 
-    <item android:title="Communicate">
-        <menu>
-            <item android:title="Item" />
-            <item
-                android:id="@+id/nav_share"
-                android:icon="@drawable/ic_menu_share"
-                android:title="@string/menu_share" />
-            <item
-                android:id="@+id/nav_send"
-                android:icon="@drawable/ic_menu_send"
-                android:title="@string/menu_send" />
-        </menu>
+    <item
+        android:id="@+id/saved_filters"
+        android:title="@string/saved_filters">
+        <menu />
     </item>
 
 </menu>

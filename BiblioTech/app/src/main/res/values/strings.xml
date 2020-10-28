@@ -87,4 +87,5 @@
     <string name="repl_tag_books_unknown">Replace tags for books?</string>
     <string name="edit">Edit</string>
     <string name="drawer">Drawer</string>
+    <string name="saved_filters">Saved Filters</string>
 </resources>
