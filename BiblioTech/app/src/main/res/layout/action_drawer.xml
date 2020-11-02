@@ -8,21 +8,21 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/action_drawer_view"
-        android:paddingStart="24dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="24dp"
-        android:paddingBottom="8dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp">
 
         <TextView
             android:id="@+id/edit_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
             android:text="@string/edit"
-            android:textSize="24sp" />
+            android:textSize="24sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/action_delete"
@@ -53,8 +53,8 @@
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
-            android:paddingTop="8dp"
             android:paddingStart="24dp"
+            android:paddingTop="8dp"
             android:text=""
             app:cornerRadius="4dp"
             app:icon="@drawable/ic_add_tags_24"
@@ -73,8 +73,8 @@
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
-            android:paddingTop="8dp"
             android:paddingStart="24dp"
+            android:paddingTop="8dp"
             android:text=""
             app:cornerRadius="4dp"
             app:icon="@drawable/ic_remove_tags_24"
@@ -93,8 +93,8 @@
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
-            android:paddingTop="8dp"
             android:paddingStart="24dp"
+            android:paddingTop="8dp"
             android:text=""
             app:cornerRadius="4dp"
             app:icon="@drawable/ic_replace_tags_24"
@@ -115,10 +115,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/end_edit"
             android:text="@string/filter"
-            android:textSize="24sp" />
+            android:textSize="24sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/end_edit" />
 
         <View
             android:id="@+id/end_filter"
@@ -127,58 +127,30 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/filter_label" />
 
+        <TextView
+            android:id="@+id/order_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/order"
+            android:textSize="16sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/end_filter"
+            tools:layout_editor_absoluteX="8dp"
+            tools:layout_editor_absoluteY="8dp" />
+
         <TableLayout
             android:id="@+id/order_table"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/end_filter">
+            app:layout_constraintTop_toBottomOf="@id/order_label">
 
-            <TableRow
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/action_add_order_row"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:paddingTop="4dp"
-                    android:paddingStart="20dp"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:insetLeft="0dp"
-                    android:insetTop="0dp"
-                    android:insetRight="0dp"
-                    android:insetBottom="0dp"
-                    android:text=""
-                    app:cornerRadius="4dp"
-                    app:icon="@drawable/ic_baseline_add_24"
-                    app:iconGravity="textStart"
-                    app:strokeColor="@color/colorPrimaryDark" />
-
-                <TextView
-                    android:id="@+id/order_by"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="@string/order_by"
-                    android:gravity="center"
-                    android:minWidth="72dp"
-                    android:textSize="18sp" />
-
-                <TextView
-                    android:id="@+id/use_header"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="@string/header"
-                    android:textSize="18sp" />
-
-            </TableRow>
-
-            <!-- Uncomment to see in designer
-            <include layout="@layout/order_row"/>
-            -->
+            <!-- Uncomment to see in designer -->
+            <include layout="@layout/order_header" />
+            <include layout="@layout/order_row" />
+            <!-- -->
 
         </TableLayout>
 
@@ -194,12 +166,31 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/end_order"
             android:text="@string/criteria"
             android:textSize="16sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/end_order"
             tools:layout_editor_absoluteX="8dp"
             tools:layout_editor_absoluteY="8dp" />
+
+        <View
+            android:id="@+id/end_criteria"
+            style="@style/Divider"
+            android:layout_marginTop="8dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/criteria_label" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/action_apply_filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/apply_filter"
+            app:cornerRadius="4dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/end_criteria"
+            app:strokeColor="@color/colorPrimaryDark" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

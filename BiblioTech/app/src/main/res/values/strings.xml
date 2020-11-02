@@ -103,14 +103,15 @@
         <item>Modified</item>
     </string-array>
     <string-array name="order_by_enum" translatable="false">
-        <item>LastName</item>
-        <item>FirstName</item>
-        <item>Title</item>
-        <item>Category</item>
-        <item>Tag</item>
-        <item>Added</item>
-        <item>Modified</item>
+        <item>LAST_NAME</item>
+        <item>FIRST_NAME</item>
+        <item>TITLE</item>
+        <item>CATEGORIES</item>
+        <item>TAGS</item>
+        <item>DATE_ADDED</item>
+        <item>DATE_MODIFIED</item>
     </string-array>
     <string name="order_by">Order</string>
     <string name="header">Header</string>
+    <string name="apply_filter">Apply Filter</string>
 </resources>

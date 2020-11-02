@@ -25,8 +25,8 @@ class BookRepository {
 
     private val db = BookDatabase.db
 
-    fun getBooks(): PagingSource<Int, BookAndAuthors> {
-        return db.getBookDao().getBooks()
+    fun getBooks(filter: BookFilter? = null): PagingSource<Int, BookAndAuthors> {
+        return db.getBookDao().getBooks(filter)
     }
 
     suspend fun getBook(bookId: Long): BookAndAuthors? {

@@ -6,6 +6,7 @@
     android:layout_height="wrap_content">
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/action_remove_order_row"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:paddingTop="4dp"
         android:paddingStart="20dp"
@@ -21,13 +22,34 @@
         app:iconGravity="textStart"
         app:strokeColor="@color/colorPrimaryDark" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/action_sort_dir"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:checkable="true"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        android:paddingStart="20dp"
+        android:paddingTop="4dp"
+        android:text=""
+        app:cornerRadius="4dp"
+        app:icon="@drawable/ic_sort_direction_24"
+        app:iconGravity="textStart"
+        app:iconTint="@color/colorPrimary"
+        app:strokeColor="@color/colorPrimaryDark" />
+
     <Spinner
+        android:id="@+id/action_order_by"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:entries="@array/order_by" />
 
     <Switch
+        android:id="@+id/action_use_header"
         android:layout_gravity="center"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />

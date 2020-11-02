@@ -10,19 +10,14 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
-import androidx.lifecycle.viewModelScope
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.cachedIn
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.R
-import com.example.cleve.bibliotech.db.BookRepository
+import com.example.cleve.bibliotech.ui.filter.FilterTables
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
+import com.google.android.material.button.MaterialButton
 
 class BooksFragment : Fragment() {
 
@@ -30,19 +25,16 @@ class BooksFragment : Fragment() {
     private lateinit var tagViewModel: TagViewModel
     private lateinit var actionDrawer: DrawerLayout
     private var drawerMenuItem: MenuItem? = null
-    private lateinit var close_drawer: Drawable
-    private lateinit var open_drawer: Drawable
-    private val clickHandler = object: View.OnClickListener {
-        override fun onClick(v: View?) {
-            if (v != null)
-                onActionSelected(v.id)
-        }
+    private lateinit var closeDrawer: Drawable
+    private lateinit var openDrawer: Drawable
+    private val filter = FilterTables(this)
+    private val clickHandler = View.OnClickListener { v ->
+        if (v != null)
+            onActionSelected(v.id)
     }
     private val actionButtons = HashMap<Int, View>()
-    private val selectionObserver = object: Observer<Boolean> {
-        override fun onChanged(t: Boolean?) {
-            updateMenuAndButtons()
-        }
+    private val selectionObserver = Observer<Boolean> {
+        updateMenuAndButtons()
     }
 
     private fun setActionClickListener(view: View?) {
@@ -69,8 +61,8 @@ class BooksFragment : Fragment() {
         tagViewModel.selection.hasSelection.observe(this, selectionObserver)
 
         val context = container!!.context
-        close_drawer = context.resources.getDrawable(R.drawable.ic_close_action_drawer_24, null)
-        open_drawer = context.resources.getDrawable(R.drawable.ic_open_action_drawer_24, null)
+        closeDrawer = context.resources.getDrawable(R.drawable.ic_close_action_drawer_24, null)
+        openDrawer = context.resources.getDrawable(R.drawable.ic_open_action_drawer_24, null)
 
         val root = inflater.inflate(R.layout.fragment_books, container, false)
         actionDrawer = root.findViewById(R.id.drawer_layout)
@@ -90,28 +82,20 @@ class BooksFragment : Fragment() {
             }
         })
 
-        val recycler = root.findViewById<RecyclerView>(R.id.book_list)
-
-        recycler.layoutManager = LinearLayoutManager(activity)
-        booksViewModel.adapter = BooksAdapter(context, booksViewModel)
-
-        val config = PagingConfig(pageSize = 10)
-        val pager = Pager(
-            config
-        ) {
-            BookRepository.repo.getBooks()
-        }
-        val flow = booksViewModel.applySelectionTransform(pager.flow)
-                   .cachedIn(booksViewModel.viewModelScope)
-        booksViewModel.viewModelScope.launch {
-            flow.collectLatest {
-                    data -> booksViewModel.adapter.submitData(data)
-            }
-        }
-        recycler.adapter = booksViewModel.adapter
+        val recyclerView = root.findViewById<RecyclerView>(R.id.book_list)
+        booksViewModel.layoutManager = LinearLayoutManager(activity)
+        recyclerView.layoutManager = booksViewModel.layoutManager
+        booksViewModel.adapter = BooksAdapter(context!!, booksViewModel)
+        booksViewModel.buildFlow(filter.filter.value)
+        recyclerView.adapter = booksViewModel.adapter
         setHasOptionsMenu(true)
 
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
+        root.findViewById<MaterialButton>(R.id.action_apply_filter).setOnClickListener {
+            booksViewModel.buildFlow(filter.filter.value)
+        }
+
+        filter.onCreateView(inflater, root.findViewById(R.id.order_table))
 
         updateMenuAndButtons()
         return root
@@ -121,6 +105,7 @@ class BooksFragment : Fragment() {
     override fun onDestroyView() {
         booksViewModel.selection.hasSelection.removeObserver(selectionObserver)
         tagViewModel.selection.hasSelection.removeObserver(selectionObserver)
+        filter.onDestroyView()
         super.onDestroyView()
     }
 
@@ -130,7 +115,7 @@ class BooksFragment : Fragment() {
         super.onCreateOptionsMenu(menu, inflater)
     }
 
-    fun onActionSelected(id: Int): Boolean {
+    private fun onActionSelected(id: Int): Boolean {
         return when (id) {
             R.id.action_drawer -> {
                 if (actionDrawer.isDrawerOpen(GravityCompat.END))
@@ -187,7 +172,7 @@ class BooksFragment : Fragment() {
         drawerMenuItem?.let {
             val checked = actionDrawer.isDrawerOpen(GravityCompat.END)
             it.isChecked = checked
-            it.icon = if (checked) close_drawer else open_drawer
+            it.icon = if (checked) closeDrawer else openDrawer
         }
     }
 }

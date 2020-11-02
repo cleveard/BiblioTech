@@ -21,58 +21,60 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.*
+import java.lang.StringBuilder
 import kotlin.collections.ArrayList
 
+const val BOOK_TABLE = "books"
+const val BOOK_ID_COLUMN = "books_id"
+const val VOLUME_ID_COLUMN = "books_volume_id"
+const val SOURCE_ID_COLUMN = "books_source_id"
+const val ISBN_COLUMN = "books_isbn"
+const val TITLE_COLUMN = "books_title"
+const val SUBTITLE_COLUMN = "books_subtitle"
+const val DESCRIPTION_COLUMN = "books_description"
+const val PAGE_COUNT_COLUMN = "books_page_count"
+const val BOOK_COUNT_COLUMN = "books_count"
+const val VOLUME_LINK = "books_volume_link"
+const val RATING_COLUMN = "books_rating"
+const val DATE_ADDED_COLUMN = "books_date_added"
+const val DATE_MODIFIED_COLUMN = "books_date_modified"
+const val SMALL_THUMB_COLUMN = "books_small_thumb"
+const val LARGE_THUMB_COLUMN = "books_large_thumb"
+val ALL_BOOK_COLUMNS = arrayOf(
+    BOOK_ID_COLUMN, VOLUME_ID_COLUMN, SOURCE_ID_COLUMN,
+    ISBN_COLUMN, TITLE_COLUMN, SUBTITLE_COLUMN,
+    DESCRIPTION_COLUMN, PAGE_COUNT_COLUMN, BOOK_COUNT_COLUMN,
+    VOLUME_LINK, RATING_COLUMN, DATE_ADDED_COLUMN,
+    DATE_MODIFIED_COLUMN, SMALL_THUMB_COLUMN, LARGE_THUMB_COLUMN)
+const val AUTHORS_TABLE = "authors"
+const val AUTHORS_ID_COLUMN = "authors_id"
+const val LAST_NAME_COLUMN = "authors_last_name"
+const val REMAINING_COLUMN = "authors_remaining"
+const val BOOK_AUTHORS_TABLE = "book_authors"
+const val BOOK_AUTHORS_ID_COLUMN = "book_authors_id"
+const val BOOK_AUTHORS_BOOK_ID_COLUMN = "book_authors_book_id"
+const val BOOK_AUTHORS_AUTHOR_ID_COLUMN = "book_authors_author_id"
+const val CATEGORIES_TABLE = "categories"
+const val CATEGORIES_ID_COLUMN = "categories_id"
+const val CATEGORY_COLUMN = "categories_category"
+const val BOOK_CATEGORIES_TABLE = "book_categories"
+const val BOOK_CATEGORIES_ID_COLUMN = "book_categories_id"
+const val BOOK_CATEGORIES_BOOK_ID_COLUMN = "book_categories_book_id"
+const val BOOK_CATEGORIES_CATEGORY_ID_COLUMN = "book_categories_category_id"
+const val TAGS_TABLE = "tags"
+const val TAGS_ID_COLUMN = "tags_id"
+const val TAGS_NAME_COLUMN = "tags_name"
+const val TAGS_DESC_COLUMN = "tags_desc"
+const val BOOK_TAGS_TABLE = "book_tags"
+const val BOOK_TAGS_ID_COLUMN = "book_tags_id"
+const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"
+const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"
 
-private const val BOOK_TABLE = "books"
-private const val BOOK_ID_COLUMN = "books_id"
-private const val VOLUME_ID_COLUMN = "books_volume_id"
-private const val SOURCE_ID_COLUMN = "books_source_id"
-private const val ISBN_COLUMN = "books_isbn"
-private const val TITLE_COLUMN = "books_title"
-private const val SUBTITLE_COLUMN = "books_subtitle"
-private const val DESCRIPTION_COLUMN = "books_description"
-private const val PAGE_COUNT_COLUMN = "books_page_count"
-private const val BOOK_COUNT_COLUMN = "books_count"
-private const val VOLUME_LINK = "books_volume_link"
-private const val RATING_COLUMN = "books_rating"
-private const val DATE_ADDED_COLUMN = "books_date_added"
-private const val DATE_MODIFIED_COLUMN = "books_date_modified"
-private const val SMALL_THUMB_COLUMN = "books_small_thumb"
-private const val LARGE_THUMB_COLUMN = "books_large_thumb"
-private const val AUTHORS_TABLE = "authors"
-private const val AUTHORS_ID_COLUMN = "authors_id"
-private const val LAST_NAME_COLUMN = "authors_last_name"
-private const val REMAINING_COLUMN = "authors_remaining"
-private const val BOOK_AUTHORS_TABLE = "book_authors"
-private const val BOOK_AUTHORS_ID_COLUMN = "book_authors_id"
-private const val BOOK_AUTHORS_BOOK_ID_COLUMN = "book_authors_book_id"
-private const val BOOK_AUTHORS_AUTHOR_ID_COLUMN = "book_authors_author_id"
-private const val CATEGORIES_TABLE = "categories"
-private const val CATEGORIES_ID_COLUMN = "categories_id"
-private const val CATEGORY_COLUMN = "categories_category"
-private const val BOOK_CATEGORIES_TABLE = "book_categories"
-private const val BOOK_CATEGORIES_ID_COLUMN = "book_categories_id"
-private const val BOOK_CATEGORIES_BOOK_ID_COLUMN = "book_categories_book_id"
-private const val BOOK_CATEGORIES_CATEGORY_ID_COLUMN = "book_categories_category_id"
-private const val TAGS_TABLE = "tags"
-private const val TAGS_ID_COLUMN = "tags_id"
-private const val TAGS_NAME_COLUMN = "tags_name"
-private const val TAGS_DESC_COLUMN = "tags_desc"
-private const val BOOK_TAGS_TABLE = "book_tags"
-private const val BOOK_TAGS_ID_COLUMN = "book_tags_id"
-private const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"
-private const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"
+const val kSmallThumb = ".small.png"
+const val kThumb = ".png"
 
-private const val kSmallThumb = ".small.png"
-private const val kThumb = ".png"
-
-private val SORT_ORDER: HashMap<String, Comparator<BookAndAuthors>> = hashMapOf(
-    BookEntity.SORT_BY_AUTHOR_LAST_FIRST to compareBy(
-        { if (it.authors.isNotEmpty()) it.authors[0].lastName else "" },
-        { if (it.authors.isNotEmpty()) it.authors[0].remainingName else "" }
-    )
-)
+const val kDesc = "DESC"
+const val kAsc = "ASC"
 
 class Converters {
     @TypeConverter
@@ -115,10 +117,6 @@ data class BookEntity(
     @ColumnInfo(name = SMALL_THUMB_COLUMN) var smallThumb: String?,
     @ColumnInfo(name = LARGE_THUMB_COLUMN) var largeThumb: String?
 ) {
-    companion object {
-        const val SORT_BY_AUTHOR_LAST_FIRST = "authorsLastFirst"
-    }
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -1199,8 +1197,8 @@ abstract class BookDao(private val db: BookDatabase) {
     @RawQuery(observedEntities = [BookAndAuthors::class])
     abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>
 
-    fun getBooks(query: String = "SELECT * FROM $BOOK_TABLE"): PagingSource<Int, BookAndAuthors> {
-        return getBooks(SimpleSQLiteQuery(query))
+    fun getBooks(filter: BookFilter?): PagingSource<Int, BookAndAuthors> {
+        return getBooks(BookFilter.buildFilterQuery(filter))
     }
 
     // Thumbnails
