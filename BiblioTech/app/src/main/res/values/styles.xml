@@ -28,4 +28,30 @@
         <item name="android:layout_height">1dp</item>
         <item name="android:background">?android:attr/listDivider</item>
     </style>
+
+    <style name="HeaderItem0">
+        <item name="android:textSize">18dp</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="HeaderName0" parent="HeaderItem0">
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HeaderItem1">
+        <item name="android:textSize">16dp</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="HeaderName1" parent="HeaderItem0">
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HeaderName2">
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HeaderItem2">
+        <item name="android:textStyle">normal</item>
+    </style>
 </resources>

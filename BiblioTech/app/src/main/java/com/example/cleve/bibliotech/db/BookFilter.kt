@@ -2,7 +2,11 @@ package com.example.cleve.bibliotech.db
 
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.example.cleve.bibliotech.R
 import java.lang.StringBuilder
+import java.text.SimpleDateFormat
+import java.util.*
+import kotlin.collections.ArrayList
 
 interface BuildQuery {
     fun addSelect(name: String)
@@ -33,6 +37,11 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             override fun addSelection(buildQuery: BuildQuery) {
             }
+            override val nameResourceId: Int
+                get() = R.string.author
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return "${book.sortLast?: ""}, ${book.sortFirst?: ""}"
+            }
         },
         FIRST_NAME {
             override val joinTable: String? = AUTHORS_TABLE
@@ -48,6 +57,11 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             override fun addSelection(buildQuery: BuildQuery) {
             }
+            override val nameResourceId: Int
+                get() = R.string.author
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return "${book.sortFirst?: ""}, ${book.sortLast?: ""}"
+            }
         },
         ANY {
             override fun addJoin(buildQuery: BuildQuery) {
@@ -58,20 +72,40 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             override fun addSelection(buildQuery: BuildQuery) {
             }
+            override val nameResourceId: Int
+                get() = 0
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return ""
+            }
         },
         TITLE {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(TITLE_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = R.string.title
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.title
             }
         },
         SUBTITLE {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(SUBTITLE_COLUMN, direction.dir)
             }
+            override val nameResourceId: Int
+                get() = R.string.subtitle
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.subTitle
+            }
         },
         DESCRIPTION {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(DESCRIPTION_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = 0
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return ""
             }
         },
         TAGS {
@@ -87,6 +121,11 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             override fun addSelection(buildQuery: BuildQuery) {
             }
+            override val nameResourceId: Int
+                get() = R.string.tag
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.sortTag?: ""
+            }
         },
         CATEGORIES {
             override val joinTable: String? = CATEGORIES_TABLE
@@ -101,45 +140,90 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             override fun addSelection(buildQuery: BuildQuery) {
             }
+            override val nameResourceId: Int
+                get() = R.string.category
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.sortCategory?: ""
+            }
         },
         SOURCE {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(SOURCE_ID_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = R.string.source
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.sourceId?: ""
             }
         },
         SOURCE_ID {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(VOLUME_ID_COLUMN, direction.dir)
             }
+            override val nameResourceId: Int
+                get() = R.string.volume
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.volumeId?: ""
+            }
         },
         ISBN {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(ISBN_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = R.string.isbn
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.ISBN?: ""
             }
         },
         PAGE_COUNT {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(PAGE_COUNT_COLUMN, direction.dir)
             }
+            override val nameResourceId: Int
+                get() = R.string.pages
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.pageCount.toString()
+            }
         },
         BOOK_COUNT {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(BOOK_COUNT_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = R.string.books
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.bookCount.toString()
             }
         },
         RATING {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(RATING_COLUMN, direction.dir)
             }
+            override val nameResourceId: Int
+                get() = R.string.rating
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return book.book.rating.toString()
+            }
         },
         DATE_ADDED {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(DATE_ADDED_COLUMN, direction.dir)
             }
+            override val nameResourceId: Int
+                get() = R.string.date_added
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return SimpleDateFormat("MM/dd/yy", locale).format(book.book.added)
+            }
         },
         DATE_MODIFIED {
             override fun addOrder(buildQuery: BuildQuery, direction: Order) {
                 buildQuery.addOrderColumn(DATE_MODIFIED_COLUMN, direction.dir)
+            }
+            override val nameResourceId: Int
+                get() = R.string.date_changed
+            override fun getValue(book: BookAndAuthors, locale: Locale): String {
+                return SimpleDateFormat("MM/dd/yy", locale).format(book.book.modified)
             }
         };
 
@@ -149,6 +233,8 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
         abstract fun addOrder(buildQuery: BuildQuery, direction: Order)
         open fun addSelection(buildQuery: BuildQuery) {
         }
+        abstract val nameResourceId: Int
+        abstract fun getValue(book: BookAndAuthors, locale: Locale): String
     }
 
     @Suppress("unused")
@@ -221,7 +307,7 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
 
             if (column != other.column) return false
             if (order != other.order) return false
-            return true;
+            return true
         }
     }
 
@@ -283,7 +369,7 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
         for (f in filterList.indices) {
             if (!filterList[f].isSameQuery(other.filterList[f])) return false
         }
-        return true;
+        return true
     }
 
     companion object {

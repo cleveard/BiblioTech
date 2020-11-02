@@ -22,10 +22,10 @@ import java.lang.StringBuilder
 import java.text.SimpleDateFormat
 
 
-private val format = SimpleDateFormat("MM/dd/yy")
-
 internal open class BooksAdapter(context: Context, private val viewModel: GenericViewModel<BookAndAuthors>) :
     PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+
+    private val format = SimpleDateFormat("MM/dd/yy", context.resources.configuration.locales[0])
 
     init {
         // Initialize the no thumbnail image

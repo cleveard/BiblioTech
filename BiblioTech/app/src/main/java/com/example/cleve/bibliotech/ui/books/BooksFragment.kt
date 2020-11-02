@@ -3,9 +3,11 @@ package com.example.cleve.bibliotech.ui.books
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.*
+import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.GravityCompat
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
@@ -83,11 +85,29 @@ class BooksFragment : Fragment() {
         })
 
         val recyclerView = root.findViewById<RecyclerView>(R.id.book_list)
-        booksViewModel.layoutManager = LinearLayoutManager(activity)
+        booksViewModel.layoutManager = object: LinearLayoutManager(activity) {
+            override fun onLayoutCompleted(state: RecyclerView.State?) {
+                super.onLayoutCompleted(state)
+                setHeader()
+            }
+
+            override fun offsetChildrenVertical(dy: Int) {
+                super.offsetChildrenVertical(dy)
+                setHeader()
+            }
+        }
         recyclerView.layoutManager = booksViewModel.layoutManager
         booksViewModel.adapter = BooksAdapter(context!!, booksViewModel)
         booksViewModel.buildFlow(filter.filter.value)
         recyclerView.adapter = booksViewModel.adapter
+        recyclerView.addOnScrollListener(object: RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    setHeader()
+                }
+                super.onScrollStateChanged(recyclerView, newState)
+            }
+        })
         setHasOptionsMenu(true)
 
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
@@ -101,6 +121,18 @@ class BooksFragment : Fragment() {
         return root
     }
 
+    fun setHeader() {
+        view?.let { root ->
+            val text = booksViewModel.buildHeader(context!!)
+            val headerView = root.findViewById<TextView>(R.id.header_view)
+            headerView.text = text
+            val vis = if (text == null) View.GONE else View.VISIBLE
+            if (vis != headerView.visibility) {
+                headerView.visibility = vis
+                headerView.requestLayout()
+            }
+        }
+    }
 
     override fun onDestroyView() {
         booksViewModel.selection.hasSelection.removeObserver(selectionObserver)

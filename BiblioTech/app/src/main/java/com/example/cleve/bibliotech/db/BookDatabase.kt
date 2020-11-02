@@ -402,7 +402,13 @@ open class BookAndAuthors(
             entityColumn = BOOK_TAGS_TAG_ID_COLUMN
         )
     )
-    var tags: List<TagEntity>
+    var tags: List<TagEntity>,
+    // Columns used when sorting by related field. These are used to
+    // Construct the header for the list.
+    @ColumnInfo(name= REMAINING_COLUMN) var sortFirst: String? = null,
+    @ColumnInfo(name= LAST_NAME_COLUMN) var sortLast: String? = null,
+    @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String? = null,
+    @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null
 ) : Parcelable, Selectable {
     @Ignore override var selected: Boolean = false
     override val id: Long
@@ -1179,20 +1185,8 @@ abstract class BookDao(private val db: BookDatabase) {
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
             + " WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     abstract suspend fun getBook(bookId: Long): BookAndAuthors?
-
-    @Transaction
-    @Query(value = "SELECT * FROM $BOOK_TABLE"
-            + " WHERE $ISBN_COLUMN = :ISBN LIMIT 1")
-    abstract suspend fun getBookByISBN(ISBN: String): BookAndAuthors?
-
-    @Transaction
-    @Query(value = "SELECT * FROM $BOOK_TABLE"
-            + " WHERE $VOLUME_ID_COLUMN = :volumeId LIMIT 1")
-    abstract suspend fun getBookByVolume(volumeId: String): BookAndAuthors?
-
-    @RawQuery
-    protected abstract suspend fun getBooksRaw(query: SupportSQLiteQuery): List<BookAndAuthors>?
 
     @RawQuery(observedEntities = [BookAndAuthors::class])
     abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>

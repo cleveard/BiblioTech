@@ -114,4 +114,13 @@
     <string name="order_by">Order</string>
     <string name="header">Header</string>
     <string name="apply_filter">Apply Filter</string>
+    <string name="author">Author</string>
+    <string name="subtitle">Subtitle</string>
+    <string name="category">Category</string>
+    <string name="source">Source</string>
+    <string name="volume">Volume</string>
+    <string name="books">Books</string>
+    <string name="rating">Rating</string>
+    <string name="date_added">Date Added</string>
+    <string name="date_changed">Date Changed</string>
 </resources>
