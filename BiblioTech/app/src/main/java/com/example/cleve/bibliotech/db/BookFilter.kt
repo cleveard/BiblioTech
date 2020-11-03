@@ -39,6 +39,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.author
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.sortLast == other.sortLast && book.sortFirst == other.sortFirst
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return "${book.sortLast?: ""}, ${book.sortFirst?: ""}"
             }
@@ -59,8 +62,11 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.author
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.sortLast == other.sortLast && book.sortFirst == other.sortFirst
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
-                return "${book.sortFirst?: ""}, ${book.sortLast?: ""}"
+                return "${book.sortFirst?: ""} ${book.sortLast?: ""}"
             }
         },
         ANY {
@@ -74,6 +80,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = 0
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return true
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return ""
             }
@@ -84,6 +93,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.title
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return true
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.title
             }
@@ -94,6 +106,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.subtitle
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return true
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.subTitle
             }
@@ -104,6 +119,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = 0
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return true
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return ""
             }
@@ -123,6 +141,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.tag
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.sortTag == other.sortTag
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.sortTag?: ""
             }
@@ -142,6 +163,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.category
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.sortCategory == other.sortCategory
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.sortCategory?: ""
             }
@@ -152,6 +176,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.source
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.book.sourceId == other.book.sourceId
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.sourceId?: ""
             }
@@ -162,6 +189,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.volume
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.book.volumeId == other.book.volumeId
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.volumeId?: ""
             }
@@ -172,6 +202,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.isbn
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.book.ISBN == other.book.ISBN
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.ISBN?: ""
             }
@@ -182,6 +215,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.pages
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return true
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.pageCount.toString()
             }
@@ -192,6 +228,9 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.books
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return book.book.bookCount == other.book.bookCount
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return book.book.bookCount.toString()
             }
@@ -202,8 +241,11 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.rating
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                return Math.floor(book.book.rating) == Math.floor(other.book.rating)
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
-                return book.book.rating.toString()
+                return Math.floor(book.book.rating).toString()
             }
         },
         DATE_ADDED {
@@ -212,6 +254,13 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.date_added
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                cal1.time = book.book.added
+                cal2.time = other.book.added
+                return cal1.get(Calendar.DAY_OF_MONTH) == cal2.get(Calendar.DAY_OF_MONTH) &&
+                        cal1.get(Calendar.MONTH) == cal2.get(Calendar.MONTH) &&
+                        cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return SimpleDateFormat("MM/dd/yy", locale).format(book.book.added)
             }
@@ -222,6 +271,13 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
             }
             override val nameResourceId: Int
                 get() = R.string.date_changed
+            override fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+                cal1.time = book.book.modified
+                cal2.time = other.book.modified
+                return cal1.get(Calendar.DAY_OF_MONTH) == cal2.get(Calendar.DAY_OF_MONTH) &&
+                       cal1.get(Calendar.MONTH) == cal2.get(Calendar.MONTH) &&
+                       cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
+            }
             override fun getValue(book: BookAndAuthors, locale: Locale): String {
                 return SimpleDateFormat("MM/dd/yy", locale).format(book.book.modified)
             }
@@ -234,6 +290,7 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
         open fun addSelection(buildQuery: BuildQuery) {
         }
         abstract val nameResourceId: Int
+        abstract fun isSame(book: BookAndAuthors, other: BookAndAuthors): Boolean
         abstract fun getValue(book: BookAndAuthors, locale: Locale): String
     }
 
@@ -373,6 +430,8 @@ class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterF
     }
 
     companion object {
+        private val cal1 = Calendar.getInstance()
+        private val cal2 = Calendar.getInstance()
         fun buildFilterQuery(filter: BookFilter?): SupportSQLiteQuery {
             val builder = object: BuildQuery {
                 val selectSpec: StringBuilder = StringBuilder()

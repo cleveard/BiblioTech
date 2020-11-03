@@ -1,5 +1,6 @@
 package com.example.cleve.bibliotech.ui.books
 
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.*
@@ -7,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.text.Spannable
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -23,7 +25,7 @@ import java.text.SimpleDateFormat
 
 
 internal open class BooksAdapter(context: Context, private val viewModel: GenericViewModel<BookAndAuthors>) :
-    PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+    PagingDataAdapter<Any, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     private val format = SimpleDateFormat("MM/dd/yy", context.resources.configuration.locales[0])
 
@@ -87,14 +89,21 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         }
 
         val DIFF_CALLBACK =
-            object: DiffUtil.ItemCallback<BookAndAuthors>() {
+            object: DiffUtil.ItemCallback<Any>() {
                 override fun areItemsTheSame(
-                    oldBook: BookAndAuthors, newBook: BookAndAuthors): Boolean {
+                    oldBook: Any, newBook: Any): Boolean {
                     // User properties may have changed if reloaded from the DB, but ID is fixed
-                    return oldBook.book.id == newBook.book.id
+                    if (oldBook === newBook) return true
+                    if (oldBook.javaClass != newBook.javaClass) return false
+                    (oldBook as? BookAndAuthors)?.let {
+                        newBook as BookAndAuthors
+                        return oldBook.book.id == newBook.book.id
+                    }
+                    return oldBook == newBook
                 }
+                @SuppressLint("DiffUtilEquals")
                 override fun areContentsTheSame(
-                    oldBook: BookAndAuthors, newBook: BookAndAuthors): Boolean {
+                    oldBook: Any, newBook: Any): Boolean {
                     // NOTE: if you use equals, your object must properly override Object#equals()
                     // Incorrectly returning false here will result in too many animations.
                     return oldBook == newBook
@@ -104,30 +113,38 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
 
     internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
 
+    override fun getItemViewType(position: Int): Int {
+        if (getItem(position) is BookAndAuthors)
+            return R.layout.book_layout
+        return R.layout.text_view
+    }
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val context = parent.context
         val inflater = LayoutInflater.from(context)
 
         // Inflate the custom layout
-        val contactView: View = inflater.inflate(R.layout.book_layout, parent, false)
+        val contactView: View = inflater.inflate(viewType, parent, false)
         val holder = ViewHolder(contactView)
-        contactView.setOnClickListener {
-            toggleViewVisibility(it)
-        }
-        contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
-            if (it is ViewFlipper) {
-                getItem(holder.layoutPosition)?.apply {
-                    viewModel.selection.toggle(book.id)
+        if (viewType == R.layout.book_layout) {
+            contactView.setOnClickListener {
+                toggleViewVisibility(it)
+            }
+            contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
+                if (it is ViewFlipper) {
+                    getItem(holder.layoutPosition)?.apply {
+                        this as BookAndAuthors
+                        viewModel.selection.toggle(book.id)
+                    }
                 }
             }
-        }
-        contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
-            if (it is TextView) {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.text.toString()))
-                    context.startActivity(intent)
-                } catch (e: ActivityNotFoundException) {
-                    Log.e("BiblioTech", "Failed to launch browser")
+            contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
+                if (it is TextView) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.text.toString()))
+                        context.startActivity(intent)
+                    } catch (e: ActivityNotFoundException) {
+                        Log.e("BiblioTech", "Failed to launch browser")
+                    }
                 }
             }
         }
@@ -145,6 +162,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
                 val pos = holder.layoutPosition
                 if (pos >= 0) {
                     getItem(pos)?.apply {
+                        this as BookAndAuthors
                         if (book.id == bookId)
                             holder.itemView.findViewById<ImageView>(viewId).setImageBitmap(it)
                     }
@@ -154,7 +172,21 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val book: BookAndAuthors = getItem(position)?: return
+        val item = getItem(position)?: return
+        val book: BookAndAuthors? = item as? BookAndAuthors
+
+        if (book == null) {
+            val spannable = item as? Spannable
+            if (spannable == null) {
+                holder.itemView.visibility = View.GONE
+                return
+            }
+            holder.itemView.visibility = View.VISIBLE
+            (holder.itemView as TextView).text = spannable
+            return
+        }
+
+        holder.itemView.visibility = View.VISIBLE
         val thumbSmall =
             holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)
         val thumbLarge =

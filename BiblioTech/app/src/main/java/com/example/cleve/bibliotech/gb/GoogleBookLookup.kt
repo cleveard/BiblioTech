@@ -24,8 +24,8 @@ internal class GoogleBookLookup {
 
     class LookupException(message: String?) : java.lang.Exception(message)
 
-    class BookQueryPagingSource(private val query: String, private val itemCount: Int, private var list: List<BookAndAuthors>? = null) : PagingSource<Int, BookAndAuthors>() {
-        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, BookAndAuthors> {
+    class BookQueryPagingSource(private val query: String, private val itemCount: Int, private var list: List<BookAndAuthors>? = null) : PagingSource<Int, Any>() {
+        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Any> {
             val loadSize = params.loadSize.coerceAtMost(40)
             val index = params.key?:0
             val spec = buildUrl(

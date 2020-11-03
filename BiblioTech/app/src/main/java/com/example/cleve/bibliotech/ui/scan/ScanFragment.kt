@@ -484,7 +484,7 @@ class ScanFragment : Fragment() {
         private var selectedPosition = -1
         private var selectedView: RadioButton? = null
 
-        inner class BookPagingAdapter : PagingDataAdapter<BookAndAuthors, BooksAdapter.ViewHolder>(
+        inner class BookPagingAdapter : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
             BooksAdapter.DIFF_CALLBACK
         ) {
             private val onRadioClick = View.OnClickListener { v ->
@@ -496,7 +496,7 @@ class ScanFragment : Fragment() {
                         button.isChecked = true
                         selectedPosition = position
                         selectedView = button
-                        book = getItem(position)
+                        book = getItem(position) as BookAndAuthors
                     }
                 }
                 catch(e: Exception) {
@@ -518,7 +518,7 @@ class ScanFragment : Fragment() {
                 val button = holder.itemView as RadioButton
                 if (button == selectedView && position != selectedPosition)
                     selectedView = null
-                button.text = book?.book?.title?: ""
+                button.text = (book as? BookAndAuthors)?.book?.title?: ""
                 button.tag = position
                 button.isChecked = position == selectedPosition
             }

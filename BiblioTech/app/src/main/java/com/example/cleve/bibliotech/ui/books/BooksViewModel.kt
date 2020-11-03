@@ -16,7 +16,9 @@ import com.example.cleve.bibliotech.db.BookFilter
 import com.example.cleve.bibliotech.db.BookRepository
 import com.example.cleve.bibliotech.utils.GenericViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.collections.HashSet
@@ -69,7 +71,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         ) {
             repo.getBooks(filter)
         }
-        val flow = applySelectionTransform(pager.flow)
+        val flow = addHeaders(applySelectionTransform(pager.flow))
             .cachedIn(viewModelScope)
         flowJob = viewModelScope.launch {
             flow.collectLatest { data ->
@@ -81,11 +83,15 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     fun buildHeader(): Spannable? {
         val filter = this.filter ?: return null
 
-        val pos = layoutManager.findFirstVisibleItemPosition()
-        val book = if (pos == RecyclerView.NO_POSITION)
-            null
-        else
-            adapter.peek(pos)
+        var pos = layoutManager.findFirstVisibleItemPosition()
+        var book: BookAndAuthors?
+        if (pos == RecyclerView.NO_POSITION)
+            book = null
+        else {
+            do {
+                book = adapter.peek(pos) as? BookAndAuthors
+            } while (++pos < adapter.itemCount && book == null)
+        }
 
         return buildHeader(filter, book)
     }
@@ -125,5 +131,32 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         }
 
         return if (span.isNotEmpty()) span else null
+    }
+
+    fun compareAndBuildeHeader(filter: BookFilter, before: BookAndAuthors?, after: BookAndAuthors?): Spannable? {
+        if (before == null) {
+            if (after == null)
+                return null
+            return buildHeader(filter, after)
+        }
+
+        if (after != null) {
+            for (field in filter.orderList) {
+                if (!field.column.isSame(before, after))
+                    return buildHeader(filter, after)
+            }
+        }
+        return null
+    }
+
+    fun addHeaders(flow: Flow<PagingData<BookAndAuthors>>): Flow<PagingData<Any>> {
+        return flow.map {data ->
+            data.insertSeparators { before, after ->
+                filter?.let {
+                    compareAndBuildeHeader(it, before, after)
+                }
+
+            }
+        }
     }
 }
