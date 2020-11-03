@@ -7,8 +7,8 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
+import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
@@ -155,9 +155,9 @@ class TagModalAction private constructor(
         fun doAddTags(fragment: Fragment) {
             val activity = fragment.activity!!
             val booksViewModel: BooksViewModel =
-                ViewModelProviders.of(activity).get(BooksViewModel::class.java)
+                MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
-                ViewModelProviders.of(activity).get(TagViewModel::class.java)
+                MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true &&
                     tagViewModel.selection.hasSelection.value == true) {
                 addTags(fragment.context!!, booksViewModel, tagViewModel)
@@ -174,9 +174,9 @@ class TagModalAction private constructor(
         fun doRemoveTags(fragment: Fragment) {
             val activity = fragment.activity!!
             val booksViewModel: BooksViewModel =
-                ViewModelProviders.of(activity).get(BooksViewModel::class.java)
+                MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
-                ViewModelProviders.of(activity).get(TagViewModel::class.java)
+                MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true &&
                     tagViewModel.selection.hasSelection.value == true) {
                 removeTags(fragment.context!!, booksViewModel, tagViewModel)
@@ -193,9 +193,9 @@ class TagModalAction private constructor(
         fun doReplaceTags(fragment: Fragment) {
             val activity = fragment.activity!!
             val booksViewModel: BooksViewModel =
-                ViewModelProviders.of(activity).get(BooksViewModel::class.java)
+                MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
-                ViewModelProviders.of(activity).get(TagViewModel::class.java)
+                MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true) {
                 replaceTags(fragment.context!!, booksViewModel, tagViewModel)
             } else {

@@ -2,14 +2,13 @@ package com.example.cleve.bibliotech.ui.modes
 
 import android.app.AlertDialog
 import android.content.Context
-import android.graphics.PorterDuff
 import androidx.appcompat.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
+import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import com.example.cleve.bibliotech.utils.BaseViewModel
@@ -120,7 +119,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
         fun doDelete(fragment: Fragment) {
             val activity = fragment.activity!!
             val viewModel: BooksViewModel =
-                ViewModelProviders.of(activity).get(BooksViewModel::class.java)
+                MainActivity.getViewModel(activity, BooksViewModel::class.java)
             if (viewModel.selection.hasSelection.value == true) {
                 delete(fragment.context!!, viewModel)
             } else {

@@ -1,9 +1,11 @@
 package com.example.cleve.bibliotech.ui.books
 
+import android.app.Application
 import android.content.Context
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
+import android.util.SparseArray
 import androidx.lifecycle.viewModelScope
 import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -16,17 +18,40 @@ import com.example.cleve.bibliotech.utils.GenericViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.util.*
+import kotlin.collections.HashSet
 
-val nameStyles = arrayOf(R.style.HeaderName0, R.style.HeaderName1, R.style.HeaderName2)
-val itemStyles = arrayOf(R.style.HeaderItem0, R.style.HeaderItem1, R.style.HeaderItem2)
-
-class BooksViewModel : GenericViewModel<BookAndAuthors>() {
+class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(app) {
 
     val repo: BookRepository = BookRepository.repo
     internal lateinit var adapter: BooksAdapter
     internal lateinit var layoutManager: LinearLayoutManager
     private var flowJob: Job? = null
     private var filter: BookFilter? = null
+    private var nameStyles: Array<TextAppearanceSpan>
+    private var itemStyles: Array<TextAppearanceSpan>
+    private var locale: Locale
+    private val names = SparseArray<String>()
+
+
+    init {
+        val context = app.applicationContext
+        val resources = context.resources
+        locale = resources.configuration.locales[0]
+        nameStyles = arrayOf(
+            TextAppearanceSpan(context, R.style.HeaderName0),
+            TextAppearanceSpan(context, R.style.HeaderName1),
+            TextAppearanceSpan(context, R.style.HeaderName2)
+        )
+        itemStyles = arrayOf(
+            TextAppearanceSpan(context, R.style.HeaderItem0),
+            TextAppearanceSpan(context, R.style.HeaderItem1),
+            TextAppearanceSpan(context, R.style.HeaderItem2)
+        )
+        for (c in BookFilter.Column.values()) {
+            names.put(c.nameResourceId, if (c.nameResourceId == 0) null else resources.getString(c.nameResourceId))
+        }
+    }
 
     override fun invalidateUI() {
         adapter.refresh()
@@ -53,8 +78,8 @@ class BooksViewModel : GenericViewModel<BookAndAuthors>() {
         }
     }
 
-    fun buildHeader(context: Context): Spannable? {
-        val filter = this.filter?: return null
+    fun buildHeader(): Spannable? {
+        val filter = this.filter ?: return null
 
         val pos = layoutManager.findFirstVisibleItemPosition()
         val book = if (pos == RecyclerView.NO_POSITION)
@@ -62,31 +87,39 @@ class BooksViewModel : GenericViewModel<BookAndAuthors>() {
         else
             adapter.peek(pos)
 
+        return buildHeader(filter, book)
+    }
+
+    fun buildHeader(filter: BookFilter, book: BookAndAuthors?): Spannable? {
         val span = SpannableStringBuilder()
 
         fun appendSpan(text: String, vararg effects: Any?) {
             val start = span.length
             span.append(text)
             for (eff in effects) {
-                eff?.let { span.setSpan(it, start, span.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
+                eff?.let {
+                    span.setSpan(it, start, span.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
             }
         }
 
-        val locale = context.resources.configuration.locales[0]
+        fun textAppearance(base: Array<TextAppearanceSpan>, i: Int): TextAppearanceSpan {
+            val style = base[if (i < base.size) i else base.size - 1]
+            return TextAppearanceSpan(style.family, style.textStyle, style.textSize, style.textColor, style.linkTextColor)
+        }
+
         val added = HashSet<BookFilter.Column>()
         for ((i, field) in filter.orderList.withIndex()) {
             if (book == null) {
                 span.appendLine()
             } else if (field.headers && !added.contains(field.column)) {
                 added.add(field.column)
-                val nameStyle = nameStyles[if (i < nameStyles.size) i else nameStyles.size - 1]
-                val itemStyle = itemStyles[if (i < itemStyles.size) i else itemStyles.size - 1]
                 if (span.isNotEmpty())
                     span.appendLine()
-                appendSpan("${context.resources.getString(field.column.nameResourceId)}: ", TextAppearanceSpan(context, nameStyle))
-                appendSpan(
-                    field.column.getValue(book, locale),
-                    itemStyle?.let { TextAppearanceSpan(context, it) }
+                appendSpan("${names[field.column.nameResourceId]}: ",
+                    textAppearance(nameStyles, i))
+                appendSpan(field.column.getValue(book, locale),
+                    textAppearance(itemStyles, i)
                 )
             }
         }

@@ -7,14 +7,14 @@ import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.GravityCompat
 import androidx.core.view.children
-import androidx.core.view.isVisible
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.db.BookFilter
 import com.example.cleve.bibliotech.ui.filter.FilterTables
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
@@ -55,10 +55,8 @@ class BooksFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        booksViewModel =
-            ViewModelProviders.of(activity!!).get(BooksViewModel::class.java)
-        tagViewModel =
-            ViewModelProviders.of(activity!!).get(TagViewModel::class.java)
+        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
+        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
         booksViewModel.selection.hasSelection.observe(this, selectionObserver)
         tagViewModel.selection.hasSelection.observe(this, selectionObserver)
 
@@ -85,6 +83,12 @@ class BooksFragment : Fragment() {
         })
 
         val recyclerView = root.findViewById<RecyclerView>(R.id.book_list)
+        filter.onCreateView(inflater, root.findViewById(R.id.order_table))
+        filter.setFilter(BookFilter(
+            arrayOf(BookFilter.OrderField(BookFilter.Column.LAST_NAME, BookFilter.Order.Ascending, true)),
+            emptyArray()
+        ))
+
         booksViewModel.layoutManager = object: LinearLayoutManager(activity) {
             override fun onLayoutCompleted(state: RecyclerView.State?) {
                 super.onLayoutCompleted(state)
@@ -115,15 +119,13 @@ class BooksFragment : Fragment() {
             booksViewModel.buildFlow(filter.filter.value)
         }
 
-        filter.onCreateView(inflater, root.findViewById(R.id.order_table))
-
         updateMenuAndButtons()
         return root
     }
 
     fun setHeader() {
         view?.let { root ->
-            val text = booksViewModel.buildHeader(context!!)
+            val text = booksViewModel.buildHeader()
             val headerView = root.findViewById<TextView>(R.id.header_view)
             headerView.text = text
             val vis = if (text == null) View.GONE else View.VISIBLE

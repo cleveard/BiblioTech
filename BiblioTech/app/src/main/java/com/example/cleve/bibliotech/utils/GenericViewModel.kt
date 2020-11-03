@@ -1,5 +1,6 @@
 package com.example.cleve.bibliotech.utils
 
+import android.app.Application
 import android.graphics.PorterDuff
 import android.view.Menu
 import android.view.MenuItem
@@ -13,7 +14,7 @@ import com.example.cleve.bibliotech.db.Selectable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-abstract class GenericViewModel<T> : BaseViewModel() where T: Selectable {
+abstract class GenericViewModel<T>(app: Application) : BaseViewModel(app) where T: Selectable {
     fun applySelectionTransform(flow: Flow<PagingData<T>>): Flow<PagingData<T>> {
         return flow.map {
             it.map { b ->

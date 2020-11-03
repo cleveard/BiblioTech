@@ -1,5 +1,6 @@
 package com.example.cleve.bibliotech
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
@@ -14,6 +15,10 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProviders
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import java.io.File
 import com.example.cleve.bibliotech.db.*
@@ -25,11 +30,18 @@ class MainActivity : AppCompatActivity() {
         private lateinit var mCache: File
         val cache: File
             get() = mCache
+        private lateinit var mViewModelFactory: ViewModelProvider.Factory
+
+        fun <T: ViewModel> getViewModel(activity: FragmentActivity?, c: Class<T>): T {
+            return ViewModelProviders.of(activity!!, mViewModelFactory).get(c)
+        }
     }
 
     private lateinit var appBarConfiguration: AppBarConfiguration
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        mViewModelFactory = ViewModelProvider.AndroidViewModelFactory(application)
+
         // Create the data base
         BookDatabase.initialize(applicationContext)
         BookRepository.initialize(applicationContext)

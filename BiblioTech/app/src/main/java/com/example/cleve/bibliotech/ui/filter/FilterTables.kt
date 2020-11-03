@@ -124,6 +124,7 @@ class FilterTables(private val fragment: Fragment) {
     fun setFilter(filter: BookFilter?) {
         clearRows()
         bindFilter(filter)
+        _filter.value = filter
     }
 
     private fun clearRows() {

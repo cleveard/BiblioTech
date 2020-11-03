@@ -1,9 +1,11 @@
 package com.example.cleve.bibliotech.utils
 
+import android.app.Application
 import android.content.Context
 import android.graphics.PorterDuff
 import android.view.Menu
 import android.view.MenuItem
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -13,7 +15,7 @@ import com.example.cleve.bibliotech.R
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-abstract class BaseViewModel : ViewModel() {
+abstract class BaseViewModel(app: Application) : AndroidViewModel(app) {
     // Handler for selection
     inner class Selection {
         private var _inverted: Boolean = false

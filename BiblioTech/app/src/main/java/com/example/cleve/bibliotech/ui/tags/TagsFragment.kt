@@ -1,8 +1,5 @@
 package com.example.cleve.bibliotech.ui.tags
 
-import android.content.Context
-import android.content.DialogInterface
-import android.graphics.PorterDuff
 import android.os.Bundle
 import android.view.*
 import android.view.inputmethod.InputMethodManager
@@ -10,20 +7,18 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.ActionMenuView
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.db.TagEntity
 import com.example.cleve.bibliotech.utils.BaseViewModel
-import kotlinx.android.synthetic.main.book_layout.view.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -37,7 +32,6 @@ import kotlin.coroutines.suspendCoroutine
 class TagsFragment : Fragment() {
     private lateinit var tagViewModel: TagViewModel
     private lateinit var pagerJob: Job
-    private lateinit var addItem: MenuItem
     private lateinit var deleteItem: MenuItem
     private lateinit var editItem: MenuItem
     private val observer: Observer<Boolean?> = Observer<Boolean?> { updateMenu() }
@@ -49,7 +43,7 @@ class TagsFragment : Fragment() {
         // Inflate the layout for this fragment
         val content = inflater.inflate(R.layout.fragment_tags, container, false)
         tagViewModel =
-            ViewModelProviders.of(activity!!).get(TagViewModel::class.java)
+            MainActivity.getViewModel(activity, TagViewModel::class.java)
 
         setupRecyclerView(content)
         setupActionMenu(content)
@@ -173,7 +167,7 @@ class TagsFragment : Fragment() {
 
     private fun addOrEdit(tagId: Long) {
         tagViewModel.viewModelScope.launch {
-            var tag: TagEntity?
+            val tag: TagEntity?
             if (tagId != 0L) {
                 tag = tagViewModel.repo.getTag(tagId)
                 if (tag == null)
@@ -209,7 +203,7 @@ class TagsFragment : Fragment() {
                         tag.desc = desc.text.toString()
 
                         tagViewModel.viewModelScope.launch {
-                            tagViewModel.repo.addOrUpdateTag(tag) {_ ->
+                            tagViewModel.repo.addOrUpdateTag(tag) {
                                 suspendCoroutine { cont ->
                                     tagViewModel.viewModelScope.launch {
                                         var accept = false
@@ -217,9 +211,9 @@ class TagsFragment : Fragment() {
                                             .setTitle(R.string.tag_conflict_title)
                                             .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)
                                             .setCancelable(false)
-                                            .setPositiveButton(R.string.yes, { _, _ ->
+                                            .setPositiveButton(R.string.yes) { _, _ ->
                                                 accept = true
-                                            })
+                                            }
                                             .setNegativeButton(R.string.no, null)
                                             .setOnDismissListener {
                                                 cont.resume(accept)
