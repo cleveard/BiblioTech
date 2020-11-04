@@ -1,11 +1,8 @@
 package com.example.cleve.bibliotech
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
-import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.android.material.snackbar.Snackbar
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
@@ -27,19 +24,36 @@ const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"
 class MainActivity : AppCompatActivity() {
     companion object {
+        // The File to the app cache directory. Used to save thumbnails
         private lateinit var mCache: File
+
+        /**
+         * File to the application cache directory.
+         * Use to save thumbnails
+         */
         val cache: File
             get() = mCache
+
+        // Factory used to create AndroidViewModel view models
         private lateinit var mViewModelFactory: ViewModelProvider.Factory
 
-        fun <T: ViewModel> getViewModel(activity: FragmentActivity?, c: Class<T>): T {
-            return ViewModelProviders.of(activity!!, mViewModelFactory).get(c)
+        /**
+         * Create an AndroidViewModel view model for a fragment
+         * @param activity The fragments activity
+         * @param classType The java class for the viewmodel to be created.
+         */
+        fun <T: ViewModel> getViewModel(activity: FragmentActivity?, classType: Class<T>): T {
+            return ViewModelProviders.of(activity!!, mViewModelFactory).get(classType)
         }
     }
 
     private lateinit var appBarConfiguration: AppBarConfiguration
 
+    /**
+     * @inheritDoc
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Create the view model factory
         mViewModelFactory = ViewModelProvider.AndroidViewModelFactory(application)
 
         // Create the data base
@@ -48,14 +62,12 @@ class MainActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Setup the action toolbar
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
 
-        /* val fab: FloatingActionButton = findViewById(R.id.bufab)
-        fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show()
-        } */
+        // Setup the navigation drawer
         val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
         val navView: NavigationView = findViewById(R.id.nav_view)
         val navController = findNavController(R.id.nav_host_fragment)
@@ -69,16 +81,24 @@ class MainActivity : AppCompatActivity() {
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
+        // Remember the cache directory
         mCache = cacheDir
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onSupportNavigateUp(): Boolean {
         val navController = findNavController(R.id.nav_host_fragment)
         return navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
     }
 
-    /** When key down event is triggered, relay it via local broadcast so fragments can handle it */
+    /**
+     * @inheritDoc
+     */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Handle Volume up or down key and send a local intent.
+        // The Scan fragment listens and starts scanning for bar codes
         when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_DOWN,
             KeyEvent.KEYCODE_VOLUME_UP -> {
