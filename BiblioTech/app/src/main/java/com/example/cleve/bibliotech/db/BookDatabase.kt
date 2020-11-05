@@ -165,39 +165,7 @@ data class BookEntity(
     @ColumnInfo(name = DATE_MODIFIED_COLUMN,defaultValue = "0") var modified: Date,
     @ColumnInfo(name = SMALL_THUMB_COLUMN) var smallThumb: String?,
     @ColumnInfo(name = LARGE_THUMB_COLUMN) var largeThumb: String?
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as BookEntity
-
-        if (id != other.id) return false
-        if (volumeId != other.volumeId) return false
-        if (ISBN != other.ISBN) return false
-        if (title != other.title) return false
-        if (subTitle != other.subTitle) return false
-        if (description != other.description) return false
-        if (smallThumb != other.smallThumb) return false
-        if (largeThumb != other.largeThumb) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + (volumeId?.hashCode() ?: 0)
-        result = 31 * result + (ISBN?.hashCode() ?: 0)
-        result = 31 * result + title.hashCode()
-        result = 31 * result + subTitle.hashCode()
-        result = 31 * result + description.hashCode()
-        result = 31 * result + (smallThumb?.hashCode() ?: 0)
-        result = 31 * result + (largeThumb?.hashCode() ?: 0)
-        return result
-    }
-
-
-}
+)
 
 /**
  * Room Entity for the Authors table
@@ -211,38 +179,19 @@ data class AuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var lastName: String,
     @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var remainingName: String
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as AuthorEntity
-
-        if (id != other.id) return false
-        if (lastName != other.lastName) return false
-        if (remainingName != other.remainingName) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + lastName.hashCode()
-        result = 31 * result + remainingName.hashCode()
-        return result
-    }
-}
+)
 
 /**
  * Selectable Author class
  */
-open class Author(
-    @Embedded var author: AuthorEntity
+data class Author(
+    @Embedded var author: AuthorEntity,
+    @Ignore override var selected: Boolean
 ) : Selectable {
     /**
-     * Indicate whether object is selected
+     * This constructor is needed to use @Ignore in Room
      */
-    @Ignore override var selected = false
+    constructor(author: AuthorEntity): this(author, false)
 
     /**
      * Get the id of the Author
@@ -287,36 +236,19 @@ data class BookAndAuthorEntity(
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = CATEGORIES_ID_COLUMN) var id: Long,
     @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var category: String
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as CategoryEntity
-
-        if (id != other.id) return false
-        if (category != other.category) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + category.hashCode()
-        return result
-    }
-}
+)
 
 /**
  * Selectable category object
  */
-open class Category(
-    @Embedded var category: CategoryEntity
+data class Category(
+    @Embedded var category: CategoryEntity,
+    @Ignore override var selected: Boolean = false
 ) : Selectable {
     /**
-     * Indicate whether the object is selected
+     * This constructor is needed to use @Ignore in Room
      */
-    @Ignore override var selected = false
+    constructor(category: CategoryEntity): this(category, false)
 
     /**
      * Get the id of the category
@@ -386,37 +318,20 @@ data class TagEntity(
 /**
  * Selectable tag object
  */
-open class Tag(
-    @Embedded var tag: TagEntity
+data class Tag(
+    @Embedded var tag: TagEntity,
+    @Ignore override var selected: Boolean = false
 ) : Selectable {
     /**
-     * Indicate whether the object is selected
+     * This constructor is needed to use @Ignore in Room
      */
-    @Ignore override var selected = false
+    constructor(tag: TagEntity): this(tag, false)
 
     /**
      * Get the id of the tag
      */
     override val id: Long
         get() = tag.id
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as Tag
-
-        if (tag != other.tag) return false
-        if (selected != other.selected) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = tag.hashCode()
-        result = 31 * result + selected.hashCode()
-        return result
-    }
 }
 
 /**
@@ -442,32 +357,12 @@ data class BookAndTagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = BOOK_TAGS_TAG_ID_COLUMN) var tagId: Long,
     @ColumnInfo(name = BOOK_TAGS_BOOK_ID_COLUMN) var bookId: Long
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as BookAndTagEntity
-
-        if (id != other.id) return false
-        if (bookId != other.bookId) return false
-        if (tagId != other.tagId) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + bookId.hashCode()
-        result = 31 * result + tagId.hashCode()
-        return result
-    }
-}
+)
 
 /**
  * Selectable Book object with authors, tags and categories
  */
-open class BookAndAuthors(
+data class BookAndAuthors(
     @Embedded var book: BookEntity,
     @Relation(
         entity = AuthorEntity::class,
@@ -504,15 +399,37 @@ open class BookAndAuthors(
     var tags: List<TagEntity>,
     // Columns used when sorting by related field. These are used to
     // Construct the header for the list.
-    @ColumnInfo(name= REMAINING_COLUMN) var sortFirst: String? = null,
-    @ColumnInfo(name= LAST_NAME_COLUMN) var sortLast: String? = null,
-    @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String? = null,
-    @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null
+    @ColumnInfo(name= REMAINING_COLUMN) var sortFirst: String?,
+    @ColumnInfo(name= LAST_NAME_COLUMN) var sortLast: String?,
+    @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String?,
+    @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String?,
+    @Ignore override var selected: Boolean
 ) : Parcelable, Selectable {
-    @Ignore override var selected: Boolean = false
+    /**
+     * This constructor is needed to allow Room to work with @Ignore
+     */
+    constructor(
+        book: BookEntity,
+        authors: List<AuthorEntity>,
+        categories: List<CategoryEntity>,
+        tags: List<TagEntity>,
+        sortFirst: String? = null,
+        sortLast: String? = null,
+        sortTag: String? = null,
+        sortCategory: String? = null
+    ): this(book, authors, categories, tags, sortFirst, sortLast, sortTag, sortCategory, false)
+
+    /**
+     * Get the id of the book
+     */
     override val id: Long
         get() { return book.id }
 
+    /**
+     * @inheritDoc
+     *
+     * Override to exclude sortFirst, sortLast, sortTag and sortCategory from equals
+     */
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -528,6 +445,11 @@ open class BookAndAuthors(
         return true
     }
 
+    /**
+     * @inheritDoc
+     *
+     * Override to exclude sortFirst, sortLast, sortTag and sortCategory from hash
+     */
     override fun hashCode(): Int {
         var result = book.hashCode()
         result = 31 * result + authors.hashCode()
