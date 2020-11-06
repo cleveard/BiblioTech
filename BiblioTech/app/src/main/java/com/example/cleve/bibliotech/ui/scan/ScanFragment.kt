@@ -35,6 +35,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.*
 import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.gb.GoogleBookLookup.Companion.generalLookup
 import com.example.cleve.bibliotech.ui.books.BooksAdapter
 import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
@@ -49,6 +50,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.Serializable
 import java.lang.Exception
+import java.net.MalformedURLException
 import java.nio.ByteBuffer
 import java.util.*
 import java.util.concurrent.Executor
@@ -81,7 +83,6 @@ class ScanFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private var imageAnalyzer: ImageAnalysis? = null
     private var previewing = false
-    private val lookup = GoogleBookLookup()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -271,38 +272,36 @@ class ScanFragment : Fragment() {
                 fun(codes: Array<String>) {
                     container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
 
-                    for (isbn in codes) {
-                        var second = false
-                        lookup.lookupISBN(object : GoogleBookLookup.LookupDelegate {
-                            override fun bookLookupResult(result: List<BookAndAuthors>?, itemCount: Int) {
-                                if (result == null || result.isEmpty()) {
-                                    if (!second) {
-                                        second = true
-                                        lookup.generalLookup(this, isbn, 0, 20)
-                                    }
-                                    return
+                    booksViewModel.viewModelScope.launch {
+                        for (isbn in codes) {
+                            try {
+                                var result = GoogleBookLookup.lookupISBN(isbn)
+                                if (result == null || result.list.isEmpty()) {
+                                    result = generalLookup(isbn, 0, 20)
+                                    if (result == null || result.list.isEmpty())
+                                        return@launch
                                 }
 
-                                selectBook(result, isbn, itemCount) {
+                                selectBook(result.list, isbn, result.itemCount) {
                                     container.findViewById<TextView>(R.id.scan_title).text =
                                         it.book.title
 
                                     it.book.ISBN = isbn
                                     booksViewModel.viewModelScope.launch {
-                                        repo.addOrUpdateBook(it, tagViewModel.selection.selection,
-                                            tagViewModel.selection.inverted)
+                                        repo.addOrUpdateBook(
+                                            it, tagViewModel.selection.selection,
+                                            tagViewModel.selection.inverted
+                                        )
                                     }
                                 }
-                            }
-
-                            override fun bookLookupError(error: String?) {
+                            } catch (e: GoogleBookLookup.LookupException) {
                                 Toast.makeText(
                                     context,
-                                    "Error finding book: ${error ?: "Unknown error"}",
+                                    "Error finding book: ${e.toString()}",
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
-                        }, isbn)
+                        }
                     }
                 }
             ))
@@ -543,7 +542,7 @@ class ScanFragment : Fragment() {
             val pager = Pager(
                 config
             ) {
-                GoogleBookLookup.BookQueryPagingSource(spec, itemCount, list)
+                GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
             }
             val flow = pager.flow.cachedIn(scope)
             val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
