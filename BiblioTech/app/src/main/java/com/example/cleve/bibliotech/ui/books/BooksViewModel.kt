@@ -1,7 +1,6 @@
 package com.example.cleve.bibliotech.ui.books
 
 import android.app.Application
-import android.content.Context
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
@@ -93,10 +92,10 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             } while (++pos < adapter.itemCount && book == null)
         }
 
-        return buildHeader(filter, book)
+        return buildHeader(filter, book, false)
     }
 
-    fun buildHeader(filter: BookFilter, book: BookAndAuthors?): Spannable? {
+    fun buildHeader(filter: BookFilter, book: BookAndAuthors?, isSeparator: Boolean): Spannable? {
         val span = SpannableStringBuilder()
 
         fun appendSpan(text: String, vararg effects: Any?) {
@@ -124,7 +123,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                     span.appendLine()
                 appendSpan("${names[field.column.nameResourceId]}: ",
                     textAppearance(nameStyles, i))
-                appendSpan(field.column.getValue(book, locale),
+                appendSpan(
+                    if (isSeparator)
+                        field.column.getSeparatorValue(book, locale)
+                    else
+                        field.column.getValue(book, locale),
                     textAppearance(itemStyles, i)
                 )
             }
@@ -137,13 +140,13 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         if (before == null) {
             if (after == null)
                 return null
-            return buildHeader(filter, after)
+            return buildHeader(filter, after, true)
         }
 
         if (after != null) {
             for (field in filter.orderList) {
-                if (!field.column.isSame(before, after))
-                    return buildHeader(filter, after)
+                if (field.column.shouldAddSeparator(before, after))
+                    return buildHeader(filter, after, true)
             }
         }
         return null
