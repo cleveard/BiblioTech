@@ -1,8 +1,5 @@
 package com.example.cleve.bibliotech.ui.scan
 
-//import android.hardware.Camera
-
-/* Import ZBar Class files */
 import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.gb.*
 import android.Manifest
@@ -50,41 +47,99 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.Serializable
 import java.lang.Exception
-import java.net.MalformedURLException
 import java.nio.ByteBuffer
-import java.util.*
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
-/** Helper type alias used for analysis use case callbacks */
-typealias BarcodeListener = (codes: Array<String>) -> Unit
+/**
+ * Helper type alias used for analysis use case callbacks
+ */
+typealias BarcodeListener = (codes: List<String>) -> Unit
 
+/**
+ * Bar code scan fragment
+ */
 class ScanFragment : Fragment() {
-
+    /**
+     * The books view model
+     */
     private lateinit var booksViewModel: BooksViewModel
+
+    /**
+     * The tags view model
+     */
     private lateinit var tagViewModel: TagViewModel
+
+    /**
+     * Root of the scan fragment layout
+     */
     private lateinit var container: ConstraintLayout
+
+    /**
+     * The view that displays the camera preview
+     */
     private lateinit var viewFinder: TextureView
+
+    /**
+     * Broadcast manager for the app. Used to react to volume up/down button presses
+     */
     private lateinit var broadcastManager: LocalBroadcastManager
+
+    /**
+     * Executor for the main thread
+     */
     private lateinit var mainExecutor: Executor
+
+    /**
+     * The Z-Bar image scanner
+     */
     private lateinit var scanner: ImageScanner
 
+    /**
+     * Display id of the camera preview view
+     */
     private var displayId = -1
+
+    /**
+     * Lens to use for scanning
+     */
     private var lensFacing = CameraX.LensFacing.BACK
+
+    /**
+     * Preview camera stream
+     */
     private var preview: Preview? = null
+
+    /**
+     * Image capture stream
+     */
+    // TODO: Is this needed?
     private var imageCapture: ImageCapture? = null
+
+    /**
+     * Image analyzer - used to analyze images captured from the camera
+     */
     private var imageAnalyzer: ImageAnalysis? = null
+
+    /**
+     * Flag that turns bar code scanning on and off.
+     * Set this to true to start scanning for a barcode
+     * Set to false when you are done.
+     */
     private var previewing = false
 
-
+    /**
+     * @inheritDoc
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -98,6 +153,9 @@ class ScanFragment : Fragment() {
         scanner.setConfig(0, Config.Y_DENSITY, 3)
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -112,22 +170,30 @@ class ScanFragment : Fragment() {
         }
     }
 
-    /** Volume down button receiver used to trigger shutter */
+    /**
+     * Volume down button receiver used to trigger shutter
+     * This listens for the intent broadcast by the activity when volume up/down is pressed
+     */
     private val volumeDownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getIntExtra(KEY_EVENT_EXTRA, KeyEvent.KEYCODE_UNKNOWN)) {
                 // When the volume down button is pressed, scan the bar code
                 KeyEvent.KEYCODE_VOLUME_DOWN,
                 KeyEvent.KEYCODE_VOLUME_UP -> {
+                    // Clear the isbn and title fields
                     clearView()
+                    // Focus the camera
                     focus()
+                    // Turn on bar code scanning in the analyzer
                     previewing = true
                 }
             }
         }
     }
 
-    /** Internal reference of the [DisplayManager] */
+    /**
+     * Internal reference of the [DisplayManager]
+     */
     private lateinit var displayManager: DisplayManager
 
     /**
@@ -148,6 +214,9 @@ class ScanFragment : Fragment() {
         } ?: Unit
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onResume() {
         super.onResume()
         // Make sure that all permissions are still present, since user could have removed them
@@ -157,6 +226,9 @@ class ScanFragment : Fragment() {
         }
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onDestroyView() {
         super.onDestroyView()
 
@@ -165,6 +237,9 @@ class ScanFragment : Fragment() {
         displayManager.unregisterDisplayListener(displayListener)
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -176,17 +251,25 @@ class ScanFragment : Fragment() {
         return inflater.inflate(R.layout.fragment_scan, container, false)
     }
 
+    /**
+     * Clear isbn and title text views
+     */
     private fun clearView() {
         container.findViewById<TextView>(R.id.scan_isbn).text = ""
         container.findViewById<TextView>(R.id.scan_title).text = ""
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Setup local properties
         container = view as ConstraintLayout
         viewFinder = container.findViewById(R.id.view_finder)
         broadcastManager = LocalBroadcastManager.getInstance(view.context)
 
+        // Clear the isbn and title
         clearView()
 
         // Set up the intent filter that will receive events from our main activity
@@ -212,7 +295,9 @@ class ScanFragment : Fragment() {
         }
     }
 
-    /** Declare and bind preview, capture and analysis use cases */
+    /**
+     * Declare and bind preview, capture and analysis use cases
+     */
     private fun bindCameraUseCases() {
 
         // Get screen metrics used to setup camera for full screen resolution
@@ -257,54 +342,77 @@ class ScanFragment : Fragment() {
             setTargetRotation(viewFinder.display.rotation)
         }.build()
 
-        fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors) -> Unit) {
+        /**
+         * Select a book from a google query
+         * @param list List of books in first page returned from the book query
+         * @param spec query used to get the page of books
+         * @param totalItems Total number of books the query found
+         */
+        suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int): BookAndAuthors? {
             if (list.size == 1) {
-                callback(list[0])
-                return
+                // If the query resulted in a single book, then select it
+                return list[0]
             }
 
-            SelectBookDialogFragment.createDialog(list, spec, totalItems, callback).show(fragmentManager!!, "select_book")
+            // Otherwise display a dialog to select the book
+            return suspendCoroutine { cont ->
+                SelectBookDialogFragment.createDialog(list, spec, totalItems) {
+                    cont.resume(it)
+                }.show(fragmentManager!!, "select_book")
+            }
         }
 
+        // Setup the image analyzer to scan for bar codes
         val repo = booksViewModel.repo
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
-            setAnalyzer(mainExecutor, BarcodeScanner(
-                fun(codes: Array<String>) {
-                    container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
+            // Run the analysis on the main thread and use the BarcodeScanner class
+            setAnalyzer(mainExecutor, BarcodeScanner {codes ->
+                // Display the bar codes in the UI
+                container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
 
-                    booksViewModel.viewModelScope.launch {
-                        for (isbn in codes) {
-                            try {
-                                var result = GoogleBookLookup.lookupISBN(isbn)
-                                if (result == null || result.list.isEmpty()) {
-                                    result = generalLookup(isbn, 0, 20)
-                                    if (result == null || result.list.isEmpty())
-                                        return@launch
-                                }
-
-                                selectBook(result.list, isbn, result.itemCount) {
-                                    container.findViewById<TextView>(R.id.scan_title).text =
-                                        it.book.title
-
-                                    it.book.ISBN = isbn
-                                    booksViewModel.viewModelScope.launch {
-                                        repo.addOrUpdateBook(
-                                            it, tagViewModel.selection.selection,
-                                            tagViewModel.selection.inverted
-                                        )
-                                    }
-                                }
-                            } catch (e: GoogleBookLookup.LookupException) {
-                                Toast.makeText(
-                                    context,
-                                    "Error finding book: ${e.toString()}",
-                                    Toast.LENGTH_LONG
-                                ).show()
+                // Start a coroutine job to run query for the book
+                booksViewModel.viewModelScope.launch {
+                    // Look through the codes we found
+                    for (isbn in codes) {
+                        try {
+                            // Lookup using isbn
+                            var result = GoogleBookLookup.lookupISBN(isbn)
+                            if (result == null || result.list.isEmpty()) {
+                                // If we didn't find anything find books with the isbn
+                                // somewhere in the book data
+                                result = generalLookup(isbn, 0, 20)
+                                // If we still didn't find anything, continue with next code
+                                if (result == null || result.list.isEmpty())
+                                    continue
                             }
+
+                            // Select a book from the ones we found
+                            selectBook(result.list, isbn, result.itemCount)?.let {book ->
+                                // When a book is selected, set the title
+                                container.findViewById<TextView>(R.id.scan_title).text =
+                                    book.book.title
+
+                                // Make sure the isbn in the book record is the one we searched
+                                book.book.ISBN = isbn
+                                // Add the book to the database
+                                repo.addOrUpdateBook(
+                                    book, tagViewModel.selection.selection,
+                                    tagViewModel.selection.inverted
+                                )
+                                // Stop looking
+                                return@launch
+                            }
+                        } catch (e: GoogleBookLookup.LookupException) {
+                            // Display and error if we found one
+                            Toast.makeText(
+                                context,
+                                "Error finding book: $e",
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     }
                 }
-            ))
+            })
         }
 
         // Apply declared configs to CameraX using the same lifecycle owner
@@ -332,7 +440,11 @@ class ScanFragment : Fragment() {
         return AspectRatio.RATIO_16_9
     }
 
+    /**
+     * Start auto focus for the camera
+     */
     private fun focus(): Boolean {
+        // Position where we want to focus
         val x = viewFinder.x + viewFinder.width / 2f
         val y = viewFinder.y + viewFinder.height / 2f
 
@@ -344,6 +456,7 @@ class ScanFragment : Fragment() {
         val aePoint = pointFactory.createPoint(x, y, aePointWidth, 1.0f)
 
         try {
+            // Start the auto focus
             CameraX.getCameraControl(lensFacing).startFocusAndMetering(
                 FocusMeteringAction.Builder.from(afPoint, FocusMeteringAction.MeteringMode.AF_ONLY)
                                            .addPoint(aePoint, FocusMeteringAction.MeteringMode.AE_ONLY)
@@ -355,19 +468,13 @@ class ScanFragment : Fragment() {
 
         return true
     }
+
     /**
-     * Our custom image analysis class.
-     *
-     * <p>All we need to do is override the function `analyze` with our desired operations. Here,
-     * we compute the average luminosity of the image by looking at the Y plane of the YUV frame.
+     * Custom analysis code to scan for bar codes
      */
     private inner class BarcodeScanner(listener: BarcodeListener? = null) : ImageAnalysis.Analyzer {
-        private val frameRateWindow = 8
-        private val frameTimestamps = ArrayDeque<Long>(5)
         private val listeners = ArrayList<BarcodeListener>().apply { listener?.let { add(it) } }
         private var lastAnalyzedTimestamp = 0L
-        var framesPerSecond: Double = -1.0
-            private set
 
         /**
          * Helper extension function used to extract a byte array from an image plane buffer
@@ -400,44 +507,38 @@ class ScanFragment : Fragment() {
 
             // Keep track of frames analyzed
             val currentTime = System.currentTimeMillis()
-            frameTimestamps.push(currentTime)
-
-            // Compute the FPS using a moving average
-            while (frameTimestamps.size >= frameRateWindow) frameTimestamps.removeLast()
-            val timestampFirst = frameTimestamps.peekFirst() ?: currentTime
-            val timestampLast = frameTimestamps.peekLast() ?: currentTime
-            framesPerSecond = 1.0 / ((timestampFirst - timestampLast) /
-                    frameTimestamps.size.coerceAtLeast(1).toDouble()) * 1000.0
 
             // scan barcode no more often than every .25 seconds
-            if (frameTimestamps.first - lastAnalyzedTimestamp >= TimeUnit.MILLISECONDS.toMillis(250)) {
-                lastAnalyzedTimestamp = frameTimestamps.first
+            if (currentTime - lastAnalyzedTimestamp >= TimeUnit.MILLISECONDS.toMillis(250)) {
+                lastAnalyzedTimestamp = currentTime
 
-                val barcode =
-                    Image(image.width, image.height, "GREY")
+                // Put the image in the format Z-bar wants
+                val barcode = Image(image.width, image.height, "GREY")
                 // Since format in ImageAnalysis is YUV, image.planes[0] contains the luminance
                 //  plane. Use that as a gray level image
                 val data = image.planes[0].buffer.toByteArray()
                 barcode.data = data
 
+                // Scan the image for bar code. Returns 0 if nothing was found
                 val result: Int = scanner.scanImage(barcode)
 
                 if (result != 0) {
+                    // We found something, so stop analyzing
                     previewing = false
+                    // Get the results and look for ISBN codes
                     val symbols = scanner.results
-                    val extract = arrayOfNulls<String>(symbols.size)
-                    var i = 0
+                    val codes = ArrayList<String>()
                     for (sym in symbols) {
+                        // When we find an ISBN, add it to the codes
                         when (sym.type) {
                             Symbol.ISBN10,
                             Symbol.ISBN13,
                             Symbol.EAN13 ->
-                                extract[i++] = sym.data
+                                codes.add(sym.data)
                         }
                     }
 
-                    val codes = Array(i) { extract[it]!! }
-                    // Call all listeners with new value
+                    // Call all listeners with codes we found
                     listeners.forEach { it(codes) }
                 }
             }
@@ -445,7 +546,14 @@ class ScanFragment : Fragment() {
     }
 
     companion object {
+        /**
+         * Tag for Logging
+         */
         private const val TAG = "CameraXBasic"
+
+        /**
+         * Common camera ratios
+         */
         private const val RATIO_4_3_VALUE = 4.0 / 3.0
         private const val RATIO_16_9_VALUE = 16.0 / 9.0
 
@@ -455,44 +563,118 @@ class ScanFragment : Fragment() {
         }
     }
 
-    internal  class SelectBookDialogFragment private constructor() : DialogFragment() {
+    /**
+     * Dialog to present book titles to be selected by the user
+     * Private class not allowed by Android
+     */
+    internal class SelectBookDialogFragment private constructor() : DialogFragment() {
         companion object {
+            /**
+             * Argument bundle name for the first page of the books
+             */
             private const val kList = "list"
+
+            /**
+             * Argument bundle name for the book query
+             */
             private const val kSpec = "spec"
+
+            /**
+             * Argument bundle name for the total number of items
+             */
             private const val kItemCount = "itemCount"
+
+            /**
+             * Argument bundle name for the call back
+             */
             private const val kCallback = "callback"
-            fun createDialog(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors) -> Unit) : DialogFragment {
+
+            /**
+             * Create the dialog and set the argument bundle to callers arguments
+             * @param list The first page of books from the query
+             * @param spec The query
+             * @param totalItems The total number of books from the query
+             * @param callback Callback made when the user makes a choice
+             */
+            fun createDialog(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors?) -> Unit) : DialogFragment {
+                // Bundle the arguments
                 val bundle = Bundle()
                 bundle.putParcelableArrayList(kList, list as ArrayList<out Parcelable>?)
                 bundle.putString(kSpec, spec)
                 bundle.putInt(kItemCount, totalItems)
                 bundle.putSerializable(kCallback, callback as Serializable)
+                // Create the dialog
                 val dialog = SelectBookDialogFragment()
+                // Set the argument bundle
                 dialog.arguments = bundle
                 return dialog
             }
         }
-        // Use this instance of the interface to deliver action events
+
+        /**
+         * The un-bundled first page of books
+         */
         private lateinit var list: List<BookAndAuthors>
+
+        /**
+         * The un-bundled query
+         */
         private lateinit var spec: String
-        private lateinit var callback: (BookAndAuthors) -> Unit
+
+        /**
+         * The un-bundled callback
+         */
+        private lateinit var callback: (BookAndAuthors?) -> Unit
+
+        /**
+         * The content view in the dialog
+         */
         private lateinit var content: View
+
+        /**
+         * The un-bundled total number of items
+         */
         private var itemCount = 0
+
+        /**
+         * Job used for the Pager flow
+         */
         private lateinit var pagerJob: Job
+
+        /**
+         * Selected book
+         */
         private var book: BookAndAuthors? = null
+
+        /**
+         * Selected book position
+         */
         private var selectedPosition = -1
+
+        /**
+         * Selected radio button view
+         */
         private var selectedView: RadioButton? = null
 
+        /**
+         * Recycler adapter to display the  books
+         */
         inner class BookPagingAdapter : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
             BooksAdapter.DIFF_CALLBACK
         ) {
+            // On click listener for the radio buttons. Need to handle this manually because
+            // the recycler view doesn't
             private val onRadioClick = View.OnClickListener { v ->
                 try {
                     val button = v as RadioButton
                     val position = v.tag as Int
+                    // If we select a new book
                     if (position != selectedPosition) {
+                        // Uncheck the previously selected book
                         selectedView?.isChecked = false
+                        // Check this book
                         button.isChecked = true
+                        // Save the position, view and book selected
                         selectedPosition = position
                         selectedView = button
                         book = getItem(position) as BookAndAuthors
@@ -502,41 +684,57 @@ class ScanFragment : Fragment() {
                 }
             }
 
+            /**
+             * @inheritDoc
+             */
             override fun onCreateViewHolder(
                 parent: ViewGroup,
                 viewType: Int
             ): BooksAdapter.ViewHolder {
+                // Just create a single radio button for each book
                 val button = RadioButton(context)
                 val viewHolder = BooksAdapter.ViewHolder(button)
                 button.setOnClickListener(onRadioClick)
                 return viewHolder
             }
 
+            /**
+             * @inheritDoc
+             */
             override fun onBindViewHolder(holder: BooksAdapter.ViewHolder, position: Int) {
                 val book = getItem(position)
                 val button = holder.itemView as RadioButton
+                // If we are binding the currently selected book, deselect it
                 if (button == selectedView && position != selectedPosition)
                     selectedView = null
+                // Set the title, tag and checked
                 button.text = (book as? BookAndAuthors)?.book?.title?: ""
                 button.tag = position
                 button.isChecked = position == selectedPosition
             }
         }
 
+        /**
+         * @inheritDoc
+         */
         @SuppressLint("InflateParams")
         override fun onCreateDialog(savedInstanceState: Bundle?) : Dialog {
+            // Get the argument bundle and un-bundle the interesting data
             val args = arguments!!
             list = args.getParcelableArrayList(kList)!!
             val pageCount = list.size
+            // If itemCount is 0, then use the count of books already returned
             val i = args.getInt(kItemCount)
             itemCount = if (i > 0) i else pageCount
             spec = args.getString(kSpec)!!
             @Suppress("UNCHECKED_CAST")
-            callback = args.getSerializable(kCallback) as (BookAndAuthors) -> Unit
+            callback = args.getSerializable(kCallback) as (BookAndAuthors?) -> Unit
             book = null
 
+            // Get the content view for the dialog
             content = parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
 
+            // Create a pager to drive the recycler view
             val scope = MainScope()
             val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
             val pager = Pager(
@@ -545,17 +743,21 @@ class ScanFragment : Fragment() {
                 GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
             }
             val flow = pager.flow.cachedIn(scope)
+
+            // Find the recycler view and set the layout manager and adapter
             val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
             val adapter = BookPagingAdapter()
             titles.layoutManager = LinearLayoutManager(activity)
             titles.adapter = adapter
 
+            // Start the book stream to the recycler view
             pagerJob = scope.launch {
                 flow.collectLatest {
                     data -> adapter.submitData(data)
                 }
             }
 
+            // Create an alert dialog with the content view
             val builder = AlertDialog.Builder(activity)
             builder.setTitle(R.string.select_title)
                 // Specify the list array, the items to be selected by default (null for none),
@@ -565,19 +767,24 @@ class ScanFragment : Fragment() {
                 .setPositiveButton(
                     R.string.ok
                 ) { _, _ ->
-                    val curBook = book
-                    if (curBook != null)
-                        callback(curBook)
+                    // Don't need to do anything, callback is done in onDismiss
                 }
                 .setNegativeButton(
                     R.string.cancel
                 ) { _, _ ->
+                    // Clear return book value
+                    book = null
                 }
             return builder.create()
         }
 
+        /**
+         * @inheritDoc
+         */
         override fun onDismiss(dialog: DialogInterface) {
             super.onDismiss(dialog)
+            // Return the selected book and cancel the Pager flow job
+            callback(book)
             pagerJob.cancel()
         }
     }
