@@ -52,9 +52,10 @@ class TagsFragment : Fragment() {
     private lateinit var editItem: MenuItem
 
     /**
-     * Observer to update menu when selection changes
+     * Observers to update menu when selection changes
      */
-    private val observer: Observer<Boolean?> = Observer<Boolean?> { updateMenu() }
+    private val observerHasSelection: Observer<Boolean?> = Observer<Boolean?> { updateMenu() }
+    private val observerLastSelection: Observer<Long?> = Observer<Long?> { updateMenu() }
 
     /**
      * @inheritDoc
@@ -76,7 +77,8 @@ class TagsFragment : Fragment() {
         setupActionMenu(content)
 
         // Observe the tag selection to update the action menu
-        tagViewModel.selection.hasSelection.observe(this, observer)
+        tagViewModel.selection.hasSelection.observe(this, observerHasSelection)
+        tagViewModel.selection.lastSelection.observe(this, observerLastSelection)
 
         return content
     }
@@ -88,7 +90,8 @@ class TagsFragment : Fragment() {
         // Cancel the pager flow job
         pagerJob.cancel()
         // Remove the selection observer
-        tagViewModel.selection.hasSelection.removeObserver(observer)
+        tagViewModel.selection.hasSelection.removeObserver(observerHasSelection)
+        tagViewModel.selection.lastSelection.removeObserver(observerLastSelection)
         super.onDestroyView()
     }
 
@@ -280,8 +283,8 @@ class TagsFragment : Fragment() {
                 // Listen for the OK click. When OK is clicked we check to see if the
                 // there is a conflict for the tag name and ask the user if it is OK
                 ok.setOnClickListener {
-                    tag.name = name.text.toString().trim() { it <= ' ' }
-                    tag.desc = desc.text.toString().trim() { it <= ' ' }
+                    tag.name = name.text.toString().trim { it <= ' ' }
+                    tag.desc = desc.text.toString().trim { it <= ' ' }
 
                     // Do this in a coroutine, to use the repo coroutine methods
                     tagViewModel.viewModelScope.launch {
