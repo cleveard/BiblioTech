@@ -4,6 +4,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.R
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.lang.StringBuilder
 import java.text.SimpleDateFormat
 import java.util.*
@@ -62,14 +63,14 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
     }
 
     companion object: BookFilterCompanion() {
-        val VERSION = 0
+        const val VERSION = 0
     }
 }
 
 /**
  * Class with companion methods for BookFilter
  */
-open class BookFilterCompanion() {
+open class BookFilterCompanion {
     /**
      * Build an SQLite query from a filter description
      * @param filter The filter description
@@ -195,6 +196,34 @@ open class BookFilterCompanion() {
         return SimpleSQLiteQuery(spec.toString())
     }
 
+    /**
+     * Convert a BookFilter to a string
+     * @param filter The filter to convert
+     * @return The string or null if filter is null
+     */
+    fun encodeToString(filter: BookFilter?): String? {
+        return filter?.let {
+            Json.encodeToString(
+                VersionedSerialization.serializer(),
+                VersionedSerialization(
+                    BookFilter.VERSION,
+                    Json.encodeToString(BookFilter.serializer(), it)
+                )
+            )
+        }
+    }
+
+    /**
+     * Convert a string to a BookFilter
+     * @param string The string to deserialize
+     * @return The filter or null if string is null
+     */
+    fun decodeFromString(string: String?): BookFilter? {
+        string?: return null
+        val version = Json.decodeFromString(VersionedSerialization.serializer(), string)
+        return version.data?.let { deserializers[version.version](it) }
+    }
+
     /** Calculate hash from array contents */
     fun <T> hashArray(array: Array<T>): Int {
         var result = 0
@@ -215,7 +244,28 @@ open class BookFilterCompanion() {
         }
         return true
     }
+
+    companion object {
+        /**
+         * Deserializer versions
+         */
+        private val deserializers: Array<(string:String) -> BookFilter> = arrayOf(
+            {string: String ->
+                Json.decodeFromString(BookFilter.serializer(), string)
+            }
+        )
+    }
 }
+
+/**
+ * Class used to serialize a filter with a version
+ * @param version The version of the filter
+ * @param data The serialized filter
+ * This is used as part of a two step deserialization. First
+ * we get the version then use that to deserialize the data
+ */
+@Serializable
+data class VersionedSerialization(val version: Int, val data: String?)
 
 /**
  * A field to order books
