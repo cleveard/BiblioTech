@@ -10,9 +10,7 @@ import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.R
-import com.example.cleve.bibliotech.db.BookAndAuthors
-import com.example.cleve.bibliotech.db.BookFilter
-import com.example.cleve.bibliotech.db.BookRepository
+import com.example.cleve.bibliotech.db.*
 import com.example.cleve.bibliotech.utils.GenericViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -28,7 +26,7 @@ import kotlin.collections.HashSet
 class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(app) {
 
     /**
-     * The book databse repository
+     * The book database repository
      */
     val repo: BookRepository = BookRepository.repo
 
@@ -43,14 +41,16 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     internal lateinit var layoutManager: LinearLayoutManager
 
     /**
-     * Job used to create the coroutine flow for thw PagingSource adaptr
+     * Job used to create the coroutine flow for thw PagingSource adapter
      */
     private var flowJob: Job? = null
 
     /**
      * Filter for the book list
      */
-    private var filter: BookFilter? = null
+    private var _filter: BookFilter? = null
+    val filter: BookFilter?
+        get() = _filter
 
     /**
      * The styles to used for the names and items in headers and separators
@@ -88,8 +88,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             TextAppearanceSpan(context, R.style.HeaderItem2)
         )
         // Get the localized names of the columns
-        for (c in BookFilter.Column.values()) {
-            names.put(c.nameResourceId, if (c.nameResourceId == 0) null else resources.getString(c.nameResourceId))
+        for (c in Column.values()) {
+            names.put(c.desc.nameResourceId,
+                if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
     }
 
@@ -100,7 +101,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         adapter.refresh()
     }
 
-    fun buildFilter(orderFields: Array<BookFilter.OrderField>?, filterFields: Array<BookFilter.FilterField>?): BookFilter? {
+    fun buildFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): BookFilter? {
         if (orderFields == null && filterFields == null)
             return null
         return BookFilter(orderFields?: emptyArray(), filterFields?: emptyArray())
@@ -108,10 +109,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
     /**
      * Build a new flow for book stream
-     * @param filter The filter for the new stream
+     * @param orderFields The fields used to order the filter
+     * @param filterFields The fields used to filter the data
      * This is called when the filter is changed to update the display
      */
-    fun buildFlow(orderFields: Array<BookFilter.OrderField>?, filterFields: Array<BookFilter.FilterField>?) {
+    fun buildFlow(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?) {
         // Build the filter
         val filter = buildFilter(orderFields, filterFields)
 
@@ -121,7 +123,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             flowJob = null
         }
         // Set the filter
-        this.filter = filter
+        this._filter = filter
         // Create the pager
         val config = PagingConfig(pageSize = 10)
         val pager = Pager(
@@ -129,7 +131,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         ) {
             repo.getBooks(filter)
         }
-        // Add haders and cache
+        // Add headers and cache
         val flow = addHeaders(applySelectionTransform(pager.flow))
             .cachedIn(viewModelScope)
         // Start the flow
@@ -142,11 +144,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
     /**
      * Build a header string for the filter
-     * @return The Spananble string with the header content
+     * @return The Spannable string with the header content
      */
     fun buildHeader(): Spannable? {
         // No filter means no header
-        val filter = this.filter ?: return null
+        val filter = this._filter ?: return null
 
         // Get the first visible item in the list
         var pos = layoutManager.findFirstCompletelyVisibleItemPosition()
@@ -169,7 +171,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param filter The book filter that defines the header
      * @param book The book
      * @param isSeparator True for separators and false the headers
-     * @return The Spananble string with the content
+     * @return The Spannable string with the content
      */
     fun buildHeader(filter: BookFilter, book: BookAndAuthors?, isSeparator: Boolean): Spannable? {
         val span = SpannableStringBuilder()
@@ -202,7 +204,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         }
 
         // Keep track of columns already added to the header
-        val added = HashSet<BookFilter.Column>()
+        val added = HashSet<Column>()
         // Loop over the fields in the filter order
         for ((i, field) in filter.orderList.withIndex()) {
             if (book == null) {
@@ -215,14 +217,14 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 if (span.isNotEmpty())
                     span.appendLine()
                 // Add the name
-                appendSpan("${names[field.column.nameResourceId]}: ",
+                appendSpan("${names[field.column.desc.nameResourceId]}: ",
                     textAppearance(nameStyles, i))
                 // Add the item value, possibly different for headers and separators
                 appendSpan(
                     if (isSeparator)
-                        field.column.getSeparatorValue(book, locale)
+                        field.column.desc.getSeparatorValue(book, locale)
                     else
-                        field.column.getValue(book, locale),
+                        field.column.desc.getValue(book, locale),
                     textAppearance(itemStyles, i)
                 )
             }
@@ -236,9 +238,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param filter The filter that defines the separator
      * @param before The book before the separator
      * @param after the Book after the separator
-     * @return The Spananble string with the separator content
+     * @return The Spannable string with the separator content
      */
-    fun compareAndBuildeHeader(filter: BookFilter, before: BookAndAuthors?, after: BookAndAuthors?): Spannable? {
+    fun compareAndBuildHeader(filter: BookFilter, before: BookAndAuthors?, after: BookAndAuthors?): Spannable? {
         // If this is the first item create the separator, unless it is null, too
         if (before == null) {
             if (after == null)
@@ -250,7 +252,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         // Create the separator if they are
         if (after != null) {
             for (field in filter.orderList) {
-                if (field.column.shouldAddSeparator(before, after))
+                if (field.column.desc.shouldAddSeparator(before, after))
                     return buildHeader(filter, after, true)
             }
         }
@@ -259,15 +261,15 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
     /**
      * Add a data mapping to insert separators in the book stream
-     * @param flow The flow for the book stram
+     * @param flow The flow for the book stream
      * @return The flow for the book stream with headers
      */
     fun addHeaders(flow: Flow<PagingData<BookAndAuthors>>): Flow<PagingData<Any>> {
         return flow.map {data ->
             data.insertSeparators { before, after ->
                 // Insert separators for the filter
-                filter?.let {
-                    compareAndBuildeHeader(it, before, after)
+                _filter?.let {
+                    compareAndBuildHeader(it, before, after)
                 }
 
             }

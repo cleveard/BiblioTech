@@ -2,6 +2,7 @@ package com.example.cleve.bibliotech.ui.books
 
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.util.Log
 import android.util.SparseArray
 import android.view.*
 import android.widget.TextView
@@ -16,11 +17,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
 import com.example.cleve.bibliotech.db.BookFilter
+import com.example.cleve.bibliotech.db.Column
+import com.example.cleve.bibliotech.db.Order
+import com.example.cleve.bibliotech.db.OrderField
 import com.example.cleve.bibliotech.ui.filter.OrderTable
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
 import com.google.android.material.button.MaterialButton
+import kotlinx.serialization.json.Json
 
 /**
  * Fragment to display the book list
@@ -155,7 +160,7 @@ class BooksFragment : Fragment() {
 
         // Set the initial filter.
         filter.setOrder(
-            arrayOf(BookFilter.OrderField(BookFilter.Column.LAST_NAME, BookFilter.Order.Ascending, true))
+            arrayOf(OrderField(Column.LAST_NAME, Order.Ascending, true))
         )
 
         // Create the layout manager for the book list. When the layout

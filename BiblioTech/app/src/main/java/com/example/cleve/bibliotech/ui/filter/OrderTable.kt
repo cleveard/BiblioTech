@@ -7,7 +7,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.example.cleve.bibliotech.R
-import com.example.cleve.bibliotech.db.BookFilter
+import com.example.cleve.bibliotech.db.Column
+import com.example.cleve.bibliotech.db.Order
+import com.example.cleve.bibliotech.db.OrderField
 import com.google.android.material.button.MaterialButton
 
 /**
@@ -18,8 +20,8 @@ class OrderTable(private val fragment: Fragment) {
      * LiveData object used to let the fragment know when
      * the filter has changed
      */
-    private val _order: MutableLiveData<Array<BookFilter.OrderField>> = MutableLiveData()
-    val order: LiveData<Array<BookFilter.OrderField>>
+    private val _order: MutableLiveData<Array<OrderField>> = MutableLiveData()
+    val order: LiveData<Array<OrderField>>
         get() = _order
 
     /**
@@ -88,15 +90,15 @@ class OrderTable(private val fragment: Fragment) {
             // Get the table row
             val row = rows[index]
             // Create the OrderField from the table row
-            BookFilter.OrderField(
+            OrderField(
                 // Get the column
-                BookFilter.Column.valueOf(
+                Column.valueOf(
                     columnMap[row.findViewById<Spinner>(R.id.action_order_by).selectedItemPosition]),
                 // Get the sort direction
                 if (row.findViewById<MaterialButton>(R.id.action_sort_dir).isChecked)
-                    BookFilter.Order.Descending
+                    Order.Descending
                 else
-                    BookFilter.Order.Ascending,
+                    Order.Ascending,
                 // Get the use header flag
                 row.findViewById<Switch>(R.id.action_use_header).isChecked
             )
@@ -140,7 +142,7 @@ class OrderTable(private val fragment: Fragment) {
 
     /**
      * Add a row to the order table
-     * @param inflater Inflator to use to create the table row. Supply as an optimization
+     * @param inflater Inflater to use to create the table row. Supply as an optimization
      */
     private fun addRow(inflater: LayoutInflater? = null): Int {
         // Create the table row
@@ -177,11 +179,11 @@ class OrderTable(private val fragment: Fragment) {
     /**
      * Bind the order array to the table layout
      * @param order The order array
-     * @param inflater Inflator to use to create the table rows. Supply as an optimization
+     * @param inflater Inflater to use to create the table rows. Supply as an optimization
      * Assume that the table layout has no rows
      */
-    private fun bindOrder(order: Array<BookFilter.OrderField>?, inflater: LayoutInflater? = null) {
-        // Get an inflator, if one isn't supplied
+    private fun bindOrder(order: Array<OrderField>?, inflater: LayoutInflater? = null) {
+        // Get an inflater, if one isn't supplied
         val inf = inflater?: LayoutInflater.from(fragment.context)
         // Add the array entries to the table layout
         order?.let {o ->
@@ -197,19 +199,19 @@ class OrderTable(private val fragment: Fragment) {
      * @param row Index of the row to bind
      * @param field The order field to bind
      */
-    private fun bindRow(row: Int, field: BookFilter.OrderField) {
+    private fun bindRow(row: Int, field: OrderField) {
         // Get the row view
         val rowView = rows[row]
         // Set the sort direction
         rowView.findViewById<MaterialButton>(R.id.action_sort_dir).isChecked =
-            field.order == BookFilter.Order.Descending
+            field.order == Order.Descending
         // Set the column
         rowView.findViewById<Spinner>(R.id.action_order_by).setSelection(columnMap.indexOf(field.column.name))
         // Set use headers
         rowView.findViewById<Switch>(R.id.action_use_header).isChecked = field.headers
     }
 
-    fun setOrder(order: Array<BookFilter.OrderField>?) {
+    fun setOrder(order: Array<OrderField>?) {
         clearRows()
         bindOrder(order)
         _order.value = order
@@ -227,7 +229,7 @@ class OrderTable(private val fragment: Fragment) {
 
     /**
      * Setup the table layout
-     * @param inflater Inflator for layouts in the table layout
+     * @param inflater Inflater for layouts in the table layout
      * @param tableLayout The table layout view
      */
     fun onCreateView(inflater: LayoutInflater, tableLayout: TableLayout) {
