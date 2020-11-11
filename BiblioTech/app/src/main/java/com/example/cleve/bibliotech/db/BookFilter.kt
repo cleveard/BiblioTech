@@ -4,11 +4,12 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.R
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import java.lang.StringBuilder
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.math.floor
 
 // Temp variables used when calculating separates for dates
@@ -202,14 +203,25 @@ open class BookFilterCompanion {
      * @return The string or null if filter is null
      */
     fun encodeToString(filter: BookFilter?): String? {
+        // Encode the filter to a JsonElement
+        return encodeToJson(filter)?.let {json ->
+            // Then create a JsonObject with the version and encoded filter
+            // and convert that to a string
+            val map = HashMap<String, JsonElement>()
+            map[kVersion] = JsonPrimitive(BookFilter.VERSION)
+            map[kFilter] = json
+            JsonObject(map).toString()
+        }
+    }
+
+    /**
+     * Convert a BookFilter to a JsonElement
+     * @param filter The filter to convert
+     * @return The JsonElement or null if filter is null
+     */
+    private fun encodeToJson(filter: BookFilter?): JsonElement? {
         return filter?.let {
-            Json.encodeToString(
-                VersionedSerialization.serializer(),
-                VersionedSerialization(
-                    BookFilter.VERSION,
-                    Json.encodeToString(BookFilter.serializer(), it)
-                )
-            )
+            Json.encodeToJsonElement(BookFilter.serializer(), it)
         }
     }
 
@@ -219,9 +231,26 @@ open class BookFilterCompanion {
      * @return The filter or null if string is null
      */
     fun decodeFromString(string: String?): BookFilter? {
-        string?: return null
-        val version = Json.decodeFromString(VersionedSerialization.serializer(), string)
-        return version.data?.let { deserializers[version.version](it) }
+        return string?.let { decodeFromJson(Json.parseToJsonElement(it)) }
+    }
+
+    /**
+     * Convert a JsonElement to a BookFilter
+     * @param inJson The JsonElement to deserialize
+     * @return The filter or null if string is null
+     */
+    private fun decodeFromJson(inJson: JsonElement?): BookFilter? {
+        return inJson?.let {json ->
+            // Extract the version, return null if it is missing
+            val obj = json.jsonObject
+            val version = obj[kVersion]?.jsonPrimitive?.int?: return@let null
+            // If the version is valid, then decode the filter for that version
+            // Otherwise return null
+            if (version in deserializers.indices)
+                obj[kFilter]?.let { deserializers[version](it) }
+            else
+                null
+        }
     }
 
     /** Calculate hash from array contents */
@@ -246,26 +275,19 @@ open class BookFilterCompanion {
     }
 
     companion object {
+        private const val kVersion = "VERSION"
+        private const val kFilter = "FILTER"
+
         /**
          * Deserializer versions
          */
-        private val deserializers: Array<(string:String) -> BookFilter> = arrayOf(
-            {string: String ->
-                Json.decodeFromString(BookFilter.serializer(), string)
+        private val deserializers: Array<(json: JsonElement) -> BookFilter> = arrayOf(
+            {json: JsonElement ->
+                Json.decodeFromJsonElement(BookFilter.serializer(), json)
             }
         )
     }
 }
-
-/**
- * Class used to serialize a filter with a version
- * @param version The version of the filter
- * @param data The serialized filter
- * This is used as part of a two step deserialization. First
- * we get the version then use that to deserialize the data
- */
-@Serializable
-data class VersionedSerialization(val version: Int, val data: String?)
 
 /**
  * A field to order books
