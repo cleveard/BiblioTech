@@ -1,6 +1,7 @@
 package com.example.cleve.bibliotech.ui.books
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
@@ -46,9 +47,33 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private var flowJob: Job? = null
 
     /**
+     * Preferences listener
+     */
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener {pref, key ->
+        when (key) {
+            kFilter -> {
+                this._filter = BookFilter.decodeFromString(pref.getString(kFilter, null))
+                buildFlow()
+            }
+        }
+    }
+
+    /**
+     * Preferences object for the application
+     */
+    val preferences = getApplication<Application>().getSharedPreferences("BookPreferences", 0).also {
+        it.registerOnSharedPreferenceChangeListener(preferenceListener)
+    }
+
+    /**
+     * Preference editor for the view model
+     */
+    val prefEdit = preferences.edit()
+
+    /**
      * Filter for the book list
      */
-    private var _filter: BookFilter? = null
+    private var _filter: BookFilter? = BookFilter.decodeFromString(preferences.getString(kFilter, null))
     val filter: BookFilter?
         get() = _filter
 
@@ -67,7 +92,6 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * Column names for the filter columns om headers and separators
      */
     private val names = SparseArray<String>()
-
 
     init {
         // Get the locale
@@ -97,33 +121,46 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * @inheritDoc
      */
+    override fun onCleared() {
+        preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
+        super.onCleared()
+    }
+
+    /**
+     * @inheritDoc
+     */
     override fun invalidateUI() {
         adapter.refresh()
     }
 
-    fun buildFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): BookFilter? {
-        if (orderFields == null && filterFields == null)
-            return null
-        return BookFilter(orderFields?: emptyArray(), filterFields?: emptyArray())
+    /**
+     * Apply the filter description to the view model
+     * @param orderFields The description of the filter sort order
+     * @param filterFields The description of the filter
+     */
+    fun applyFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?) {
+        // Convert the description to a filter
+        val filter = if (orderFields == null && filterFields == null)
+            null
+        else
+            BookFilter(orderFields?: emptyArray(), filterFields?: emptyArray())
+        // Set on the preferences. The preference listener will setup the data stream
+        prefEdit.putString(kFilter, BookFilter.encodeToString(filter))
+        prefEdit.apply()
+
     }
 
     /**
-     * Build a new flow for book stream
-     * @param orderFields The fields used to order the filter
-     * @param filterFields The fields used to filter the data
+     * Build a new flow for book stream from the filte in the view model
      * This is called when the filter is changed to update the display
      */
-    fun buildFlow(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?) {
-        // Build the filter
-        val filter = buildFilter(orderFields, filterFields)
-
+    fun buildFlow() {
         // Cancel previous job if there was one
         flowJob?.let {
             it.cancel()
             flowJob = null
         }
-        // Set the filter
-        this._filter = filter
+
         // Create the pager
         val config = PagingConfig(pageSize = 10)
         val pager = Pager(
@@ -274,5 +311,12 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
             }
         }
+    }
+
+    companion object {
+        /**
+         * The name of the filter preference
+         */
+        const val kFilter = "Filter"
     }
 }

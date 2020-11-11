@@ -126,9 +126,6 @@ open class BookFilterCompanion {
              * @param list List of columns in array of fields
              */
             fun buildSelect(list: Iterator<Column>) {
-                // Add all book columns first
-                for (column in ALL_BOOK_COLUMNS)
-                    addSelect(column)
                 // Add columns from fields
                 for (field in list) {
                     field.desc.addSelection(this)
@@ -163,6 +160,9 @@ open class BookFilterCompanion {
 
         // If filter is null, don't collect anything
         if (filter != null) {
+            // Add all book columns first
+            for (column in ALL_BOOK_COLUMNS)
+                builder.addSelect(column)
             // Collect select columns from orderList
             builder.buildSelect(MapIterator(filter.orderList.iterator()) { it.column })
             // Collect select columns from filterList
@@ -175,7 +175,8 @@ open class BookFilterCompanion {
             builder.buildOrder(filter.orderList.iterator())
             // Collect order by columns from filterList
             builder.buildFilter(filter.filterList.iterator())
-        }
+        } else
+            builder.selectSpec.append("*")
 
         // Build the SQLite command
         val spec = StringBuilder()

@@ -2,7 +2,6 @@ package com.example.cleve.bibliotech.ui.books
 
 import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.util.Log
 import android.util.SparseArray
 import android.view.*
 import android.widget.TextView
@@ -16,16 +15,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
-import com.example.cleve.bibliotech.db.BookFilter
-import com.example.cleve.bibliotech.db.Column
-import com.example.cleve.bibliotech.db.Order
-import com.example.cleve.bibliotech.db.OrderField
 import com.example.cleve.bibliotech.ui.filter.OrderTable
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
 import com.google.android.material.button.MaterialButton
-import kotlinx.serialization.json.Json
 
 /**
  * Fragment to display the book list
@@ -64,7 +58,7 @@ class BooksFragment : Fragment() {
     /**
      * UI handler for the filter elements in the edit and filter drawer
      */
-    private val filter = OrderTable(this)
+    private val orderTable = OrderTable(this)
 
     /**
      * OnClick handler for buttons in the edit and filter drawer
@@ -156,12 +150,10 @@ class BooksFragment : Fragment() {
         val recyclerView = root.findViewById<RecyclerView>(R.id.book_list)
 
         // Initialize the filter UI handler with the view to the order table
-        filter.onCreateView(inflater, root.findViewById(R.id.order_table))
+        orderTable.onCreateView(inflater, root.findViewById(R.id.order_table))
 
         // Set the initial filter.
-        filter.setOrder(
-            arrayOf(OrderField(Column.LAST_NAME, Order.Ascending, true))
-        )
+        orderTable.setOrder(booksViewModel.filter?.orderList)
 
         // Create the layout manager for the book list. When the layout
         // changes, update the header
@@ -180,7 +172,7 @@ class BooksFragment : Fragment() {
         // Set the layout manager on the recycler view.
         recyclerView.layoutManager = booksViewModel.layoutManager
         // Setup the adapter data stream and set the adapter on the recycler view
-        booksViewModel.buildFlow(filter.order.value, null)
+        booksViewModel.buildFlow()
         recyclerView.adapter = booksViewModel.adapter
 
         // When the recycler view scrolls, update the list header
@@ -200,7 +192,7 @@ class BooksFragment : Fragment() {
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
         // Set onClickListener for the Apply Filter button in the edit and filter drawer
         root.findViewById<MaterialButton>(R.id.action_apply_filter).setOnClickListener {
-            booksViewModel.buildFlow(filter.order.value, null)
+            booksViewModel.applyFilter(orderTable.order.value, null)
         }
 
         // Set the initial state of the menus and buttons
@@ -236,7 +228,7 @@ class BooksFragment : Fragment() {
         booksViewModel.selection.hasSelection.removeObserver(selectionObserver)
         tagViewModel.selection.hasSelection.removeObserver(selectionObserver)
         // Let filter UI cleanup
-        filter.onDestroyView()
+        orderTable.onDestroyView()
         super.onDestroyView()
     }
 
