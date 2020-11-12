@@ -19,7 +19,7 @@ class BookRepository private constructor() {
             get() = mRepo!!
 
         /**
-         * Initialze the BookRepository
+         * Initialize the BookRepository
          * @param context Application context
          */
         fun initialize(context: Context) {

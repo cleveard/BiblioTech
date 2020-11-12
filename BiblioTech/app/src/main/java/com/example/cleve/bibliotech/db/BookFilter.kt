@@ -1,5 +1,6 @@
 package com.example.cleve.bibliotech.db
 
+import android.util.Log
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.R
@@ -327,109 +328,44 @@ data class OrderField(
  * a generic Value subclass is used to type the values for the filter
  */
 @Serializable
-sealed class FilterField {
+class FilterField(
     /** The column being filters */
-    abstract val column: Column
-
+    val column: Column,
     /** The predicate for the filter */
-    abstract val predicate: Predicate
-
-    /** Will this field generate the same SQL query as another */
-    abstract fun isSameQuery(other: Any?) : Boolean
-
+    val predicate: Predicate,
+    /** The values for the filter */
+    val values: Array<String>
+) {
     /**
-     * Get the values for the filter field, or null
-     * @param className The class name of the value type.
-     * @return The value array, if the classname argument matches the field className, or null
+     * Indicate whether two fields are the same query
+     * @param other The other field
      */
-    abstract fun <R> getValuesForType(className: String?): Array<R>?
-
-    /**
-     * Inline function to supply class name for _getValuesForType
-     * @return The value array, if the class types match
-     */
-    inline fun <reified T> getValuesForType(): Array<T>? {
-        return getValuesForType(T::class.qualifiedName)
+    fun isSameQuery(other: Any?) : Boolean {
+        return this == other
     }
 
-    /**
-     * Inline function to create a generic Value field and supply the className
-     * @param column The column for the field
-     * @param predicate The predicate for the field
-     * @param values The values for the field
-     * @return The created FilterField
-     */
-    inline fun <reified T> createField(column: Column, predicate: Predicate, values: Array<T>): FilterField {
-        return Value(column, predicate, values, T::class.qualifiedName)
+    /** @inheritDoc */
+    override fun equals(other: Any?): Boolean {
+        // If references are equal, so are the object
+        if (this === other) return true
+        // If the classes are different, objects are different
+        if (this.javaClass != other?.javaClass) return false
+
+        other as FilterField
+
+        // Make sure contents are equal
+        if (column != other.column) return false
+        if (predicate != other.predicate) return false
+        return BookFilter.equalArray(values, other.values)
     }
 
-    /**
-     * A field used to filter books
-     * @param column The column for filtering
-     * @param predicate The predicate for filtering
-     * @param values The filter values
-     * @param className The name of the value type.
-     */
-    @Serializable
-    class Value<T>(
-        override val column: Column,
-        override val predicate: Predicate,
-        private val values: Array<T>,
-        private val className: String?
-    ): FilterField() {
-        /**
-         * Indicate whether two fields are the same query
-         * @param other The other field
-         */
-        override fun isSameQuery(other: Any?) : Boolean {
-            return this == other
-        }
-
-        /** @inheritDoc */
-        @Suppress("UNCHECKED_CAST")
-        override fun <R> getValuesForType(className: String?): Array<R>? {
-            // Check the class name and return the value or null
-            // The cast is unsafe, but hopefully verifying the class name will make it OK
-            return if (className == this.className)
-                values as? Array<R>
-            else
-                null
-        }
-
-        /** @inheritDoc */
-        override fun equals(other: Any?): Boolean {
-            // If references are equal, so are the object
-            if (this === other) return true
-            // If the classes are different, objects are different
-            if (this.javaClass != other?.javaClass) return false
-
-            other as Value<*>
-
-            // Make sure contents are equal
-            if (column != other.column) return false
-            if (predicate != other.predicate) return false
-            return BookFilter.equalArray(values, other.values)
-        }
-
-        /** @inheritDoc */
-        override fun hashCode(): Int {
-            var hash = column.hashCode()
-            hash = hash * 31 + predicate.hashCode()
-            hash = hash * 31 + BookFilter.hashArray(values)
-            return hash
-        }
+    /** @inheritDoc */
+    override fun hashCode(): Int {
+        var hash = column.hashCode()
+        hash = hash * 31 + predicate.hashCode()
+        hash = hash * 31 + BookFilter.hashArray(values)
+        return hash
     }
-}
-
-@Suppress("unused")
-enum class Predicate {
-    ONE_OF,
-    ALL_OF,
-    GLOB,
-    GT,
-    GE,
-    LT,
-    LE
 }
 
 /** Order direction enum */
@@ -441,11 +377,57 @@ enum class Order(val dir: String) {
 }
 
 /**
+ * Predicate Data description
+ */
+open class PredicateDataDescription(val nameResourceId: Int) {
+    init {
+        Log.d("Predicate", "PredicateDataDescription initialized $nameResourceId")
+    }
+}
+
+private val oneOf = object: PredicateDataDescription(R.string.one_of) {
+}
+private val glob = object: PredicateDataDescription(R.string.has) {
+}
+private val gt = object: PredicateDataDescription(R.string.gt) {
+}
+private val ge = object: PredicateDataDescription(R.string.ge) {
+}
+private val lt = object: PredicateDataDescription(R.string.lt) {
+}
+private val le = object: PredicateDataDescription(R.string.le) {
+}
+
+/**
+ * The predicate available
+ */
+@Suppress("unused")
+enum class Predicate(val desc: PredicateDataDescription) {
+    /** Match one of several values */
+    ONE_OF(oneOf),
+    /** Partial match on of several values */
+    GLOB(glob),
+    /** Greater than */
+    GT(gt),
+    /** Greater than or equal */
+    GE(ge),
+    /** Less than */
+    LT(lt),
+    /** Less than or equal */
+    LE(le);
+
+    init {
+        Log.d("Predicate", "Predicate initialized $name")
+    }
+
+}
+
+/**
  * Enum of columns
  * The enums not only identify the column, but also contain information about how to use it
  */
 @Suppress("unused")
-enum class Column(val desc: DataDescriptor) {
+enum class Column(val desc: ColumnDataDescriptor) {
     /** Author - Last, First */
     LAST_NAME(lastFirst),
     /** Author - First Last */
@@ -532,10 +514,13 @@ class MapIterator<T, R>(private val src: Iterator<T>, private val map: (T) -> R)
 
 /**
  * Abstract class used to describe the data in filter columns
- * @param columns The database column names used by the filter columns
+ * @param columnNames The database column names used by the filter columns
  * @param nameResourceId The resource id for the localized name of the filter column
  */
-abstract class DataDescriptor(private val columns: Array<String>, val nameResourceId: Int) {
+abstract class ColumnDataDescriptor(
+    private val columnNames:
+    Array<String>, val nameResourceId: Int,
+    val predicates: Array<Predicate>) {
     /** Add a join if needed to extract the column */
     open fun addJoin(buildQuery: BuildQuery) {
         // Default is that no join is required
@@ -548,7 +533,7 @@ abstract class DataDescriptor(private val columns: Array<String>, val nameResour
      */
     open fun addOrder(buildQuery: BuildQuery, direction: Order) {
         // Default to adding columns in order
-        for (f in columns)
+        for (f in columnNames)
             buildQuery.addOrderColumn(f, direction.dir)
     }
 
@@ -558,7 +543,7 @@ abstract class DataDescriptor(private val columns: Array<String>, val nameResour
      */
     open fun addSelection(buildQuery: BuildQuery) {
         // Default to adding columns in order
-        for (f in columns)
+        for (f in columnNames)
             buildQuery.addSelect(f)
     }
 
@@ -588,7 +573,11 @@ abstract class DataDescriptor(private val columns: Array<String>, val nameResour
 }
 
 /** Author - Last, First */
-private val lastFirst = object: DataDescriptor(arrayOf(LAST_NAME_COLUMN, REMAINING_COLUMN), R.string.author) {
+private val lastFirst = object: ColumnDataDescriptor(
+    arrayOf(LAST_NAME_COLUMN, REMAINING_COLUMN),
+    R.string.author,
+    emptyArray()        // Both author columns filter the same. Only use one
+) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
         buildQuery.addJoin(BOOK_AUTHORS_TABLE, BOOK_ID_COLUMN, BOOK_AUTHORS_BOOK_ID_COLUMN)
@@ -607,7 +596,11 @@ private val lastFirst = object: DataDescriptor(arrayOf(LAST_NAME_COLUMN, REMAINI
 }
 
 /** Author - First Last */
-private val firstLast = object: DataDescriptor(arrayOf(REMAINING_COLUMN, LAST_NAME_COLUMN), R.string.author) {
+private val firstLast = object: ColumnDataDescriptor(
+    arrayOf(REMAINING_COLUMN, LAST_NAME_COLUMN),
+    R.string.author,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
         buildQuery.addJoin(BOOK_AUTHORS_TABLE, BOOK_ID_COLUMN, BOOK_AUTHORS_BOOK_ID_COLUMN)
@@ -626,7 +619,11 @@ private val firstLast = object: DataDescriptor(arrayOf(REMAINING_COLUMN, LAST_NA
 }
 
 /** Enum meaning filter everywhere */
-private val anyColumn = object: DataDescriptor(arrayOf(), 0) {
+private val anyColumn = object: ColumnDataDescriptor(
+    arrayOf(),
+    R.string.any,
+    arrayOf(Predicate.GLOB)
+) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
     }
@@ -651,7 +648,11 @@ private val anyColumn = object: DataDescriptor(arrayOf(), 0) {
 }
 
 /** Title */
-private val title = object: DataDescriptor(arrayOf(TITLE_COLUMN), R.string.title) {
+private val title = object: ColumnDataDescriptor(
+    arrayOf(TITLE_COLUMN),
+    R.string.title,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return false
@@ -664,7 +665,11 @@ private val title = object: DataDescriptor(arrayOf(TITLE_COLUMN), R.string.title
 }
 
 /** Subtitle */
-private val subtitle = object: DataDescriptor(arrayOf(SUBTITLE_COLUMN), R.string.subtitle) {
+private val subtitle = object: ColumnDataDescriptor(
+    arrayOf(SUBTITLE_COLUMN),
+    R.string.subtitle,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return false
@@ -680,7 +685,11 @@ private val subtitle = object: DataDescriptor(arrayOf(SUBTITLE_COLUMN), R.string
  * Description
  * Not allowed as separator
  */
-private val description = object: DataDescriptor(arrayOf(DESCRIPTION_COLUMN), 0) {
+private val description = object: ColumnDataDescriptor(
+    arrayOf(DESCRIPTION_COLUMN),
+    R.string.description,
+    arrayOf(Predicate.GLOB)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return false
@@ -693,7 +702,11 @@ private val description = object: DataDescriptor(arrayOf(DESCRIPTION_COLUMN), 0)
 }
 
 /** Tags */
-private val tags = object: DataDescriptor(arrayOf(TAGS_NAME_COLUMN), R.string.tag) {
+private val tags = object: ColumnDataDescriptor(
+    arrayOf(TAGS_NAME_COLUMN),
+    R.string.tag,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
         buildQuery.addJoin(BOOK_TAGS_TABLE, BOOK_ID_COLUMN, BOOK_TAGS_BOOK_ID_COLUMN)
@@ -712,7 +725,11 @@ private val tags = object: DataDescriptor(arrayOf(TAGS_NAME_COLUMN), R.string.ta
 }
 
 /** Categories */
-private val categories = object: DataDescriptor(arrayOf(CATEGORY_COLUMN), R.string.category) {
+private val categories = object: ColumnDataDescriptor(
+    arrayOf(CATEGORY_COLUMN),
+    R.string.category,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
         buildQuery.addJoin(BOOK_CATEGORIES_TABLE, BOOK_ID_COLUMN, BOOK_CATEGORIES_BOOK_ID_COLUMN)
@@ -731,7 +748,11 @@ private val categories = object: DataDescriptor(arrayOf(CATEGORY_COLUMN), R.stri
 }
 
 /** Source of book details */
-private val source = object: DataDescriptor(arrayOf(SOURCE_ID_COLUMN), R.string.source) {
+private val source = object: ColumnDataDescriptor(
+    arrayOf(SOURCE_ID_COLUMN),
+    R.string.source,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return book.book.sourceId != other.book.sourceId
@@ -744,7 +765,11 @@ private val source = object: DataDescriptor(arrayOf(SOURCE_ID_COLUMN), R.string.
 }
 
 /** Id of book details in the source */
-private val sourceId = object: DataDescriptor(arrayOf(VOLUME_ID_COLUMN), R.string.volume) {
+private val sourceId = object: ColumnDataDescriptor(
+    arrayOf(VOLUME_ID_COLUMN),
+    R.string.volume,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return book.book.volumeId != other.book.volumeId
@@ -757,7 +782,11 @@ private val sourceId = object: DataDescriptor(arrayOf(VOLUME_ID_COLUMN), R.strin
 }
 
 /** ISBN */
-private val isbn = object: DataDescriptor(arrayOf(ISBN_COLUMN), R.string.isbn) {
+private val isbn = object: ColumnDataDescriptor(
+    arrayOf(ISBN_COLUMN),
+    R.string.isbn,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return book.book.ISBN != other.book.ISBN
@@ -770,7 +799,11 @@ private val isbn = object: DataDescriptor(arrayOf(ISBN_COLUMN), R.string.isbn) {
 }
 
 /** Page Count */
-private val pageCount = object: DataDescriptor(arrayOf(PAGE_COUNT_COLUMN), R.string.pages) {
+private val pageCount = object: ColumnDataDescriptor(
+    arrayOf(PAGE_COUNT_COLUMN),
+    R.string.pages,
+    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return false
@@ -783,7 +816,11 @@ private val pageCount = object: DataDescriptor(arrayOf(PAGE_COUNT_COLUMN), R.str
 }
 
 /** Number of books tracked */
-private val bookCount = object: DataDescriptor(arrayOf(BOOK_COUNT_COLUMN), R.string.books) {
+private val bookCount = object: ColumnDataDescriptor(
+    arrayOf(BOOK_COUNT_COLUMN),
+    R.string.books,
+    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return book.book.bookCount != other.book.bookCount
@@ -795,7 +832,11 @@ private val bookCount = object: DataDescriptor(arrayOf(BOOK_COUNT_COLUMN), R.str
     }
 }
 /** Rating */
-private val rating = object: DataDescriptor(arrayOf(RATING_COLUMN), R.string.rating) {
+private val rating = object: ColumnDataDescriptor(
+    arrayOf(RATING_COLUMN),
+    R.string.rating,
+    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
+) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return floor(book.book.rating) != floor(other.book.rating)
@@ -807,7 +848,11 @@ private val rating = object: DataDescriptor(arrayOf(RATING_COLUMN), R.string.rat
     }
 }
 /** Date book was added to the database */
-private val dateAdded = object: DataDescriptor(arrayOf(DATE_ADDED_COLUMN), R.string.date_added) {
+private val dateAdded = object: ColumnDataDescriptor(
+    arrayOf(DATE_ADDED_COLUMN),
+    R.string.date_added,
+    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+) {
     /**
      * @inheritDoc
      * Add separators at day boundaries
@@ -829,7 +874,11 @@ private val dateAdded = object: DataDescriptor(arrayOf(DATE_ADDED_COLUMN), R.str
     }
 }
 /** Date book was last modified in the database */
-private val dateModified = object: DataDescriptor(arrayOf(DATE_MODIFIED_COLUMN), R.string.date_changed) {
+private val dateModified = object: ColumnDataDescriptor(
+    arrayOf(DATE_MODIFIED_COLUMN),
+    R.string.date_changed,
+    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+) {
     /**
      * @inheritDoc
      * Add separators at day boundaries

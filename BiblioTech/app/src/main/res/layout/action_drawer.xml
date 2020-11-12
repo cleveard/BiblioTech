@@ -173,12 +173,29 @@
             tools:layout_editor_absoluteX="8dp"
             tools:layout_editor_absoluteY="8dp" />
 
+
+        <TableLayout
+            android:id="@+id/filter_table"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/criteria_label">
+
+            <!-- Uncomment to see in designer -->
+            <include layout="@layout/filter_header" />
+            <include layout="@layout/filter_row" />
+            <include layout="@layout/filter_values" />
+            <!-- -->
+
+        </TableLayout>
+
         <View
             android:id="@+id/end_criteria"
             style="@style/Divider"
             android:layout_marginTop="8dp"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/criteria_label" />
+            app:layout_constraintTop_toBottomOf="@id/filter_table" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/action_apply_filter"

@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.ui.filter.FilterTable
 import com.example.cleve.bibliotech.ui.filter.OrderTable
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
@@ -56,9 +57,14 @@ class BooksFragment : Fragment() {
     private lateinit var openDrawer: Drawable
 
     /**
-     * UI handler for the filter elements in the edit and filter drawer
+     * UI handler for the filter order elements in the edit and filter drawer
      */
     private val orderTable = OrderTable(this)
+
+    /**
+     * UI handler for the filter filter elements in the edit and filter drawer
+     */
+    private val filterTable = FilterTable(this)
 
     /**
      * OnClick handler for buttons in the edit and filter drawer
@@ -151,9 +157,11 @@ class BooksFragment : Fragment() {
 
         // Initialize the filter UI handler with the view to the order table
         orderTable.onCreateView(inflater, root.findViewById(R.id.order_table))
+        filterTable.onCreateView(inflater, root.findViewById(R.id.filter_table))
 
         // Set the initial filter.
         orderTable.setOrder(booksViewModel.filter?.orderList)
+        filterTable.setFilter(booksViewModel.filter?.filterList)
 
         // Create the layout manager for the book list. When the layout
         // changes, update the header
@@ -192,7 +200,7 @@ class BooksFragment : Fragment() {
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
         // Set onClickListener for the Apply Filter button in the edit and filter drawer
         root.findViewById<MaterialButton>(R.id.action_apply_filter).setOnClickListener {
-            booksViewModel.applyFilter(orderTable.order.value, null)
+            booksViewModel.applyFilter(orderTable.order.value, filterTable.filter.value)
         }
 
         // Set the initial state of the menus and buttons
@@ -229,6 +237,7 @@ class BooksFragment : Fragment() {
         tagViewModel.selection.hasSelection.removeObserver(selectionObserver)
         // Let filter UI cleanup
         orderTable.onDestroyView()
+        filterTable.onDestroyView()
         super.onDestroyView()
     }
 
