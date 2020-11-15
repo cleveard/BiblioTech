@@ -1,11 +1,14 @@
 package com.example.cleve.bibliotech.ui.filter
 
+import android.app.Activity
 import android.content.Context
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
@@ -16,6 +19,7 @@ import com.example.cleve.bibliotech.db.Column
 import com.example.cleve.bibliotech.db.FilterField
 import com.example.cleve.bibliotech.db.Predicate
 import kotlinx.coroutines.*
+import java.lang.Runnable
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -32,6 +36,14 @@ class FilterTable(private val fragment: Fragment) {
         get() {
             valueListener.maybeBuildFilter()
             return _filter
+        }
+
+    var actionListener: TextView.OnEditorActionListener? = null
+        set(listener) {
+            field = listener
+            for (ui in rows) {
+                ui.valueRow.findViewById<EditText>(R.id.filter_value)?.setOnEditorActionListener(listener)
+            }
         }
 
     /**
@@ -124,7 +136,10 @@ class FilterTable(private val fragment: Fragment) {
         var values: Array<String>
             get() {
                 return valueRow.findViewById<EditText>(R.id.filter_value)
-                    .text?.split(Regex("\\s*;\\s*"))?.toTypedArray()?: emptyArray()
+                    .text?.split(Regex(";"))
+                    ?.map {str -> str.trim() { it <= ' ' } }
+                    ?.filter { it.isNotEmpty() }
+                    ?.toTypedArray()?: emptyArray()
             }
             set(value) {
                 valueRow.findViewById<EditText>(R.id.filter_value)
@@ -307,10 +322,13 @@ class FilterTable(private val fragment: Fragment) {
 
         // Add values listener
         val edit = rowItem.valueRow.findViewById<EditText>(R.id.filter_value)
-        if (clear)
+        if (clear) {
+            edit.setOnEditorActionListener(null)
             edit.removeTextChangedListener(valueListener)
-        else
+        } else {
+            edit.setOnEditorActionListener(actionListener)
             edit.addTextChangedListener(valueListener)
+        }
         rowItem.valueRow.tag = row
     }
 

@@ -1,9 +1,12 @@
 package com.example.cleve.bibliotech.ui.books
 
+import android.app.Activity
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.SparseArray
 import android.view.*
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.GravityCompat
@@ -21,6 +24,7 @@ import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
 import com.google.android.material.button.MaterialButton
+import kotlinx.android.synthetic.main.action_drawer.view.*
 
 /**
  * Fragment to display the book list
@@ -64,7 +68,15 @@ class BooksFragment : Fragment() {
     /**
      * UI handler for the filter filter elements in the edit and filter drawer
      */
-    private val filterTable = FilterTable(this)
+    private val filterTable = FilterTable(this).also {
+        it.actionListener = TextView.OnEditorActionListener { _, actionid, _ ->
+            if (actionid == EditorInfo.IME_ACTION_SEARCH) {
+                applyFilter()
+                return@OnEditorActionListener true
+            }
+            false
+        }
+    }
 
     /**
      * OnClick handler for buttons in the edit and filter drawer
@@ -145,6 +157,10 @@ class BooksFragment : Fragment() {
             }
 
             override fun onDrawerClosed(drawerView: View) {
+                // Dismiss the keyboard
+                val imm =
+                    context?.getSystemService(Activity.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.hideSoftInputFromWindow(actionDrawer.action_drawer_view.windowToken, 0)
                 updateMenuAndButtons()
             }
 
@@ -200,12 +216,19 @@ class BooksFragment : Fragment() {
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
         // Set onClickListener for the Apply Filter button in the edit and filter drawer
         root.findViewById<MaterialButton>(R.id.action_apply_filter).setOnClickListener {
-            booksViewModel.applyFilter(orderTable.order.value, filterTable.filter.value)
+            applyFilter()
         }
 
         // Set the initial state of the menus and buttons
         updateMenuAndButtons()
         return root
+    }
+
+    private fun applyFilter() {
+        // close the drawer
+        actionDrawer.closeDrawer(GravityCompat.END)
+        // apply the flter
+        booksViewModel.applyFilter(orderTable.order.value, filterTable.filter.value)
     }
 
     /**
