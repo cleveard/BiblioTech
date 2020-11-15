@@ -1,6 +1,7 @@
 package com.example.cleve.bibliotech.ui.books
 
 import android.app.Application
+import android.content.Context
 import android.content.SharedPreferences
 import android.text.Spannable
 import android.text.SpannableStringBuilder
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.util.*
 import kotlin.collections.HashSet
 
 /**
@@ -61,14 +61,14 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Preferences object for the application
      */
-    val preferences = getApplication<Application>().getSharedPreferences("BookPreferences", 0).also {
+    private val preferences: SharedPreferences = getApplication<Application>().getSharedPreferences("BookPreferences", 0).also {
         it.registerOnSharedPreferenceChangeListener(preferenceListener)
     }
 
     /**
      * Preference editor for the view model
      */
-    val prefEdit = preferences.edit()
+    private val prefEdit: SharedPreferences.Editor = preferences.edit()
 
     /**
      * Filter for the book list
@@ -86,7 +86,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Locale to use for headers and separators and dates
      */
-    private var locale: Locale
+    private var context: Context = app.applicationContext
 
     /**
      * Column names for the filter columns om headers and separators
@@ -96,9 +96,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     init {
         // Get the locale
         // TODO: change the local when changed on the phone
-        val context = app.applicationContext
         val resources = context.resources
-        locale = resources.configuration.locales[0]
         // Get the text appearances for column names in separators
         nameStyles = arrayOf(
             TextAppearanceSpan(context, R.style.HeaderName0),
@@ -151,7 +149,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     }
 
     /**
-     * Build a new flow for book stream from the filte in the view model
+     * Build a new flow for book stream from the filter in the view model
      * This is called when the filter is changed to update the display
      */
     fun buildFlow() {
@@ -166,7 +164,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         val pager = Pager(
             config
         ) {
-            repo.getBooks(filter)
+            filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
         }
         // Add headers and cache
         val flow = addHeaders(applySelectionTransform(pager.flow))
@@ -191,7 +189,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         var pos = layoutManager.findFirstCompletelyVisibleItemPosition()
         var book: BookAndAuthors?
         // Find the first completely visible book in the list
-        if (pos == RecyclerView.NO_POSITION)
+        if (pos == RecyclerView.NO_POSITION || pos >= adapter.itemCount)
             book = null
         else {
             do {
@@ -210,7 +208,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param isSeparator True for separators and false the headers
      * @return The Spannable string with the content
      */
-    fun buildHeader(filter: BookFilter, book: BookAndAuthors?, isSeparator: Boolean): Spannable? {
+    private fun buildHeader(filter: BookFilter, book: BookAndAuthors?, isSeparator: Boolean): Spannable? {
         val span = SpannableStringBuilder()
 
         /**
@@ -259,9 +257,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 // Add the item value, possibly different for headers and separators
                 appendSpan(
                     if (isSeparator)
-                        field.column.desc.getSeparatorValue(book, locale)
+                        field.column.desc.getSeparatorValue(book, context)
                     else
-                        field.column.desc.getValue(book, locale),
+                        field.column.desc.getValue(book, context),
                     textAppearance(itemStyles, i)
                 )
             }
@@ -277,7 +275,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param after the Book after the separator
      * @return The Spannable string with the separator content
      */
-    fun compareAndBuildHeader(filter: BookFilter, before: BookAndAuthors?, after: BookAndAuthors?): Spannable? {
+    private fun compareAndBuildHeader(filter: BookFilter, before: BookAndAuthors?, after: BookAndAuthors?): Spannable? {
         // If this is the first item create the separator, unless it is null, too
         if (before == null) {
             if (after == null)
@@ -301,7 +299,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param flow The flow for the book stream
      * @return The flow for the book stream with headers
      */
-    fun addHeaders(flow: Flow<PagingData<BookAndAuthors>>): Flow<PagingData<Any>> {
+    private fun addHeaders(flow: Flow<PagingData<BookAndAuthors>>): Flow<PagingData<Any>> {
         return flow.map {data ->
             data.insertSeparators { before, after ->
                 // Insert separators for the filter

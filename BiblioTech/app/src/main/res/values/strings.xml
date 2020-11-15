@@ -132,4 +132,5 @@
     <string name="ge">&gt;=</string>
     <string name="lt">&lt;</string>
     <string name="le">&lt;=</string>
+    <string name="month_year_pattern">M/y</string>
 </resources>

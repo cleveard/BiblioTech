@@ -250,31 +250,7 @@ internal class GoogleBookLookup private constructor() {
          * @return An AuthorEntity with the name
          */
         private fun separateAuthor(in_name: String) : AuthorEntity {
-            // Trim whitespace from start and end
-            val name = in_name.trim { it <= ' ' }
-            // Look for a , assume last, remaining if found
-            var lastIndex = name.lastIndexOf(',')
-            var lastName = name
-            var remainingName = ""
-            if (lastIndex > 0) {
-                // Found a comma, last name is before the comma, first name after
-                lastName = name.substring(0, lastIndex).trim { it <= ' ' }
-                remainingName = name.substring(lastIndex + 1).trim { it <= ' ' }
-            } else {
-                // look for a space, assume remaining last if found
-                lastIndex = name.lastIndexOf(' ')
-                if (lastIndex > 0) {
-                    lastName = name.substring(lastIndex)
-                    remainingName = name.substring(0, lastIndex).trim { it <= ' ' }
-                }
-            }
-
-            // Return the AuthorEntity
-            return AuthorEntity(
-                id = 0,
-                lastName = lastName,
-                remainingName = remainingName
-            )
+            return AuthorEntity(0, in_name)
         }
 
         /**

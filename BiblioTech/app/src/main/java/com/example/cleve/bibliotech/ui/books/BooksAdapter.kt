@@ -21,7 +21,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.utils.GenericViewModel
 import kotlinx.coroutines.launch
 import java.lang.StringBuilder
-import java.text.SimpleDateFormat
+import java.text.DateFormat
 
 
 /**
@@ -33,7 +33,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     /**
      * Format to show dates
      */
-    private val format = SimpleDateFormat("MM/dd/yy", context.resources.configuration.locales[0])
+    private val format = DateFormat.getDateInstance(DateFormat.SHORT, context.resources.configuration.locales[0])
 
     init {
         // Initialize the no thumbnail image

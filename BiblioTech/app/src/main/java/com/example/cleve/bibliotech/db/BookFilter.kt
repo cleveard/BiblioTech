@@ -1,21 +1,14 @@
 package com.example.cleve.bibliotech.db
 
-import android.util.Log
+import android.content.Context
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
-import com.example.cleve.bibliotech.R
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.lang.StringBuilder
-import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
-import kotlin.math.floor
-
-// Temp variables used when calculating separates for dates
-private val cal1: Calendar = Calendar.getInstance()
-private val cal2: Calendar = Calendar.getInstance()
 
 /**
  * The description of a filter to filter books
@@ -77,9 +70,9 @@ open class BookFilterCompanion {
      * Build an SQLite query from a filter description
      * @param filter The filter description
      */
-    fun buildFilterQuery(filter: BookFilter?): SupportSQLiteQuery {
+    fun buildFilterQuery(filter: BookFilter, context: Context): SupportSQLiteQuery {
         // The object used to build the query
-        val builder = object: BuildQuery {
+        val builder = object: BuildQuery(context) {
             // The select columns
             val selectSpec: StringBuilder = StringBuilder()
             // Joins
@@ -90,6 +83,10 @@ open class BookFilterCompanion {
             val groupSpec: StringBuilder = StringBuilder()
             // Where expression
             val filterSpec: StringBuilder = StringBuilder()
+            // Holds expressions for a single field
+            val filterFieldExpression: StringBuilder = StringBuilder()
+            // Holds rollback of argList if filterFieldExpression is abandoned
+            var argRollback: Int = 0
             // Track joins to prevent adding multiple times
             val joins: ArrayList<String> = ArrayList()
             // Track select columns to prevent adding multiple times
@@ -119,6 +116,32 @@ open class BookFilterCompanion {
                     orders.add(name)
                     orderSpec.append("${if (orderSpec.isEmpty()) "" else ", "}$name $direction")
                     groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$name")
+                }
+            }
+
+            /** @inheritDoc */
+            override fun beginFilterField() {
+                // If we call begin without calling end
+                // it will clear any expressions for the field
+                while (argList.size > argRollback)
+                    argList.removeLast()
+                filterFieldExpression.clear()
+            }
+
+            /** @inheritDoc */
+            override fun addFilterExpression(expression: String) {
+                filterFieldExpression.append(
+                    "${if (filterFieldExpression.isEmpty()) "" else " OR "} ( $expression )")
+            }
+
+            /** @inheritDoc */
+            override fun endFilterField() {
+                // Only append expressions if there are any
+                if (filterFieldExpression.isNotEmpty()) {
+                    filterSpec.append(
+                        "${if (filterSpec.isEmpty()) "" else " AND "} ( $filterFieldExpression )")
+                    filterFieldExpression.clear()
+                    argRollback = argList.size
                 }
             }
 
@@ -155,29 +178,37 @@ open class BookFilterCompanion {
                 groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$BOOK_ID_COLUMN")
             }
 
+            /**
+             * Collect the filter expressions from iterator of FilterFields
+             * @param list The list FilterFields to process
+             */
             fun buildFilter(list: Iterator<FilterField>) {
+                for (f in list) {
+                    // Start collecting expressions
+                    beginFilterField()
+                    // Add the expression for the field
+                    f.column.desc.addExpression(this, f.predicate, f.values)
+                    // Finish up
+                    endFilterField()
+                }
             }
         }
 
-        // If filter is null, don't collect anything
-        if (filter != null) {
-            // Add all book columns first
-            for (column in ALL_BOOK_COLUMNS)
-                builder.addSelect(column)
-            // Collect select columns from orderList
-            builder.buildSelect(MapIterator(filter.orderList.iterator()) { it.column })
-            // Collect select columns from filterList
-            builder.buildSelect(MapIterator(filter.filterList.iterator()) { it.column })
-            // Collect joins from orderList
-            builder.buildJoin(MapIterator(filter.orderList.iterator()) { it.column })
-            // Collect joins from filterList
-            builder.buildJoin(MapIterator(filter.filterList.iterator()) { it.column })
-            // Collect order by columns from orderList
-            builder.buildOrder(filter.orderList.iterator())
-            // Collect order by columns from filterList
-            builder.buildFilter(filter.filterList.iterator())
-        } else
-            builder.selectSpec.append("*")
+        // Add all book columns first
+        for (column in ALL_BOOK_COLUMNS)
+            builder.addSelect(column)
+        // Collect select columns from orderList
+        builder.buildSelect(MapIterator(filter.orderList.iterator()) { it.column })
+        // Collect select columns from filterList
+        builder.buildSelect(MapIterator(filter.filterList.iterator()) { it.column })
+        // Collect joins from orderList
+        builder.buildJoin(MapIterator(filter.orderList.iterator()) { it.column })
+        // Collect joins from filterList
+        builder.buildJoin(MapIterator(filter.filterList.iterator()) { it.column })
+        // Collect order by columns from orderList
+        builder.buildOrder(filter.orderList.iterator())
+        // Collect order by columns from filterList
+        builder.buildFilter(filter.filterList.iterator())
 
         // Build the SQLite command
         val spec = StringBuilder()
@@ -196,7 +227,7 @@ open class BookFilterCompanion {
             spec.append(" ORDER BY ${builder.orderSpec}")
 
         // Return SQLite query
-        return SimpleSQLiteQuery(spec.toString())
+        return SimpleSQLiteQuery(spec.toString(), builder.argList.toArray())
     }
 
     /**
@@ -374,528 +405,4 @@ enum class Order(val dir: String) {
     Ascending(kAsc),
     /** Descending direction */
     Descending(kDesc);
-}
-
-/**
- * Predicate Data description
- */
-open class PredicateDataDescription(val nameResourceId: Int) {
-    init {
-        Log.d("Predicate", "PredicateDataDescription initialized $nameResourceId")
-    }
-}
-
-private val oneOf = object: PredicateDataDescription(R.string.one_of) {
-}
-private val glob = object: PredicateDataDescription(R.string.has) {
-}
-private val gt = object: PredicateDataDescription(R.string.gt) {
-}
-private val ge = object: PredicateDataDescription(R.string.ge) {
-}
-private val lt = object: PredicateDataDescription(R.string.lt) {
-}
-private val le = object: PredicateDataDescription(R.string.le) {
-}
-
-/**
- * The predicate available
- */
-@Suppress("unused")
-enum class Predicate(val desc: PredicateDataDescription) {
-    /** Match one of several values */
-    ONE_OF(oneOf),
-    /** Partial match on of several values */
-    GLOB(glob),
-    /** Greater than */
-    GT(gt),
-    /** Greater than or equal */
-    GE(ge),
-    /** Less than */
-    LT(lt),
-    /** Less than or equal */
-    LE(le);
-
-    init {
-        Log.d("Predicate", "Predicate initialized $name")
-    }
-
-}
-
-/**
- * Enum of columns
- * The enums not only identify the column, but also contain information about how to use it
- */
-@Suppress("unused")
-enum class Column(val desc: ColumnDataDescriptor) {
-    /** Author - Last, First */
-    LAST_NAME(lastFirst),
-    /** Author - First Last */
-    FIRST_NAME(firstLast),
-    /** Enum meaning filter everywhere */
-    ANY(anyColumn),
-    /** Title */
-    TITLE(title),
-    /** Subtitle */
-    SUBTITLE(subtitle),
-    /** Description */
-    DESCRIPTION(description),
-    /** Tags */
-    TAGS(tags),
-    /** Categories */
-    CATEGORIES(categories),
-    /** Source of book details */
-    SOURCE(source),
-    /** Id of book details in the source */
-    SOURCE_ID(sourceId),
-    /** ISBN */
-    ISBN(isbn),
-    /** Page Count */
-    PAGE_COUNT(pageCount),
-    /** Number of books tracked */
-    BOOK_COUNT(bookCount),
-    /** Rating */
-    RATING(rating),
-    /** Date book was added to the database */
-    DATE_ADDED(dateAdded),
-    /** Date book was last modified in the database */
-    DATE_MODIFIED(dateModified);
-}
-
-/** An interface used to add components to a query */
-interface BuildQuery {
-    /**
-     * Add a name to the columns selected by the query
-     * @param name The name to add
-     * Can be called multiple time with the same name. The name is only added once
-     */
-    fun addSelect(name: String)
-
-    /**
-     * Add a left join to the query
-     * @param table The name of the table to be joined
-     * @param leftColumn The column in query used for the join
-     * @param joinColumn The column in table used for the join
-     * Can be call multiple times with the same table name. The join is only added once,
-     * even if leftColumn and joinColumn are different. Only the first call is used.
-     */
-    fun addJoin(table: String, leftColumn: String, joinColumn: String)
-
-    /**
-     * Add a column to order the query
-     * @param name The name of the column
-     * @param direction The SQL direction - ASC or DESC
-     * This can be called multiple times with the same name. The order is only added once.
-     * Only the first call is used.
-     */
-    fun addOrderColumn(name: String, direction: String)
-}
-
-/**
- * Utility class to map the contents of an iterator
- * @param <T> The type of the source iterator
- * @param <R> The type of the mapped iterator
- * @param src The source iterator
- * @param map A lambda to map objects in the source iterator to the destination iterator.
- */
-class MapIterator<T, R>(private val src: Iterator<T>, private val map: (T) -> R) : Iterator<R> {
-    /**
-     * @inheritDoc
-     * The MapIterator has more objects only when the src does
-     */
-    override fun hasNext(): Boolean = src.hasNext()
-
-    /**
-     * @inheritDoc
-     * Map the next source object to the destination
-     */
-    override fun next(): R = map(src.next())
-}
-
-/**
- * Abstract class used to describe the data in filter columns
- * @param columnNames The database column names used by the filter columns
- * @param nameResourceId The resource id for the localized name of the filter column
- */
-abstract class ColumnDataDescriptor(
-    private val columnNames:
-    Array<String>, val nameResourceId: Int,
-    val predicates: Array<Predicate>) {
-    /** Add a join if needed to extract the column */
-    open fun addJoin(buildQuery: BuildQuery) {
-        // Default is that no join is required
-    }
-
-    /**
-     * Add columns to order list
-     * @param buildQuery The query we are building
-     * @param direction The direction the columns are orders
-     */
-    open fun addOrder(buildQuery: BuildQuery, direction: Order) {
-        // Default to adding columns in order
-        for (f in columnNames)
-            buildQuery.addOrderColumn(f, direction.dir)
-    }
-
-    /**
-     * Add columns to select
-     * @param buildQuery The query we are building
-     */
-    open fun addSelection(buildQuery: BuildQuery) {
-        // Default to adding columns in order
-        for (f in columnNames)
-            buildQuery.addSelect(f)
-    }
-
-    /**
-     * Get the column value from a book
-     * @param book The book holding the value
-     * @param locale The locale to use for displaying the value
-     */
-    abstract fun getValue(book: BookAndAuthors, locale: Locale): String
-
-    /**
-     * Return whether a separator should be between two books
-     * @param book The first book
-     * @param other The other book
-     * @return True if a separator is needed
-     */
-    abstract fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean
-
-    /**
-     * Get the value string to include in the separator
-     * @param book The book after the separator
-     * @param locale The locale to use for the separator
-     */
-    open fun getSeparatorValue(book: BookAndAuthors, locale: Locale): String {
-        return getValue(book, locale)
-    }
-}
-
-/** Author - Last, First */
-private val lastFirst = object: ColumnDataDescriptor(
-    arrayOf(LAST_NAME_COLUMN, REMAINING_COLUMN),
-    R.string.author,
-    emptyArray()        // Both author columns filter the same. Only use one
-) {
-    /** @inheritDoc */
-    override fun addJoin(buildQuery: BuildQuery) {
-        buildQuery.addJoin(BOOK_AUTHORS_TABLE, BOOK_ID_COLUMN, BOOK_AUTHORS_BOOK_ID_COLUMN)
-        buildQuery.addJoin(AUTHORS_TABLE, BOOK_AUTHORS_AUTHOR_ID_COLUMN, AUTHORS_ID_COLUMN)
-    }
-
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.sortLast != other.sortLast || book.sortFirst != other.sortFirst
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return "${book.sortLast?: ""}, ${book.sortFirst?: ""}"
-    }
-}
-
-/** Author - First Last */
-private val firstLast = object: ColumnDataDescriptor(
-    arrayOf(REMAINING_COLUMN, LAST_NAME_COLUMN),
-    R.string.author,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun addJoin(buildQuery: BuildQuery) {
-        buildQuery.addJoin(BOOK_AUTHORS_TABLE, BOOK_ID_COLUMN, BOOK_AUTHORS_BOOK_ID_COLUMN)
-        buildQuery.addJoin(AUTHORS_TABLE, BOOK_AUTHORS_AUTHOR_ID_COLUMN, AUTHORS_ID_COLUMN)
-    }
-
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.sortLast != other.sortLast || book.sortFirst != other.sortFirst
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return "${book.sortFirst?: ""} ${book.sortLast?: ""}"
-    }
-}
-
-/** Enum meaning filter everywhere */
-private val anyColumn = object: ColumnDataDescriptor(
-    arrayOf(),
-    R.string.any,
-    arrayOf(Predicate.GLOB)
-) {
-    /** @inheritDoc */
-    override fun addJoin(buildQuery: BuildQuery) {
-    }
-
-    /** @inheritDoc */
-    override fun addOrder(buildQuery: BuildQuery, direction: Order) {
-    }
-
-    /** @inheritDoc */
-    override fun addSelection(buildQuery: BuildQuery) {
-    }
-
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return false
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return ""
-    }
-}
-
-/** Title */
-private val title = object: ColumnDataDescriptor(
-    arrayOf(TITLE_COLUMN),
-    R.string.title,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return false
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.title
-    }
-}
-
-/** Subtitle */
-private val subtitle = object: ColumnDataDescriptor(
-    arrayOf(SUBTITLE_COLUMN),
-    R.string.subtitle,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return false
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.subTitle
-    }
-}
-
-/**
- * Description
- * Not allowed as separator
- */
-private val description = object: ColumnDataDescriptor(
-    arrayOf(DESCRIPTION_COLUMN),
-    R.string.description,
-    arrayOf(Predicate.GLOB)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return false
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return ""
-    }
-}
-
-/** Tags */
-private val tags = object: ColumnDataDescriptor(
-    arrayOf(TAGS_NAME_COLUMN),
-    R.string.tag,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun addJoin(buildQuery: BuildQuery) {
-        buildQuery.addJoin(BOOK_TAGS_TABLE, BOOK_ID_COLUMN, BOOK_TAGS_BOOK_ID_COLUMN)
-        buildQuery.addJoin(TAGS_TABLE, BOOK_TAGS_TAG_ID_COLUMN, TAGS_ID_COLUMN)
-    }
-
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.sortTag != other.sortTag
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.sortTag?: ""
-    }
-}
-
-/** Categories */
-private val categories = object: ColumnDataDescriptor(
-    arrayOf(CATEGORY_COLUMN),
-    R.string.category,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun addJoin(buildQuery: BuildQuery) {
-        buildQuery.addJoin(BOOK_CATEGORIES_TABLE, BOOK_ID_COLUMN, BOOK_CATEGORIES_BOOK_ID_COLUMN)
-        buildQuery.addJoin(CATEGORIES_TABLE, BOOK_CATEGORIES_CATEGORY_ID_COLUMN, CATEGORIES_ID_COLUMN)
-    }
-
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.sortCategory != other.sortCategory
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.sortCategory?: ""
-    }
-}
-
-/** Source of book details */
-private val source = object: ColumnDataDescriptor(
-    arrayOf(SOURCE_ID_COLUMN),
-    R.string.source,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.book.sourceId != other.book.sourceId
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.sourceId?: ""
-    }
-}
-
-/** Id of book details in the source */
-private val sourceId = object: ColumnDataDescriptor(
-    arrayOf(VOLUME_ID_COLUMN),
-    R.string.volume,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.book.volumeId != other.book.volumeId
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.volumeId?: ""
-    }
-}
-
-/** ISBN */
-private val isbn = object: ColumnDataDescriptor(
-    arrayOf(ISBN_COLUMN),
-    R.string.isbn,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.book.ISBN != other.book.ISBN
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.ISBN?: ""
-    }
-}
-
-/** Page Count */
-private val pageCount = object: ColumnDataDescriptor(
-    arrayOf(PAGE_COUNT_COLUMN),
-    R.string.pages,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return false
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.pageCount.toString()
-    }
-}
-
-/** Number of books tracked */
-private val bookCount = object: ColumnDataDescriptor(
-    arrayOf(BOOK_COUNT_COLUMN),
-    R.string.books,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.book.bookCount != other.book.bookCount
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return book.book.bookCount.toString()
-    }
-}
-/** Rating */
-private val rating = object: ColumnDataDescriptor(
-    arrayOf(RATING_COLUMN),
-    R.string.rating,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
-) {
-    /** @inheritDoc */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return floor(book.book.rating) != floor(other.book.rating)
-    }
-
-    /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return floor(book.book.rating).toString()
-    }
-}
-/** Date book was added to the database */
-private val dateAdded = object: ColumnDataDescriptor(
-    arrayOf(DATE_ADDED_COLUMN),
-    R.string.date_added,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
-) {
-    /**
-     * @inheritDoc
-     * Add separators at day boundaries
-     */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        cal1.time = book.book.added
-        cal2.time = other.book.added
-        return cal1.get(Calendar.DAY_OF_MONTH) != cal2.get(Calendar.DAY_OF_MONTH) ||
-                cal1.get(Calendar.MONTH) != cal2.get(Calendar.MONTH) ||
-                cal1.get(Calendar.YEAR) != cal2.get(Calendar.YEAR)
-    }
-
-    /**
-     * @inheritDoc
-     * Separator value is the day
-     */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return SimpleDateFormat("MM/dd/yy", locale).format(book.book.added)
-    }
-}
-/** Date book was last modified in the database */
-private val dateModified = object: ColumnDataDescriptor(
-    arrayOf(DATE_MODIFIED_COLUMN),
-    R.string.date_changed,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
-) {
-    /**
-     * @inheritDoc
-     * Add separators at day boundaries
-     */
-    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        cal1.time = book.book.modified
-        cal2.time = other.book.modified
-        return cal1.get(Calendar.DAY_OF_MONTH) != cal2.get(Calendar.DAY_OF_MONTH) ||
-                cal1.get(Calendar.MONTH) != cal2.get(Calendar.MONTH) ||
-                cal1.get(Calendar.YEAR) != cal2.get(Calendar.YEAR)
-    }
-
-    /**
-     * @inheritDoc
-     * Separator value is the day
-     */
-    override fun getValue(book: BookAndAuthors, locale: Locale): String {
-        return SimpleDateFormat("MM/dd/yy", locale).format(book.book.modified)
-    }
 }

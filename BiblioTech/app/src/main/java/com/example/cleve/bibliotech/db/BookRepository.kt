@@ -3,6 +3,7 @@ package com.example.cleve.bibliotech.db
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.paging.PagingSource
+import java.util.*
 
 /**
  * Application interface to the book database
@@ -48,11 +49,19 @@ class BookRepository private constructor() {
 
     /**
      * Get books from the data base
+     * @return A PagingSource containing the books
+     */
+    fun getBooks(): PagingSource<Int, BookAndAuthors> {
+        return db.getBookDao().getBooks()
+    }
+
+    /**
+     * Get books from the data base
      * @param filter Description of a filter that filters and orders the books
      * @return A PagingSource containing the books
      */
-    fun getBooks(filter: BookFilter? = null): PagingSource<Int, BookAndAuthors> {
-        return db.getBookDao().getBooks(filter)
+    fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
+        return db.getBookDao().getBooks(filter, context)
     }
 
     /**

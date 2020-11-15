@@ -3,6 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:id="@+id/filter_value"
+    android:singleLine="true"
+    android:imeOptions="actionSearch"
     android:background="@android:color/transparent">
 
 </EditText>

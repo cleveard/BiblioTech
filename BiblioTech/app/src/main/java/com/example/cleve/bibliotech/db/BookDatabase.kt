@@ -179,7 +179,36 @@ data class AuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var lastName: String,
     @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var remainingName: String
-)
+) {
+    constructor(id: Long, in_name: String): this(id, "", "") {
+        setAuthor(in_name)
+    }
+
+    /**
+     * Set the first and remainging author values from a string
+     * @param in_name The string
+     */
+    fun setAuthor(in_name: String) {
+        // Trim whitespace from start and end
+        val name = in_name.trim { it <= ' ' }
+        // Look for a , assume last, remaining if found
+        var lastIndex = name.lastIndexOf(',')
+        lastName = name
+        remainingName = ""
+        if (lastIndex > 0) {
+            // Found a comma, last name is before the comma, first name after
+            lastName = name.substring(0, lastIndex).trim { it <= ' ' }
+            remainingName = name.substring(lastIndex + 1).trim { it <= ' ' }
+        } else {
+            // look for a space, assume remaining last if found
+            lastIndex = name.lastIndexOf(' ')
+            if (lastIndex > 0) {
+                lastName = name.substring(lastIndex)
+                remainingName = name.substring(0, lastIndex).trim { it <= ' ' }
+            }
+        }
+    }
+}
 
 /**
  * Selectable Author class
@@ -1602,8 +1631,16 @@ abstract class BookDao(private val db: BookDatabase) {
      * Get books
      * @param filter The filter description used to filter and order the books
      */
-    fun getBooks(filter: BookFilter?): PagingSource<Int, BookAndAuthors> {
-        return getBooks(BookFilter.buildFilterQuery(filter))
+    fun getBooks(): PagingSource<Int, BookAndAuthors> {
+        return getBooks(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
+    }
+
+    /**
+     * Get books
+     * @param filter The filter description used to filter and order the books
+     */
+    fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
+        return getBooks(BookFilter.buildFilterQuery(filter, context))
     }
 
     /**
