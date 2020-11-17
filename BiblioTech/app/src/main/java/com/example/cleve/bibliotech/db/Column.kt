@@ -1,8 +1,11 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import android.database.Cursor
 import com.example.cleve.bibliotech.R
+import java.lang.UnsupportedOperationException
 import java.text.DateFormat
+import java.text.ParseException
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.floor
@@ -106,27 +109,6 @@ abstract class BuildQuery(
 }
 
 /**
- * Utility class to map the contents of an iterator
- * @param <T> The type of the source iterator
- * @param <R> The type of the mapped iterator
- * @param src The source iterator
- * @param map A lambda to map objects in the source iterator to the destination iterator.
- */
-class MapIterator<T, R>(private val src: Iterator<T>, private val map: (T) -> R) : Iterator<R> {
-    /**
-     * @inheritDoc
-     * The MapIterator has more objects only when the src does
-     */
-    override fun hasNext(): Boolean = src.hasNext()
-
-    /**
-     * @inheritDoc
-     * Map the next source object to the destination
-     */
-    override fun next(): R = map(src.next())
-}
-
-/**
  * Abstract class used to describe the data in filter columns
  * @param columnNames The database column names used by the filter columns
  * @param nameResourceId The resource id for the localized name of the filter column
@@ -148,8 +130,11 @@ abstract class ColumnDataDescriptor(
      */
     open fun addOrder(buildQuery: BuildQuery, direction: Order) {
         // Default to adding columns in order
-        for (f in columnNames)
+        addJoin(buildQuery)
+        for (f in columnNames) {
+            buildQuery.addSelect(f)
             buildQuery.addOrderColumn(f, direction.dir)
+        }
     }
 
     /**
@@ -194,8 +179,11 @@ abstract class ColumnDataDescriptor(
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
-            if (convert(buildQuery, predicate, v))
+            if (convert(buildQuery, predicate, v)) {
+                addSelection(buildQuery)
+                addJoin(buildQuery)
                 predicate.desc.buildExpression(buildQuery, columnNames)
+            }
         }
     }
 
@@ -203,16 +191,16 @@ abstract class ColumnDataDescriptor(
      * Convert arguments for this column for a predicate
      * @param buildQuery The query we are building
      * @param predicate The predicate we want to use
-     * @param values The values we want to use
-     * @return True if all of the values converted
+     * @param value The value we want to use
+     * @return True if the value converted
      */
     protected open fun convert(
         buildQuery: BuildQuery,
         predicate: Predicate,
-        vararg values: String
+        value: String
     ): Boolean {
         // Default is just to escape the string wild cards
-        return predicate.desc.convertString(buildQuery, *values)
+        return predicate.desc.convertString(buildQuery, value)
     }
 
     /**
@@ -239,6 +227,22 @@ abstract class ColumnDataDescriptor(
         return getValue(book, context)
     }
 
+    /**
+     * Flag to indicate a column supports auto complete
+     * Override to support auto complete
+     */
+    open fun hasAutoComplete(): Boolean {
+        return false
+    }
+
+    /**
+     * Build the auto complete adapter for the column
+     * @param constraint The string to filter by
+     */
+    open fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        throw UnsupportedOperationException("Column does not support auto-complete")
+    }
+
     companion object {
         /** format for dates */
         private var format: DateFormat? = null
@@ -257,6 +261,30 @@ abstract class ColumnDataDescriptor(
                 formatLocale = locale
             }
             return format!!.format(date)
+        }
+
+        /**
+         * Build auto complete cursor
+         */
+        fun buildAutoCompleteCursor(
+            repo: BookRepository,
+            idName: String,
+            resultName: String,
+            tableName: String,
+            constraint: String?,
+            group: Boolean = false
+        ): Cursor {
+            val hasConstraint = constraint != null && constraint.isNotEmpty()
+            val query = "SELECT $idName as _id, $resultName AS _result FROM $tableName " +
+                (if (hasConstraint) "WHERE _result LIKE ? " else "") +
+                (if (group) "GROUP BY _result " else "") +
+                "ORDER BY _result"
+            return repo.getCursor(query,
+                if (hasConstraint)
+                    arrayOf("%${PredicateDataDescription.escapeLikeWildCards(constraint!!)}%")
+                else
+                    null
+            )
         }
     }
 }
@@ -312,26 +340,29 @@ private val firstLast = object: ColumnDataDescriptor(
         predicate: Predicate,
         values: Array<String>
     ) {
-        val name = AuthorEntity(0, "", "")
-
         // Loop through the values and add the expression for each one
         for (v in values) {
-            // Separate the name into last and rest
-            name.setAuthor(v)
-            // We filter a single word in either the last or first name
-            // but we filter a first last combination matching both
-            var logical = "AND"
-            if (name.remainingName == "") {
-                logical = "OR"
-                name.remainingName = name.lastName
-            }
             // If we can convert the value add the expression
-            if (convert(buildQuery, predicate, name.remainingName, name.lastName))
-                predicate.desc.buildExpression(buildQuery, columnNames, logical)
+            if (convert(buildQuery, predicate, v)) {
+                addJoin(buildQuery)
+                buildQuery.addSelect("$REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN AS _author")
+                predicate.desc.buildExpression(buildQuery, arrayOf("_author"))
+            }
         }
 
         // We need to add a join for this filter
         addJoin(buildQuery)
+    }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, AUTHORS_ID_COLUMN,
+            "$REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN", AUTHORS_TABLE, constraint)
     }
 }
 
@@ -395,6 +426,17 @@ private val title = object: ColumnDataDescriptor(
     override fun getValue(book: BookAndAuthors, context: Context): String {
         return book.book.title
     }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, BOOK_ID_COLUMN,
+            TITLE_COLUMN, BOOK_TABLE, constraint, true)
+    }
 }
 
 /** Subtitle */
@@ -455,6 +497,17 @@ private val tags = object: ColumnDataDescriptor(
     override fun getValue(book: BookAndAuthors, context: Context): String {
         return book.sortTag?: ""
     }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, TAGS_ID_COLUMN,
+            TAGS_NAME_COLUMN, TAGS_TABLE, constraint)
+    }
 }
 
 /** Categories */
@@ -478,6 +531,17 @@ private val categories = object: ColumnDataDescriptor(
     override fun getValue(book: BookAndAuthors, context: Context): String {
         return book.sortCategory?: ""
     }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, CATEGORIES_ID_COLUMN,
+            CATEGORY_COLUMN, CATEGORIES_TABLE, constraint)
+    }
 }
 
 /** Source of book details */
@@ -494,6 +558,17 @@ private val source = object: ColumnDataDescriptor(
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors, context: Context): String {
         return book.book.sourceId?: ""
+    }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, BOOK_ID_COLUMN,
+            SOURCE_ID_COLUMN, BOOK_TABLE, constraint, true)
     }
 }
 
@@ -551,10 +626,10 @@ private val pageCount = object: ColumnDataDescriptor(
     override fun convert(
         buildQuery: BuildQuery,
         predicate: Predicate,
-        vararg values: String
+        value: String
     ): Boolean {
         // Convert to ints for
-        return predicate.desc.convertInt(buildQuery, *values)
+        return predicate.desc.convertInt(buildQuery, value)
     }
 }
 
@@ -578,10 +653,10 @@ private val bookCount = object: ColumnDataDescriptor(
     override fun convert(
         buildQuery: BuildQuery,
         predicate: Predicate,
-        vararg values: String
+        value: String
     ): Boolean {
         // Convert to ints for
-        return predicate.desc.convertInt(buildQuery, *values)
+        return predicate.desc.convertInt(buildQuery, value)
     }
 }
 
@@ -605,10 +680,10 @@ private val rating = object: ColumnDataDescriptor(
     override fun convert(
         buildQuery: BuildQuery,
         predicate: Predicate,
-        vararg values: String
+        value: String
     ): Boolean {
         // Convert to doubles for
-        return predicate.desc.convertDouble(buildQuery, *values)
+        return predicate.desc.convertDouble(buildQuery, value)
     }
 }
 
@@ -649,8 +724,11 @@ private val dateAdded = object: ColumnDataDescriptor(
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
-            if (predicate.desc.convertDate(buildQuery, v))
+            if (predicate.desc.convertDate(buildQuery, v)) {
+                addSelection(buildQuery)
+                addJoin(buildQuery)
                 predicate.desc.buildExpressionDate(buildQuery, columnNames)
+            }
         }
     }
 }
@@ -692,8 +770,11 @@ private val dateModified = object: ColumnDataDescriptor(
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
-            if (predicate.desc.convertDate(buildQuery, v))
+            if (predicate.desc.convertDate(buildQuery, v)) {
+                addSelection(buildQuery)
+                addJoin(buildQuery)
                 predicate.desc.buildExpressionDate(buildQuery, columnNames)
+            }
         }
     }
 }

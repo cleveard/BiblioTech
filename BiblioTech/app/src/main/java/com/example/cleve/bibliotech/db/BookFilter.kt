@@ -197,17 +197,10 @@ open class BookFilterCompanion {
         // Add all book columns first
         for (column in ALL_BOOK_COLUMNS)
             builder.addSelect(column)
-        // Collect select columns from orderList
-        builder.buildSelect(MapIterator(filter.orderList.iterator()) { it.column })
-        // Collect select columns from filterList
-        builder.buildSelect(MapIterator(filter.filterList.iterator()) { it.column })
-        // Collect joins from orderList
-        builder.buildJoin(MapIterator(filter.orderList.iterator()) { it.column })
-        // Collect joins from filterList
-        builder.buildJoin(MapIterator(filter.filterList.iterator()) { it.column })
+
         // Collect order by columns from orderList
         builder.buildOrder(filter.orderList.iterator())
-        // Collect order by columns from filterList
+        // Collect filter by columns from filterList
         builder.buildFilter(filter.filterList.iterator())
 
         // Build the SQLite command

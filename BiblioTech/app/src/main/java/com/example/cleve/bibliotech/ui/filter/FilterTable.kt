@@ -1,27 +1,26 @@
 package com.example.cleve.bibliotech.ui.filter
 
-import android.app.Activity
 import android.content.Context
+import android.database.Cursor
+import android.database.CursorWrapper
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.example.cleve.bibliotech.MainActivity
 import com.example.cleve.bibliotech.R
-import com.example.cleve.bibliotech.db.BookFilter
-import com.example.cleve.bibliotech.db.Column
-import com.example.cleve.bibliotech.db.FilterField
-import com.example.cleve.bibliotech.db.Predicate
+import com.example.cleve.bibliotech.db.*
+import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import kotlinx.coroutines.*
-import java.lang.Runnable
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.math.sign
 
 /**
  * UI handler for filters
@@ -38,6 +37,9 @@ class FilterTable(private val fragment: Fragment) {
             return _filter
         }
 
+    /**
+     * Action Listener for keyboard actions when entering filter values
+     */
     var actionListener: TextView.OnEditorActionListener? = null
         set(listener) {
             field = listener
@@ -45,6 +47,11 @@ class FilterTable(private val fragment: Fragment) {
                 ui.valueRow.findViewById<EditText>(R.id.filter_value)?.setOnEditorActionListener(listener)
             }
         }
+
+    /**
+     * View model
+     */
+    private lateinit var booksViewModel: BooksViewModel
 
     /**
      * The table layout for the filter list
@@ -63,31 +70,42 @@ class FilterTable(private val fragment: Fragment) {
         val topRow: TableRow,
         val valueRow: View,
     ) {
+        /** The column spinner in the row */
         private val columnSpinner: Spinner = topRow.findViewById<Spinner>(R.id.action_filter_by).also {
             it.adapter = columnAdapter
             it.setSelection(initialColumnPosition)
         }
+        /** Array Adapter for the predicate spinner */
         private val predicateAdapter = ArrayAdapter<String>(fragment.context!!,
             android.R.layout.simple_spinner_item).also {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
+        /** The predicate spinner in the row */
         private val predicateSpinner: Spinner = topRow.findViewById<Spinner>(R.id.action_filter_predicate).also {
             it.adapter = predicateAdapter
             it.setSelection(0)
         }
+        /** Map of predicate spinner positions to Predicate enums */
         private var predicateMap: Array<String> = emptyArray()
+        /** Autocomplete cursor job */
+        var autoCompleteJob: Job? = null
 
         init {
+            // Initialize fields that depend on the column
             changeColumn()
         }
 
+        /**
+         * Change the fields that depend on the column
+         */
         fun changeColumn() {
             // Create the new predicate map.
-            val column = Column.valueOf(columnMap[columnSpinner.selectedItemPosition])
-            val predicates = column.desc.predicates
+            val newColumn = column
+            val predicates = newColumn.desc.predicates
             val newMap = Array(predicates.size) {
                 predicates[it].name
             }
+
             // If the new and existing maps are the same
             // We don't need to update the array in the spinner
             if (BookFilter.equalArray(newMap, predicateMap))
@@ -114,18 +132,90 @@ class FilterTable(private val fragment: Fragment) {
             predicateSpinner.setSelection(position)
         }
 
-        var predicate: String?
+        /**
+         * Get the auto complete query string for a column
+         */
+        fun getQuery(): Cursor {
+            // Extract the token at the end of the selection
+            val edit = valueRow.findViewById<EditText>(R.id.filter_value)
+            val values = edit.text.toString()
+            val cursor = edit.selectionEnd
+            val tokenStart = autoCompleteTokenizer.findTokenStart(values, cursor)
+            val tokenEnd = autoCompleteTokenizer.findTokenEnd(values, cursor)
+            val token = values.substring(tokenStart, tokenEnd)
+            // return the query string
+            return column.desc.getAutoCompleteCursor(BookRepository.repo, token)
+        }
+
+        /**
+         * Handle a focus change on the filter, we only create the cursor
+         * and adapter when a value field gets focus
+         */
+        fun valueFocusChange(hasFocus: Boolean) {
+            // Get the value field
+            val edit = valueRow.findViewById<MultiAutoCompleteTextView>(R.id.filter_value)
+            if (hasFocus) {
+                // No autocomplete, don't do anything
+                if (!column.desc.hasAutoComplete())
+                    return
+
+                // Setting focus, setup adapter and set it in the text view
+                // This is done in a coroutine job and we use the job
+                // to flag that the job is still active. When we lose focus
+                // we cancel the job if it is still active
+                autoCompleteJob =  booksViewModel.viewModelScope.launch {
+                    // Get the cursor for the column, null means no auto complete
+                    val cursor = withContext(booksViewModel.repo.queryScope.coroutineContext) {
+                        getQuery()
+                    }
+
+                    // Get the adapter from the column description
+                    val adapter = SimpleCursorAdapter(
+                        fragment.context!!,
+                        R.layout.auto_complete,
+                        cursor,
+                        arrayOf("_result"),
+                        intArrayOf(R.id.auto_complete_item),
+                        0
+                    )
+                    adapter.stringConversionColumn = cursor.getColumnIndex("_result")
+                    adapter.setFilterQueryProvider { getQuery() }
+
+                    // Set the adapter on the text view
+                    edit.setAdapter(adapter)
+                    // Flag that the job is done
+                    autoCompleteJob = null
+                }
+            } else {
+                // If we lose focus and the set focus job isn't done, cancel it
+                autoCompleteJob?.let {
+                    it.cancel()
+                    autoCompleteJob = null
+                }
+                // Clear the adapter
+                edit.setAdapter(null)
+            }
+        }
+
+        /** The column from the column spinner */
+        val column: Column
+            get() {
+                return Column.valueOf(columnMap[columnSpinner.selectedItemPosition])
+            }
+
+        /** The predicate name from the predicate spinner */
+        var predicate: Predicate?
             get() {
                 val pos = predicateSpinner.selectedItemPosition
                 if (pos == -1)
                     return null
-                return predicateMap[pos]
+                return Predicate.valueOf(predicateMap[pos])
             }
-            set (name) {
+            set (value) {
                 // Find the position of the predicate
                 var pos = -1
-                if (name != null && name.isNotEmpty()) {
-                    pos = predicateMap.indexOf(name)
+                if (value != null) {
+                    pos = predicateMap.indexOf(value.name)
                     if (pos == -1 && predicateMap.isNotEmpty())
                         pos = 0
                 }
@@ -133,17 +223,23 @@ class FilterTable(private val fragment: Fragment) {
                 predicateSpinner.setSelection(pos)
             }
 
+        /** The array of values from the value text view */
         var values: Array<String>
             get() {
                 return valueRow.findViewById<EditText>(R.id.filter_value)
+                    // split the text using ;
                     .text?.split(Regex(";"))
-                    ?.map {str -> str.trim() { it <= ' ' } }
+                    // Trim whitespace for each value
+                    ?.map {str -> str.trim { it <= ' ' } }
+                    // Remove empty values
                     ?.filter { it.isNotEmpty() }
+                    // Convert to array of string
                     ?.toTypedArray()?: emptyArray()
             }
             set(value) {
+                // Form the value text by joining the values
                 valueRow.findViewById<EditText>(R.id.filter_value)
-                    .text = SpannableStringBuilder(value.joinToString(";") { it })
+                    .text = SpannableStringBuilder(value.joinToString(" ; ") { it })
             }
     }
 
@@ -256,6 +352,52 @@ class FilterTable(private val fragment: Fragment) {
     }
 
     /**
+     * Listener for the value fields to get and lose focus
+     * This is used to setup and tear down the cursor adaptor for auto complete
+     */
+    private val valueFocusListener: View.OnFocusChangeListener =
+        View.OnFocusChangeListener { v, hasFocus ->
+            (v?.tag as? Int)?.let { index ->
+                rows[index].valueFocusChange(hasFocus)
+            }
+        }
+
+    /**
+     * Tokenizer for the value items
+     */
+    private val autoCompleteTokenizer: MultiAutoCompleteTextView.Tokenizer = object: MultiAutoCompleteTextView.Tokenizer {
+        override fun findTokenStart(text: CharSequence?, cursor: Int): Int {
+            text!!
+            var start = cursor
+            for (i in cursor - 1 downTo 0) {
+                val c = text[i]
+                if (c == ';')
+                    break
+                if (c > ' ')
+                    start = i
+            }
+            return start
+        }
+
+        override fun findTokenEnd(text: CharSequence?, cursor: Int): Int {
+            text!!
+            var end = cursor
+            for (i in cursor until text.length) {
+                val c = text[i]
+                if (c == ';')
+                    break
+                if (c > ' ')
+                    end = i
+            }
+            return end
+        }
+
+        override fun terminateToken(text: CharSequence?): CharSequence {
+            return text.toString() + " ; "
+        }
+    }
+
+    /**
      * OnClickListener for add row button
      */
     private val addRowListener = View.OnClickListener {
@@ -282,10 +424,9 @@ class FilterTable(private val fragment: Fragment) {
             // Get the table row
             val row = rows[index]
             // Create the FilterField from the table row
-            val column = Column.valueOf(
-                columnMap[row.topRow.findViewById<Spinner>(R.id.action_filter_by).selectedItemPosition])
+            val column = row.column
             FilterField(column,
-                row.predicate?.let { Predicate.valueOf(it) }?: Predicate.ONE_OF,
+                row.predicate?: Predicate.ONE_OF,
                 row.values
             )
         }
@@ -321,12 +462,17 @@ class FilterTable(private val fragment: Fragment) {
         spinner.tag = row
 
         // Add values listener
-        val edit = rowItem.valueRow.findViewById<EditText>(R.id.filter_value)
+        val edit = rowItem.valueRow.findViewById<MultiAutoCompleteTextView>(R.id.filter_value)
         if (clear) {
             edit.setOnEditorActionListener(null)
+            edit.onFocusChangeListener = null
+            edit.setTokenizer(null)
             edit.removeTextChangedListener(valueListener)
         } else {
             edit.setOnEditorActionListener(actionListener)
+            edit.onFocusChangeListener = valueFocusListener
+            edit.setTokenizer(autoCompleteTokenizer)
+            edit.threshold = 1
             edit.addTextChangedListener(valueListener)
         }
         rowItem.valueRow.tag = row
@@ -403,7 +549,7 @@ class FilterTable(private val fragment: Fragment) {
         // Make sure the predicate map is correct
         rowItem.changeColumn()
         // Set the predicate
-        rowItem.predicate = field.predicate.name
+        rowItem.predicate = field.predicate
         // Set the value
         rowItem.values = field.values
     }
@@ -432,6 +578,9 @@ class FilterTable(private val fragment: Fragment) {
     fun onCreateView(inflater: LayoutInflater, tableLayout: TableLayout) {
         // Tear down anything already setup
         onDestroyView()
+
+        // Get the view model
+        booksViewModel = MainActivity.getViewModel(fragment.activity, BooksViewModel::class.java)
 
         // Initialize the column spinner
         initColumnSpinnerAdapter(inflater.context)

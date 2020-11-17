@@ -27,37 +27,37 @@ open class PredicateDataDescription(
     /**
      * Convert string values to ints and add to the argument list
      * @param buildQuery The query builder for the query we are creating
-     * @param v The values we need to convert
+     * @param v The value we need to convert
      */
-    open fun convertInt(buildQuery: BuildQuery, vararg v: String): Boolean {
-        return convert(buildQuery, *v) { it.toInt() }
+    open fun convertInt(buildQuery: BuildQuery, v: String): Boolean {
+        return convert(buildQuery, v) { it.toInt() }
     }
 
     /**
      * Convert string values to longs and add to the argument list
      * @param buildQuery The query builder for the query we are creating
-     * @param v The values we need to convert
+     * @param v The value we need to convert
      */
-    open fun convertLong(buildQuery: BuildQuery, vararg v: String): Boolean {
-        return convert(buildQuery, *v) { it.toLong() }
+    open fun convertLong(buildQuery: BuildQuery, v: String): Boolean {
+        return convert(buildQuery, v) { it.toLong() }
     }
 
     /**
      * Convert string values to doubles and add to the argument list
      * @param buildQuery The query builder for the query we are creating
-     * @param v The values we need to convert
+     * @param v The value we need to convert
      */
-    open fun convertDouble(buildQuery: BuildQuery, vararg v: String): Boolean {
-        return convert(buildQuery, *v) { it.toDouble() }
+    open fun convertDouble(buildQuery: BuildQuery, v: String): Boolean {
+        return convert(buildQuery, v) { it.toDouble() }
     }
 
     /**
      * Convert string values to strings and add to the argument list
      * @param buildQuery The query builder for the query we are creating
-     * @param v The values we need to convert
+     * @param v The value we need to convert
      */
-    open fun convertString(buildQuery: BuildQuery, vararg v: String): Boolean {
-        return convert(buildQuery, *v) { escapeLikeWildCards(it) }
+    open fun convertString(buildQuery: BuildQuery, v: String): Boolean {
+        return convert(buildQuery, v) { escapeLikeWildCards(it) }
     }
 
     /**
@@ -217,25 +217,20 @@ open class PredicateDataDescription(
         /**
          * Convert some values and add them to the buildQuery argument list
          * @param buildQuery The query builder for the query we are creating
-         * @param values The values we need to convert
+         * @param value The value we need to convert
          * @param cvt A lambda to convert the string
          * @return True if the conversion of all values succeeded
          */
-        fun convert(buildQuery: BuildQuery, vararg values: String, cvt: (String) -> Any): Boolean {
-            // Get the list and keep track of how bit it was when we started
-            val argList = buildQuery.argList
-            val rollBack = argList.size
+        fun convert(buildQuery: BuildQuery, value: String, cvt: (String) -> Any): Boolean {
             // Conversion may throw an exception
+            val v: Any?
             try {
-                // Add the converted values to the argument list
-                for (v in values)
-                    argList.add(cvt(v))
+                v = cvt(value)
             } catch (e: Exception) {
-                // Got an exception, remove any arguments we added
-                while (argList.size > rollBack)
-                    argList.removeLast()
                 return false
             }
+            // Get the list and keep track of how bit it was when we started
+            buildQuery.argList.add(v)
             return true
         }
     }
@@ -266,24 +261,24 @@ private val oneOf = object: PredicateDataDescription(R.string.one_of, "LIKE", tr
  * Predicate for column contains one of a set of values
  */
 private val glob = object: PredicateDataDescription(R.string.has, "LIKE", true) {
-    override fun convertInt(buildQuery: BuildQuery, vararg v: String): Boolean {
+    override fun convertInt(buildQuery: BuildQuery, v: String): Boolean {
         // Always treat value as string with wildcards
-        return convert(buildQuery, *v) { "%${escapeLikeWildCards(it)}%" }
+        return convert(buildQuery, v) { "%${escapeLikeWildCards(it)}%" }
     }
 
-    override fun convertLong(buildQuery: BuildQuery, vararg v: String): Boolean {
+    override fun convertLong(buildQuery: BuildQuery, v: String): Boolean {
         // Always treat value as string with wildcards
-        return convert(buildQuery, *v) { "%${escapeLikeWildCards(it)}%" }
+        return convert(buildQuery, v) { "%${escapeLikeWildCards(it)}%" }
     }
 
-    override fun convertDouble(buildQuery: BuildQuery, vararg v: String): Boolean {
+    override fun convertDouble(buildQuery: BuildQuery, v: String): Boolean {
         // Always treat value as string with wildcards
-        return convert(buildQuery, *v) { "%${escapeLikeWildCards(it)}%" }
+        return convert(buildQuery, v) { "%${escapeLikeWildCards(it)}%" }
     }
 
-    override fun convertString(buildQuery: BuildQuery, vararg v: String): Boolean {
+    override fun convertString(buildQuery: BuildQuery, v: String): Boolean {
         // Always treat value as string with wildcards
-        return convert(buildQuery, *v) { "%${escapeLikeWildCards(it)}%" }
+        return convert(buildQuery, v) { "%${escapeLikeWildCards(it)}%" }
     }
 
     override fun convertDate(

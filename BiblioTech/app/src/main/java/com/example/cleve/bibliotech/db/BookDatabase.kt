@@ -1,10 +1,12 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Parcel
 import android.os.Parcelable
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
@@ -12,6 +14,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.MainActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.lang.Exception
@@ -1073,6 +1076,12 @@ abstract class AuthorDao {
     abstract suspend fun get(): List<Author>?
 
     /**
+     * Raw Query for author cursor
+     */
+    @RawQuery(observedEntities = arrayOf(AuthorEntity::class))
+    abstract fun getCursor(query: SupportSQLiteQuery): Cursor
+
+    /**
      * Add multiple authors for a book
      * @param bookId The id of the book
      * @param authors The list of authors
@@ -1640,6 +1649,8 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter The filter description used to filter and order the books
      */
     fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
+        if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
+            return getBooks()
         return getBooks(BookFilter.buildFilterQuery(filter, context))
     }
 

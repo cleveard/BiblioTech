@@ -1,9 +1,12 @@
 package com.example.cleve.bibliotech.db
 
 import android.content.Context
+import android.database.Cursor
 import android.graphics.Bitmap
 import androidx.paging.PagingSource
-import java.util.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Application interface to the book database
@@ -46,6 +49,11 @@ class BookRepository private constructor() {
 
     // The book database
     private val db = BookDatabase.db
+
+    /**
+     * Scope for doing queries
+     */
+    val queryScope: CoroutineScope = CoroutineScope(db.queryExecutor.asCoroutineDispatcher())
 
     /**
      * Get books from the data base
@@ -168,5 +176,9 @@ class BookRepository private constructor() {
         } catch (e: Exception) {}
         // Return null if there is an error
         return null
+    }
+
+    fun getCursor(query: String, args: Array<Any>? = null): Cursor {
+        return db.query(query, args)
     }
 }
