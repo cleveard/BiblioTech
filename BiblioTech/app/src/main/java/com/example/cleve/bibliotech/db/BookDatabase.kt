@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Parcel
 import android.os.Parcelable
-import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
@@ -14,7 +13,6 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.MainActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.lang.Exception
@@ -188,7 +186,7 @@ data class AuthorEntity(
     }
 
     /**
-     * Set the first and remainging author values from a string
+     * Set the first and remaining author values from a string
      * @param in_name The string
      */
     fun setAuthor(in_name: String) {
@@ -1078,7 +1076,7 @@ abstract class AuthorDao {
     /**
      * Raw Query for author cursor
      */
-    @RawQuery(observedEntities = arrayOf(AuthorEntity::class))
+    @RawQuery(observedEntities = [AuthorEntity::class])
     abstract fun getCursor(query: SupportSQLiteQuery): Cursor
 
     /**
@@ -1638,7 +1636,6 @@ abstract class BookDao(private val db: BookDatabase) {
 
     /**
      * Get books
-     * @param filter The filter description used to filter and order the books
      */
     fun getBooks(): PagingSource<Int, BookAndAuthors> {
         return getBooks(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
@@ -1884,9 +1881,23 @@ abstract class BookDatabase : RoomDatabase() {
          * @param context Application context
          */
         private fun create(context: Context): BookDatabase {
-            return Room.databaseBuilder(
+            val builder = Room.databaseBuilder(
                 context, BookDatabase::class.java, DATABASE_FILENAME
-            ).build()
+            )
+
+            // If we have a prepopulate database use it.
+            // This should only be used with a fresh debug install
+            val assets = context.resources.assets
+            try {
+                val asset = "database/$DATABASE_FILENAME"
+                val stream = assets.open(asset)
+                stream.close()
+                builder.createFromAsset(asset)
+            } catch (ex: IOException) {
+                // No prepopulate asset, create empty database
+            }
+
+            return builder.build()
         }
 
         /**
