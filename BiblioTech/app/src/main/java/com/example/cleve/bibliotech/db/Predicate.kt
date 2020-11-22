@@ -22,7 +22,7 @@ open class PredicateDataDescription(
     /**
      * Convert the escape character to the escape clause for SQLite
      */
-    private val escapeString = if (escape) " ESCAPE \"%\"" else ""
+    private val escapeString = if (escape) " ESCAPE '%'" else ""
 
     /**
      * Convert string values to ints and add to the argument list
@@ -293,7 +293,7 @@ private val glob = object: PredicateDataDescription(R.string.has, "LIKE", true) 
     override fun buildExpression(buildQuery: BuildQuery, c: Array<String>, logical: String) {
         val expr = StringBuilder()
         for (name in c) {
-            expr.append("${if (expr.isEmpty()) "" else " $logical "}( $name LIKE ? ESCAPE \"%\" )")
+            expr.append("${if (expr.isEmpty()) "" else " $logical "}( $name LIKE ? ESCAPE '%' )")
         }
         buildQuery.addFilterExpression(expr.toString())
     }

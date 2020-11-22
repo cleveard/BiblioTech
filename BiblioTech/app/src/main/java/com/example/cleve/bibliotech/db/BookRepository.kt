@@ -3,10 +3,10 @@ package com.example.cleve.bibliotech.db
 import android.content.Context
 import android.database.Cursor
 import android.graphics.Bitmap
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Application interface to the book database
@@ -178,7 +178,50 @@ class BookRepository private constructor() {
         return null
     }
 
+    /**
+     * Get a cursor from the database
+     * @param query The SQL query
+     * @param args The arguments for the query
+     * @return The cursor
+     * This method cannot be called from the main thread.
+     */
     fun getCursor(query: String, args: Array<Any>? = null): Cursor {
         return db.query(query, args)
+    }
+
+    /**
+     * Get the list of views from the database
+     */
+    suspend fun getViewNames(): LiveData<List<String>> {
+        return db.getViewDao().getViewNames()
+    }
+
+    /**
+     * Add or update a view to the database
+     * @param view The view to add
+     * @param onConflict A lambda function to respond to a conflict when adding. Return
+     *                   true to accept the conflict or false to abort the add
+     * @return The id of the view in the database, or 0L if the add was aborted
+     */
+    suspend fun addOrUpdateView(view: ViewEntity, onConflict: suspend (conflict: ViewEntity) -> Boolean): Long {
+        return db.getViewDao().addOrUpdate(view, onConflict)
+    }
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return The view or null if it wasn't found
+     */
+    suspend fun findViewByName(name: String): ViewEntity? {
+        return db.getViewDao().findByName(name)
+    }
+
+    /**
+     * Delete view
+     * @param name The name of the view
+     * @return The number of views deleted
+     */
+    suspend fun removeView(name: String): Int {
+        return db.getViewDao().delete(name)
     }
 }

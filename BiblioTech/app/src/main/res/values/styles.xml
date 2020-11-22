@@ -8,6 +8,8 @@
         <item name="colorAccent">@color/colorAccent</item>
         <item name="windowActionModeOverlay">true</item>
         <item name="actionModeStyle">@style/ActionModeStyle</item>
+
+        <item name="listPreferredItemHeightSmall">@dimen/navigation_menu_itemHeight</item>
     </style>
 
     <style name="AppTheme.NoActionBar">

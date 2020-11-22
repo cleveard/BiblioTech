@@ -10,6 +10,11 @@
         android:name="com.example.cleve.bibliotech.ui.books.BooksFragment"
         android:label="@string/menu_books"
         tools:layout="@layout/fragment_books">
+        <argument
+            android:name="filterName"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
     </fragment>
 
     <fragment
@@ -17,5 +22,11 @@
         android:name="com.example.cleve.bibliotech.ui.scan.ScanFragment"
         android:label="@string/menu_scan"
         tools:layout="@layout/fragment_scan" />
+    <action
+        android:id="@+id/filter_books"
+        app:destination="@id/nav_books" />
+    <action
+        android:id="@+id/scan_codes"
+        app:destination="@id/nav_scan" />
 
 </navigation>

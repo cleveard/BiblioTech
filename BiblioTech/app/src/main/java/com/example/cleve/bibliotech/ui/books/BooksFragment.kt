@@ -1,30 +1,42 @@
 package com.example.cleve.bibliotech.ui.books
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.text.SpannableStringBuilder
 import android.util.SparseArray
 import android.view.*
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.TextView
+import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.GravityCompat
 import androidx.core.view.children
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cleve.bibliotech.MainActivity
+import com.example.cleve.bibliotech.ManageNavigation
+import com.example.cleve.bibliotech.MobileNavigationDirections
 import com.example.cleve.bibliotech.R
+import com.example.cleve.bibliotech.db.BookFilter
+import com.example.cleve.bibliotech.db.ViewEntity
 import com.example.cleve.bibliotech.ui.filter.FilterTable
 import com.example.cleve.bibliotech.ui.filter.OrderTable
 import com.example.cleve.bibliotech.ui.modes.DeleteModalAction
 import com.example.cleve.bibliotech.ui.modes.TagModalAction
 import com.example.cleve.bibliotech.ui.tags.TagViewModel
-import com.google.android.material.button.MaterialButton
 import kotlinx.android.synthetic.main.action_drawer.view.*
+import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /**
  * Fragment to display the book list
@@ -60,6 +72,8 @@ class BooksFragment : Fragment() {
      */
     private lateinit var openDrawer: Drawable
 
+    private val args: BooksFragmentArgs by navArgs()
+
     /**
      * UI handler for the filter order elements in the edit and filter drawer
      */
@@ -69,9 +83,9 @@ class BooksFragment : Fragment() {
      * UI handler for the filter filter elements in the edit and filter drawer
      */
     private val filterTable = FilterTable(this).also {
-        it.actionListener = TextView.OnEditorActionListener { _, actionid, _ ->
-            if (actionid == EditorInfo.IME_ACTION_SEARCH) {
-                applyFilter()
+        it.actionListener = TextView.OnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                saveFilter()
                 return@OnEditorActionListener true
             }
             false
@@ -102,6 +116,23 @@ class BooksFragment : Fragment() {
     }
 
     /**
+     * Observer for BooksViewModel filterView changes
+     */
+    private val filterViewObserver = Observer<ViewEntity> {filterView ->
+        activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
+            // The view changed, set the title and subtitle
+            it.title = if (filterView.name.isEmpty())
+                context!!.resources.getString(R.string.menu_books)
+            else
+                filterView.name
+            it.subtitle = filterView.desc
+            // Put the filter into the UI
+            orderTable.setOrder(filterView.filter?.orderList)
+            filterTable.setFilter(filterView.filter?.filterList)
+        }
+    }
+
+    /**
      * Set onClickListener for clickable views contained in view
      * @param view The parent of the views to be set
      */
@@ -128,13 +159,13 @@ class BooksFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Get the books and tags view models
-        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
-        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
-
-        // Listen for selection changes to update the UI
-        booksViewModel.selection.hasSelection.observe(this, selectionObserver)
-        tagViewModel.selection.hasSelection.observe(this, selectionObserver)
-
+        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
+            it.selection.hasSelection.observe(this, selectionObserver)
+            it.filterView.observe(this, filterViewObserver)
+        }
+        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java).also {
+            it.selection.hasSelection.observe(this, selectionObserver)
+        }
 
         // Get the edit and filter drawer menu icons
         context?.let {context ->
@@ -176,8 +207,8 @@ class BooksFragment : Fragment() {
         filterTable.onCreateView(inflater, root.findViewById(R.id.filter_table))
 
         // Set the initial filter.
-        orderTable.setOrder(booksViewModel.filter?.orderList)
-        filterTable.setFilter(booksViewModel.filter?.filterList)
+        orderTable.setOrder(booksViewModel.filterView.value?.filter?.orderList)
+        filterTable.setFilter(booksViewModel.filterView.value?.filter?.filterList)
 
         // Create the layout manager for the book list. When the layout
         // changes, update the header
@@ -214,21 +245,80 @@ class BooksFragment : Fragment() {
 
         // Set onClickListeners for buttons in the edit and filter drawer
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
-        // Set onClickListener for the Apply Filter button in the edit and filter drawer
-        root.findViewById<MaterialButton>(R.id.action_apply_filter).setOnClickListener {
-            applyFilter()
-        }
 
         // Set the initial state of the menus and buttons
         updateMenuAndButtons()
         return root
     }
 
-    private fun applyFilter() {
-        // close the drawer
-        actionDrawer.closeDrawer(GravityCompat.END)
-        // apply the flter
-        booksViewModel.applyFilter(orderTable.order.value, filterTable.filter.value)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        // Setup the filter in the view model
+        booksViewModel.applyView(args.filterName)
+    }
+
+    /**
+     * Save the filter as set in the current UI
+     */
+    private fun saveFilter() {
+        booksViewModel.viewModelScope.launch {
+            // close the drawer
+            actionDrawer.closeDrawer(GravityCompat.END)
+            // apply the filter
+            booksViewModel.saveFilter(orderTable.order.value, filterTable.filter.value)
+        }
+    }
+
+    /**
+     * Add a new filter
+     */
+    private fun newFilter() {
+        booksViewModel.viewModelScope.launch {
+            // Ask for name and description and save it
+            addNewFilterView(booksViewModel.filterView.value)?.let {
+                // Navigate to the new filter
+                (activity as? ManageNavigation)?.navigate(MobileNavigationDirections.filterBooks(it.name))
+            }
+        }
+    }
+
+    /**
+     * Remove the current filter
+     */
+    private fun removeFilter() {
+        // Can't delete the default view
+        if (booksViewModel.filterView.value?.name?: "" == "")
+            return
+
+        // Switch the coroutine back to the main thread so we
+        // can safely present the dialog
+        booksViewModel.viewModelScope.launch {
+            val yes = suspendCoroutine<Boolean> { cont ->
+                // This keeps track of the users reply, Yes=true, No=false
+                var accept = false
+                // Present the dialog
+                AlertDialog.Builder(context!!)
+                    .setTitle(R.string.remove_view_title)
+                    .setMessage(R.string.remove_view_message)
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.yes) { _, _ ->
+                        // Pressed Yes, so set accept to true
+                        accept = true
+                    }
+                    .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
+                    .setOnDismissListener {
+                        // When the dialog is dismissed return the
+                        // user's reply to the coroutine
+                        cont.resume(accept)
+                    }
+                    .show()
+            }
+
+            // Remove it if the use OKs
+            if (yes)
+                booksViewModel.removeFilter()
+        }
+
     }
 
     /**
@@ -280,52 +370,57 @@ class BooksFragment : Fragment() {
      * @param id The id of the menu item or button
      */
     private fun onActionSelected(id: Int): Boolean {
-        return when (id) {
+        when (id) {
             R.id.action_drawer -> {
                 // Edit and filter draw menu item. Toggle drawer open or closed
                 if (actionDrawer.isDrawerOpen(GravityCompat.END))
                     actionDrawer.closeDrawer(GravityCompat.END)
                 else
                     actionDrawer.openDrawer(GravityCompat.END)
-                return true
             }
             R.id.action_delete -> {
                 // Delete menu item or button
                 DeleteModalAction.doDelete(this)
-                return true
             }
             R.id.action_add_tags -> {
                 // Add tags to books menu item or button
                 TagModalAction.doAddTags(this)
-                return true
             }
             R.id.action_remove_tags -> {
                 // Remove tags from books menu item or button
                 TagModalAction.doRemoveTags(this)
-                return true
             }
             R.id.action_replace_tags -> {
                 // Replace tags for books menu item or button
                 TagModalAction.doReplaceTags(this)
-                return true
             }
             R.id.action_select_none -> {
                 // Select no books menu item
                 booksViewModel.selection.selectAll(false)
-                return true
             }
             R.id.action_select_all -> {
                 // Select all books menu item
                 booksViewModel.selection.selectAll(true)
-                return true
             }
             R.id.action_select_invert -> {
                 // Invert book selection menu item
                 booksViewModel.selection.invert()
-                return true
             }
-            else -> false
+            R.id.action_new_filter -> {
+                newFilter()
+            }
+            R.id.action_save_filter -> {
+                saveFilter()
+            }
+            R.id.action_remove_filter -> {
+                removeFilter()
+            }
+            R.id.action_apply_filter -> {
+                saveFilter()
+            }
+            else -> return false
         }
+        return true
     }
 
     /**
@@ -352,12 +447,116 @@ class BooksFragment : Fragment() {
         // Enable replace tags if any books are selected
         actionButtons[R.id.action_replace_tags]?.isEnabled = booksSelected
 
+        // Enable delete if this is not the global list
+        actionButtons[R.id.action_remove_filter].isEnabled = args.filterName?.isNotEmpty() ?: false
+
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?
         drawerMenuItem?.let {
             val checked = actionDrawer.isDrawerOpen(GravityCompat.END)
             it.isChecked = checked
             it.icon = if (checked) closeDrawer else openDrawer
+        }
+    }
+
+    /**
+     * Add a new filter view or update an existing one
+     * @param currentView The current filter view
+     */
+    private suspend fun addNewFilterView(currentView: ViewEntity?): ViewEntity? {
+        // Get the filter from the UI
+        val filterList = filterTable.filter.value
+        val orderList = orderTable.order.value
+        // Create an entity to add to the database. Set the filter to the filter from the UI
+        val entity = currentView?.copy(
+            filter = if (filterList.isNullOrEmpty() && orderList.isNullOrEmpty())
+                null
+            else
+                BookFilter(orderTable.order.value?: emptyArray(), filterTable.filter.value?: emptyArray()))?: ViewEntity(0, "", "")
+
+        // Get the content view for the dialog
+        val content = parentFragment!!.layoutInflater.inflate(R.layout.new_filter, null)
+        val name = content.findViewById<EditText>(R.id.edit_view_name).also { it.text = SpannableStringBuilder(entity.name) }
+        val desc = content.findViewById<EditText>(R.id.edit_view_desc).also { it.text = SpannableStringBuilder(entity.desc) }
+
+        // Create an alert dialog with the content view
+        val builder = AlertDialog.Builder(activity)
+
+        // Present the dialog and return the new view entity, or null if it wasn't added
+        return suspendCoroutine { cont ->
+            // Setup the dialog
+            var added: ViewEntity? = null
+            val alert = builder.setTitle(R.string.new_filter_title)
+                .setTitle(R.string.add_view_title)
+                .setMessage(R.string.add_view_message)
+                // Specify the list array, the items to be selected by default (null for none),
+                // and the listener through which to receive callbacks when items are selected
+                .setView(content)
+                // Set the action buttons
+                .setPositiveButton(R.string.ok, null)
+                .setNegativeButton(R.string.cancel, null)
+                .setOnDismissListener {
+                    cont.resume(added)
+                }
+                .create()
+
+            // When the dialog is show, we want to setup some things
+            alert.setOnShowListener {
+                val ok = alert.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                // Make sure we start with the name selected
+                context?.getSystemService(InputMethodManager::class.java)?.also {imm ->
+                    name.requestFocus()
+                    imm.showSoftInput(name, InputMethodManager.SHOW_IMPLICIT)
+                }
+
+                // Listen for the OK click. When OK is clicked we check to see if the
+                // there is a conflict for the tag name and ask the user if it is OK
+                ok.setOnClickListener {
+                    entity.name = name.text.toString().trim { it <= ' ' }
+                    entity.desc = desc.text.toString().trim { it <= ' ' }
+
+                    // Do this in a coroutine, to use the repo coroutine methods
+                    booksViewModel.viewModelScope.launch {
+                        // Add or update the tag
+                        val id = booksViewModel.repo.addOrUpdateView(entity) {
+                            // We got a conflict, ask the use if that is OK
+                            // Here we suspend the coroutine, until the user replies
+                            // The return value of suspendCoroutine is the return
+                            // value of the this lambda
+                            suspendCoroutine { cont ->
+                                // Switch the coroutine back to the main thread so we
+                                // can safely present the dialog
+                                booksViewModel.viewModelScope.launch {
+                                    // This keeps track of the users reply, Yes=true, No=false
+                                    var accept = false
+                                    // Present the dialog
+                                    AlertDialog.Builder(context!!)
+                                        .setTitle(R.string.view_conflict_title)
+                                        .setMessage(R.string.view_conflict_message)
+                                        .setCancelable(false)
+                                        .setPositiveButton(R.string.yes) { _, _ ->
+                                            // Pressed Yes, so set accept to true
+                                            accept = true
+                                        }
+                                        .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
+                                        .setOnDismissListener {
+                                            // When the dialog is dismissed return the
+                                            // user's reply to the coroutine
+                                            cont.resume(accept)
+                                        }
+                                        .show()
+                                }
+                            }
+                        }
+
+                        added = entity
+                        if (id != 0L)
+                            alert.dismiss()
+                    }
+                }
+            }
+
+            alert.show()
         }
     }
 }

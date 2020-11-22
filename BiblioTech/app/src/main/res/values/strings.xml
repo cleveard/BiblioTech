@@ -133,4 +133,12 @@
     <string name="lt">&lt;</string>
     <string name="le">&lt;=</string>
     <string name="month_year_pattern">M/y</string>
+    <string name="view_name">View Name:</string>
+    <string name="new_filter_title">New Filtered View</string>
+    <string name="view_conflict_title">Duplicate Filter</string>
+    <string name="view_conflict_message">The name of the filter you are adding already exists.\n\nReplace the duplicate filter?</string>
+    <string name="add_view_title">Add New Filter</string>
+    <string name="add_view_message">Enter the name and description for the new filter</string>
+    <string name="remove_view_title">Remove Filter</string>
+    <string name="remove_view_message">Remove the current filter?</string>
 </resources>

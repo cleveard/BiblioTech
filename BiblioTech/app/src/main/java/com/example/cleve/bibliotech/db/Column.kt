@@ -3,9 +3,7 @@ package com.example.cleve.bibliotech.db
 import android.content.Context
 import android.database.Cursor
 import com.example.cleve.bibliotech.R
-import java.lang.UnsupportedOperationException
 import java.text.DateFormat
-import java.text.ParseException
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.floor

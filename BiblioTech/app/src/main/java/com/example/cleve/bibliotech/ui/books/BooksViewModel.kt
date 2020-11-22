@@ -2,11 +2,13 @@ package com.example.cleve.bibliotech.ui.books
 
 import android.app.Application
 import android.content.Context
-import android.content.SharedPreferences
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
 import android.util.SparseArray
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -47,35 +49,16 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private var flowJob: Job? = null
 
     /**
-     * Preferences listener
+     * Current filter view for the fragment
      */
-    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener {pref, key ->
-        when (key) {
-            kFilter -> {
-                this._filter = BookFilter.decodeFromString(pref.getString(kFilter, null))
-                buildFlow()
-            }
-        }
+    private val viewObserver = Observer<ViewEntity> {
+        buildFlow()
     }
-
-    /**
-     * Preferences object for the application
-     */
-    private val preferences: SharedPreferences = getApplication<Application>().getSharedPreferences("BookPreferences", 0).also {
-        it.registerOnSharedPreferenceChangeListener(preferenceListener)
+    private val _filterView: MutableLiveData<ViewEntity> = MutableLiveData(ViewEntity(0, "", "")).also {
+        it.observeForever(viewObserver)
     }
-
-    /**
-     * Preference editor for the view model
-     */
-    private val prefEdit: SharedPreferences.Editor = preferences.edit()
-
-    /**
-     * Filter for the book list
-     */
-    private var _filter: BookFilter? = BookFilter.decodeFromString(preferences.getString(kFilter, null))
-    val filter: BookFilter?
-        get() = _filter
+    val filterView: LiveData<ViewEntity>
+        get() { return _filterView }
 
     /**
      * The styles to used for the names and items in headers and separators
@@ -120,7 +103,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @inheritDoc
      */
     override fun onCleared() {
-        preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
+        filterView.removeObserver(viewObserver)
         super.onCleared()
     }
 
@@ -136,16 +119,48 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param orderFields The description of the filter sort order
      * @param filterFields The description of the filter
      */
-    fun applyFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?) {
+    suspend fun saveFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): Boolean {
         // Convert the description to a filter
-        val filter = if (orderFields == null && filterFields == null)
+        val view = filterView.value!!
+        view.filter = if (orderFields == null && filterFields == null)
             null
         else
             BookFilter(orderFields?: emptyArray(), filterFields?: emptyArray())
-        // Set on the preferences. The preference listener will setup the data stream
-        prefEdit.putString(kFilter, BookFilter.encodeToString(filter))
-        prefEdit.apply()
 
+        if (repo.addOrUpdateView(view) {
+                if (view.name.isEmpty())
+                    return@addOrUpdateView true
+                false
+            } == 0L
+        ) {
+            return false
+        }
+
+        _filterView.value = view
+        return true
+    }
+
+    /**
+     * Remove the current filterView
+     * @return True if the view was removed
+     */
+    suspend fun removeFilter(): Boolean {
+        val view = filterView.value!!
+        if (view.id != 0L && view.name != "" && repo.removeView(view.name) == 1) {
+            applyView("")
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Apply the filter description to the view model
+     * @param viewName The name of the view
+     */
+    fun applyView(viewName: String?) {
+        viewModelScope.launch {
+            _filterView.value = repo.findViewByName(viewName ?: "") ?: ViewEntity(0, "", "")
+        }
     }
 
     /**
@@ -164,7 +179,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         val pager = Pager(
             config
         ) {
-            filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
+            filterView.value?.filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
         }
         // Add headers and cache
         val flow = addHeaders(applySelectionTransform(pager.flow))
@@ -183,7 +198,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     fun buildHeader(): Spannable? {
         // No filter means no header
-        val filter = this._filter ?: return null
+        val filter = filterView.value?.filter ?: return null
 
         // Get the first visible item in the list
         var pos = layoutManager.findFirstCompletelyVisibleItemPosition()
@@ -303,18 +318,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         return flow.map {data ->
             data.insertSeparators { before, after ->
                 // Insert separators for the filter
-                _filter?.let {
+                filterView.value?.filter?.let {
                     compareAndBuildHeader(it, before, after)
                 }
 
             }
         }
-    }
-
-    companion object {
-        /**
-         * The name of the filter preference
-         */
-        const val kFilter = "Filter"
     }
 }

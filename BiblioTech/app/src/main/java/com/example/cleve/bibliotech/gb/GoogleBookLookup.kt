@@ -122,7 +122,7 @@ internal class GoogleBookLookup private constructor() {
 
         /**
          * Look up a book by ISBN
-         * @param ISBN The isbn to lookup
+         * @param isbn The isbn to lookup
          * @return The LookupResult for the query, or null
          */
         @Throws(LookupException::class)
@@ -150,7 +150,7 @@ internal class GoogleBookLookup private constructor() {
 
         /**
          * Lookup books using a general query
-         * @param query The query
+         * @param search The query
          * @param itemCount The total number of items the query will return, if available
          * @param list The books in the first page of the query, if available
          * @return The PagingSource for the book in the query

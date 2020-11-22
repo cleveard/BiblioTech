@@ -5,10 +5,6 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import java.lang.StringBuilder
-import java.util.*
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 
 /**
  * The description of a filter to filter books
@@ -142,28 +138,6 @@ open class BookFilterCompanion {
                         "${if (filterSpec.isEmpty()) "" else " AND "} ( $filterFieldExpression )")
                     filterFieldExpression.clear()
                     argRollback = argList.size
-                }
-            }
-
-            /**
-             * Collect the select columns from an iterator of columns in fields
-             * @param list List of columns in array of fields
-             */
-            fun buildSelect(list: Iterator<Column>) {
-                // Add columns from fields
-                for (field in list) {
-                    field.desc.addSelection(this)
-                }
-            }
-
-            /**
-             * Collect joins from an iterator of columns in fields
-             * @param list List of columns in array of fields
-             */
-            fun buildJoin(list: Iterator<Column>) {
-                // Add any other fields next
-                for (field in list) {
-                    field.desc.addJoin(this)
                 }
             }
 

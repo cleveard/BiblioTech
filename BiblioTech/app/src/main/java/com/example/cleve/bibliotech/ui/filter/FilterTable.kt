@@ -2,7 +2,6 @@ package com.example.cleve.bibliotech.ui.filter
 
 import android.content.Context
 import android.database.Cursor
-import android.database.CursorWrapper
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.TextWatcher
@@ -20,7 +19,6 @@ import com.example.cleve.bibliotech.ui.books.BooksViewModel
 import kotlinx.coroutines.*
 import java.util.*
 import kotlin.collections.ArrayList
-import kotlin.math.sign
 
 /**
  * UI handler for filters
@@ -358,7 +356,8 @@ class FilterTable(private val fragment: Fragment) {
     private val valueFocusListener: View.OnFocusChangeListener =
         View.OnFocusChangeListener { v, hasFocus ->
             (v?.tag as? Int)?.let { index ->
-                rows[index].valueFocusChange(hasFocus)
+                if (index < rows.size)
+                    rows[index].valueFocusChange(hasFocus)
             }
         }
 

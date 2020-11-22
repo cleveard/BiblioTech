@@ -19,7 +19,7 @@
             app:layout_constraintBottom_toBottomOf="@id/tags_toolbar"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toLeftOf="@id/tags_toolbar"
-            app:layout_constraintTop_toTopOf="@id/tags_toolbar"></TextView>
+            app:layout_constraintTop_toTopOf="@id/tags_toolbar" />
 
         <androidx.appcompat.widget.ActionMenuView
             android:id="@+id/tags_toolbar"

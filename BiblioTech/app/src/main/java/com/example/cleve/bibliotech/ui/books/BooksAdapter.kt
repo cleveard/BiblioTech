@@ -212,7 +212,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     }
 
     /**
-     * Bind a thumnail to the view to display it
+     * Bind a thumbnail to the view to display it
      * @param bookId The book id
      * @param large True for the large thumbnail, false for the small one
      * @param holder The view holder for the item
@@ -221,14 +221,14 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     private fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
         // Start a coroutine
         viewModel.viewModelScope.launch {
-            // Get the thumnail
+            // Get the thumbnail
             BookRepository.repo.getThumbnail(
                 bookId,
                 large
             )?.also {
-                // Ok we got it, make sure the view holder is refering to the same book
+                // Ok we got it, make sure the view holder is referring to the same book
                 val pos = holder.layoutPosition
-                if (pos >= 0) {
+                if (pos in 0 until itemCount) {
                     getItem(pos)?.apply {
                         this as BookAndAuthors
                         // Set the thumbnail if the ids are the same
@@ -241,7 +241,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     }
 
     /**
-     * @inhderitDoc
+     * @inheritDoc
      */
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         // Get the item
@@ -274,7 +274,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         book.book.title.setField(holder.itemView, R.id.book_list_title)
         book.book.subTitle.setField(holder.itemView, R.id.book_list_subtitle)
         book.authors.setField(holder.itemView, R.id.book_list_authors, ", ") {
-            // Usually we use "firstname lastname", but if eather is missing, just use the other
+            // Usually we use "first name last name", but if either is missing, just use the other
             if (it.lastName != "") {
                 if (it.remainingName != "")
                     "${it.remainingName} ${it.lastName}"

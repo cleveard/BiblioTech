@@ -6,13 +6,17 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Parcel
 import android.os.Parcelable
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.example.cleve.bibliotech.MainActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.lang.Exception
@@ -99,10 +103,18 @@ const val TAGS_ID_COLUMN = "tags_id"                        // Incrementing id
 const val TAGS_NAME_COLUMN = "tags_name"                    // Tag name
 const val TAGS_DESC_COLUMN = "tags_desc"                    // Tag description
 
+// Book Tags table name and column names
 const val BOOK_TAGS_TABLE = "book_tags"                     // Book tags table name
 const val BOOK_TAGS_ID_COLUMN = "book_tags_id"              // Incrementing id
 const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"    // Book row incrementing id
 const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"      // Tag row incrementing id
+
+// Views Table name and column names
+const val VIEWS_TABLE = "views"                         // Views table name
+const val VIEWS_ID_COLUMN = "views_id"                  // Incrementing id
+const val VIEWS_NAME_COLUMN = "views_name"              // View name
+const val VIEWS_DESC_COLUMN = "views_desc"              // View description
+const val VIEWS_FILTER_COLUMN = "views_filter"          // View filter
 
 // Extensions for thumbnail files in the cache.
 const val kSmallThumb = ".small.png"
@@ -113,7 +125,7 @@ const val kDesc = "DESC"
 const val kAsc = "ASC"
 
 // Type convert to convert between dates in the data base, which are longs, and Date objects
-class Converters {
+class DateConverters {
     @TypeConverter
     fun fromTimestamp(value: Long?): Date? {
         return value?.let { Date(it) }
@@ -122,6 +134,27 @@ class Converters {
     @TypeConverter
     fun dateToTimestamp(date: Date?): Long? {
         return date?.time
+    }
+}
+
+// Type convert to convert between filters and strings
+class FilterConverters {
+    @TypeConverter
+    fun filterFromString(value: String?): BookFilter? {
+        return try {
+            BookFilter.decodeFromString(value)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    @TypeConverter
+    fun filterToString(value: BookFilter?): String? {
+        return try {
+            BookFilter.encodeToString(value)
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
@@ -143,7 +176,7 @@ interface Selectable {
 /**
  * Room Entity for the Books table
  */
-@TypeConverters(Converters::class)
+@TypeConverters(DateConverters::class)
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
@@ -323,27 +356,7 @@ data class TagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = TAGS_NAME_COLUMN,collate = ColumnInfo.NOCASE) var name: String,
     @ColumnInfo(name = TAGS_DESC_COLUMN,defaultValue = "") var desc: String
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as TagEntity
-
-        if (id != other.id) return false
-        if (name != other.name) return false
-        if (desc != other.desc) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = id.hashCode()
-        result = 31 * result + name.hashCode()
-        result = 31 * result + desc.hashCode()
-        return result
-    }
-}
+)
 
 /**
  * Selectable tag object
@@ -387,6 +400,22 @@ data class BookAndTagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = BOOK_TAGS_TAG_ID_COLUMN) var tagId: Long,
     @ColumnInfo(name = BOOK_TAGS_BOOK_ID_COLUMN) var bookId: Long
+)
+
+/**
+ * Room entity for the views table
+ */
+@TypeConverters(FilterConverters::class)
+@Entity(tableName = VIEWS_TABLE,
+    indices = [
+        Index(value = [VIEWS_ID_COLUMN],unique = true),
+        Index(value = [VIEWS_NAME_COLUMN],unique = true)
+    ])
+data class ViewEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = VIEWS_NAME_COLUMN,collate = ColumnInfo.NOCASE) var name: String,
+    @ColumnInfo(name = VIEWS_DESC_COLUMN,defaultValue = "") var desc: String,
+    @ColumnInfo(name = VIEWS_FILTER_COLUMN) var filter: BookFilter? = null
 )
 
 /**
@@ -1478,7 +1507,7 @@ abstract class BookDao(private val db: BookDatabase) {
     /**
      * Class to get unique columns in the book table
      */
-    @TypeConverters(Converters::class)
+    @TypeConverters(DateConverters::class)
     protected data class ConflictIds(
         @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
         @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
@@ -1828,6 +1857,105 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 }
 
+@Dao
+abstract class ViewDao(private val db: BookDatabase) {
+    /**
+     * Get list of views
+     */
+    @Query(value = "SELECT $VIEWS_NAME_COLUMN FROM $VIEWS_TABLE ORDER BY $VIEWS_NAME_COLUMN")
+    abstract fun doGetViewNames(): LiveData<List<String>>
+
+    /**
+     * Get list of views
+     */
+    suspend fun getViewNames(): LiveData<List<String>> {
+        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
+            doGetViewNames()
+        }
+    }
+
+    /**
+     * Add a view
+     * @param view the View to add or update
+     * @return The id of the view
+     */
+    @Insert
+    protected abstract suspend fun doAdd(view: ViewEntity): Long
+
+    /**
+     * Update a view
+     * @param view the View to add or update
+     * @return The id of the view
+     */
+    @Update
+    protected abstract suspend fun doUpdate(view: ViewEntity): Int
+
+    /**
+     * Delete a view by name
+     * @param viewName The name with % and _ escaped
+     * @return The number of views delete
+     */
+    @Transaction
+    @Query(value = "DELETE FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :viewName ESCAPE '%'")
+    protected abstract suspend fun doDelete(viewName: String): Int
+
+    /**
+     * Delete a view by name
+     * @param viewName The name of the view. % and _ are escaped before deleting
+     * @return The number of views delete
+     */
+    suspend fun delete(viewName: String): Int {
+        return doDelete(PredicateDataDescription.escapeLikeWildCards(viewName))
+    }
+
+    /**
+     * Add or update a view to the database
+     * @param view The view to add
+     * @param onConflict A lambda function to respond to a conflict when adding. Return
+     *                   true to accept the conflict or false to abort the add
+     * @return The id of the view in the database, or 0L if the add was aborted
+     */
+    suspend fun addOrUpdate(view: ViewEntity, onConflict: suspend (conflict: ViewEntity) -> Boolean): Long {
+        // Look for a conflicting view
+        val conflict = findByName(view.name)
+        if (conflict != null) {
+            // Found one. If the conflict id and view id are the same
+            // we treat this as a rename.
+            if (conflict.id != view.id) {
+                //  Ask the onConflict handler to resolve the conflict
+                if (!onConflict(conflict))
+                    return 0L       // onConflict says not to add or update
+                view.id = conflict.id
+            }
+            // Update the view
+            if (doUpdate(view) != 1)
+                return 0L
+        } else {
+            // Add the new view
+            view.id = 0L
+            view.id = doAdd(view)
+        }
+        return view.id
+    }
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return The view or null if it wasn't found
+     */
+    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '%'")
+    protected abstract suspend fun doFindByName(name: String): ViewEntity?
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return The view or null if it wasn't found
+     */
+    suspend fun findByName(name: String): ViewEntity? {
+        return doFindByName(PredicateDataDescription.escapeLikeWildCards(name))
+    }
+}
+
 /**
  * The books database
  */
@@ -1839,12 +1967,20 @@ abstract class BookDao(private val db: BookDatabase) {
         TagEntity::class,
         BookAndTagEntity::class,
         CategoryEntity::class,
-        BookAndCategoryEntity::class
+        BookAndCategoryEntity::class,
+        ViewEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
+    abstract fun getBookDao(): BookDao
+    abstract fun getTagDao(): TagDao
+    abstract fun getBookTagDao(): BookTagDao
+    abstract fun getAuthorDao(): AuthorDao
+    abstract fun getCategoryDao(): CategoryDao
+    abstract fun getViewDao(): ViewDao
+
     companion object {
         /**
          * The name of the books database
@@ -1897,6 +2033,7 @@ abstract class BookDatabase : RoomDatabase() {
                 // No prepopulate asset, create empty database
             }
 
+            builder.addMigrations(*migrations)
             return builder.build()
         }
 
@@ -1979,11 +2116,19 @@ abstract class BookDatabase : RoomDatabase() {
             else
                 return null     // No conditions selected anything
         }
-    }
 
-    abstract fun getBookDao(): BookDao
-    abstract fun getTagDao(): TagDao
-    abstract fun getBookTagDao(): BookTagDao
-    abstract fun getAuthorDao(): AuthorDao
-    abstract fun getCategoryDao(): CategoryDao
+        /**
+         * Migrations for the book data base
+         */
+        private val migrations = arrayOf<Migration>(
+            object: Migration(1, 2) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    // This SQL is take from the BookDatabase_Impl file
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$VIEWS_NAME_COLUMN` TEXT NOT NULL COLLATE NOCASE, `$VIEWS_DESC_COLUMN` TEXT NOT NULL DEFAULT '', `$VIEWS_FILTER_COLUMN` TEXT)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_ID_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN`)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_NAME_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
+                }
+            }
+        )
+    }
 }
