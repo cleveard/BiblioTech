@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/nav_books"
-        android:name="com.example.cleve.bibliotech.ui.books.BooksFragment"
+        android:name="com.github.cleveard.BiblioTech.ui.books.BooksFragment"
         android:label="@string/menu_books"
         tools:layout="@layout/fragment_books">
         <argument
@@ -19,7 +19,7 @@
 
     <fragment
         android:id="@+id/nav_scan"
-        android:name="com.example.cleve.bibliotech.ui.scan.ScanFragment"
+        android:name="com.github.cleveard.BiblioTech.ui.scan.ScanFragment"
         android:label="@string/menu_scan"
         tools:layout="@layout/fragment_scan" />
     <action

@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.example.cleve.bibliotech",
+  "applicationId": "com.github.cleveard.BiblioTech",
   "variantName": "processReleaseResources",
   "elements": [
     {

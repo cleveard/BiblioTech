@@ -33,10 +33,10 @@
 #}
 
 # Change here com.yourcompany.yourpackage
--keep,includedescriptorclasses class com.examples.cleve.BiblioTech.**$$serializer { *; } # <-- change package name to your app's
--keepclassmembers class com.examples.cleve.BiblioTech.** { # <-- change package name to your app's
+-keep,includedescriptorclasses class com.github.cleveard.BiblioTech.**$$serializer { *; } # <-- change package name to your app's
+-keepclassmembers class com.github.cleveard.BiblioTech.** { # <-- change package name to your app's
     *** Companion;
 }
--keepclasseswithmembers class com.examples.cleve.BiblioTech.** { # <-- change package name to your app's
+-keepclasseswithmembers class com.github.cleveard.BiblioTech.** { # <-- change package name to your app's
     kotlinx.serialization.KSerializer serializer(...);
 }
