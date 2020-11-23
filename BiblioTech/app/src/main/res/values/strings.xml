@@ -1,7 +1,5 @@
 <resources>
     <string name="app_name">BiblioTech</string>
-    <string name="navigation_drawer_open">Open navigation drawer</string>
-    <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="nav_header_title">BiblioTech</string>
     <string name="nav_header_subtitle">Books for Everyone</string>
     <string name="nav_header_desc">Navigation header</string>
@@ -9,17 +7,11 @@
 
     <string name="menu_books">Books</string>
     <string name="menu_scan">Scan</string>
-    <string name="menu_slideshow">Slideshow</string>
-    <string name="menu_tools">Tools</string>
-    <string name="menu_share">Share</string>
-    <string name="menu_send">Send</string>
 
     <string name="book_thumb">Book Thumbnail</string>
-    <string name="desc">description</string>
     <string name="id">ID:</string>
     <string name="isbn">ISBN:</string>
 
-    <string name="capture_accept_alt">Capture</string>
     <string name="title_desc">Book Title</string>
     <string name="subtitle_desc">Book Subtitle</string>
     <string name="authors_desc">Book Authors</string>
@@ -133,7 +125,6 @@
     <string name="lt">&lt;</string>
     <string name="le">&lt;=</string>
     <string name="month_year_pattern">M/y</string>
-    <string name="view_name">View Name:</string>
     <string name="new_filter_title">New Filtered View</string>
     <string name="view_conflict_title">Duplicate Filter</string>
     <string name="view_conflict_message">The name of the filter you are adding already exists.\n\nReplace the duplicate filter?</string>
