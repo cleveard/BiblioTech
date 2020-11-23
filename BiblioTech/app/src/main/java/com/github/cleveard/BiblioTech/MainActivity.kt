@@ -186,6 +186,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                     // Need isCheckable for the navigation selection listener to work
                     it.isCheckable = true
                     it.isChecked = false
+                    it.icon = applicationContext.resources.getDrawable(R.drawable.ic_baseline_filter_alt_24, null)
                 }
             }
         }
