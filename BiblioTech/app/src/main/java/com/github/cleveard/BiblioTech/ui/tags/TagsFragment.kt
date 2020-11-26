@@ -5,7 +5,6 @@ import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.ActionMenuView
 import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
@@ -20,11 +19,10 @@ import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.TagEntity
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
+import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 
 /**
@@ -259,74 +257,48 @@ class TagsFragment : Fragment() {
             val desc = content.findViewById<EditText>(R.id.edit_tag_desc)
             desc.setText(tag.desc, TextView.BufferType.EDITABLE)
 
-            // Build the tag edit dialog. Don't listen for OK or Cancel.
-            // OK is handled in an on onClick listener, so we can cancel the OK
-            // Cancel doesn't need to do anything
-            val alert = AlertDialog.Builder(context!!)
-                .setTitle(if (tagId == 0L) R.string.add_title else R.string.edit_title)
-                .setMessage(if (tagId == 0L) R.string.add_message else R.string.edit_message)
-                .setCancelable(true)
-                .setView(content)
-                .setPositiveButton(R.string.ok, null)
-                .setNegativeButton(R.string.cancel, null)
-                .create()
+            coroutineAlert(context!!, Unit) { alert ->
+                // Build the tag edit dialog. Don't listen for OK or Cancel.
+                // OK is handled in an on onClick listener, so we can cancel the OK
+                // Cancel doesn't need to do anything
+                alert.builder.setTitle(if (tagId == 0L) R.string.add_title else R.string.edit_title)
+                    .setMessage(if (tagId == 0L) R.string.add_message else R.string.edit_message)
+                    .setCancelable(true)
+                    .setView(content)
+                    .setPositiveButton(R.string.ok, null)
+                    .setNegativeButton(R.string.cancel, null)
+            }.setPosListener {_, _, _ ->
+                tag.name = name.text.toString().trim { it <= ' ' }
+                tag.desc = desc.text.toString().trim { it <= ' ' }
 
-            // When the dialog is show, we want to setup some things
-            alert.setOnShowListener {
-                val ok = alert.getButton(AlertDialog.BUTTON_POSITIVE)
+                // Add or update the tag
+                val id = tagViewModel.repo.addOrUpdateTag(tag) {
+                    // We got a conflict, ask the use if that is OK
+                    // Here we suspend the coroutine, until the user replies
+                    // The return value of CoroutineAlert.show() is the return
+                    // value of the this lambda
+                    coroutineAlert(context!!, false) {alert ->
+                        // Present the dialog
+                        alert.builder.setTitle(R.string.tag_conflict_title)
+                            .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)
+                            .setCancelable(false)
+                            .setPositiveButton(R.string.yes, null)
+                            .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
+                    }.setPosListener {alert, _, _ ->
+                        alert.result = true
+                        true
+                    }.show()
+                }
+
+                // Dismiss if the id isn't 0
+                id != 0L
+            }.show {
                 // Make sure we start with the name selected
                 context?.getSystemService(InputMethodManager::class.java)?.also {imm ->
                     name.requestFocus()
                     imm.showSoftInput(name, InputMethodManager.SHOW_IMPLICIT)
                 }
-
-                // Listen for the OK click. When OK is clicked we check to see if the
-                // there is a conflict for the tag name and ask the user if it is OK
-                ok.setOnClickListener {
-                    tag.name = name.text.toString().trim { it <= ' ' }
-                    tag.desc = desc.text.toString().trim { it <= ' ' }
-
-                    // Do this in a coroutine, to use the repo coroutine methods
-                    tagViewModel.viewModelScope.launch {
-                        // Add or update the tag
-                        val id = tagViewModel.repo.addOrUpdateTag(tag) {
-                            // We got a conflict, ask the use if that is OK
-                            // Here we suspend the coroutine, until the user replies
-                            // The return value of suspendCoroutine is the return
-                            // value of the this lambda
-                            suspendCoroutine { cont ->
-                                // Switch the coroutine back to the main thread so we
-                                // can safely present the dialog
-                                tagViewModel.viewModelScope.launch {
-                                    // This keeps track of the users reply, Yes=true, No=false
-                                    var accept = false
-                                    // Present the dialog
-                                    AlertDialog.Builder(context!!)
-                                        .setTitle(R.string.tag_conflict_title)
-                                        .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)
-                                        .setCancelable(false)
-                                        .setPositiveButton(R.string.yes) { _, _ ->
-                                            // Pressed Yes, so set accept to true
-                                            accept = true
-                                        }
-                                        .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
-                                        .setOnDismissListener {
-                                            // When the dialog is dismissed return the
-                                            // user's reply to the coroutine
-                                            cont.resume(accept)
-                                        }
-                                        .show()
-                                }
-                            }
-                        }
-
-                        if (id != 0L)
-                            alert.dismiss()
-                    }
-                }
             }
-
-            alert.show()
         }
     }
 

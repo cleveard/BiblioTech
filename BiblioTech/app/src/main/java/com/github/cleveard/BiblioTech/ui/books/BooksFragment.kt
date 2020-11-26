@@ -1,7 +1,6 @@
 package com.github.cleveard.BiblioTech.ui.books
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.SpannableStringBuilder
@@ -33,10 +32,10 @@ import com.github.cleveard.BiblioTech.ui.filter.OrderTable
 import com.github.cleveard.BiblioTech.ui.modes.DeleteModalAction
 import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
+import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.android.synthetic.main.action_drawer.view.*
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 /**
  * Fragment to display the book list
@@ -293,26 +292,20 @@ class BooksFragment : Fragment() {
         // Switch the coroutine back to the main thread so we
         // can safely present the dialog
         booksViewModel.viewModelScope.launch {
-            val yes = suspendCoroutine<Boolean> { cont ->
-                // This keeps track of the users reply, Yes=true, No=false
-                var accept = false
+
+            val yes = coroutineAlert(context!!, false) { alert ->
                 // Present the dialog
-                AlertDialog.Builder(context!!)
-                    .setTitle(R.string.remove_view_title)
+                alert.builder.setTitle(R.string.remove_view_title)
                     .setMessage(R.string.remove_view_message)
                     .setCancelable(false)
-                    .setPositiveButton(R.string.yes) { _, _ ->
-                        // Pressed Yes, so set accept to true
-                        accept = true
-                    }
+                    .setPositiveButton(R.string.yes, null)
                     .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
-                    .setOnDismissListener {
-                        // When the dialog is dismissed return the
-                        // user's reply to the coroutine
-                        cont.resume(accept)
-                    }
-                    .show()
             }
+            .setPosListener {alert, _, _ ->
+                alert.result = true
+                true
+            }
+            .show()
 
             // Remove it if the use OKs
             if (yes)
@@ -464,99 +457,77 @@ class BooksFragment : Fragment() {
      * @param currentView The current filter view
      */
     private suspend fun addNewFilterView(currentView: ViewEntity?): ViewEntity? {
-        // Get the filter from the UI
-        val filterList = filterTable.filter.value
-        val orderList = orderTable.order.value
-        // Create an entity to add to the database. Set the filter to the filter from the UI
-        val entity = currentView?.copy(
-            filter = if (filterList.isNullOrEmpty() && orderList.isNullOrEmpty())
-                null
-            else
-                BookFilter(orderTable.order.value?: emptyArray(), filterTable.filter.value?: emptyArray()))?: ViewEntity(0, "", "")
-
-        // Get the content view for the dialog
-        val content = parentFragment!!.layoutInflater.inflate(R.layout.new_filter, null)
-        val name = content.findViewById<EditText>(R.id.edit_view_name).also { it.text = SpannableStringBuilder(entity.name) }
-        val desc = content.findViewById<EditText>(R.id.edit_view_desc).also { it.text = SpannableStringBuilder(entity.desc) }
-
-        // Create an alert dialog with the content view
-        val builder = AlertDialog.Builder(activity)
-
-        // Present the dialog and return the new view entity, or null if it wasn't added
-        return suspendCoroutine { cont ->
-            // Setup the dialog
-            var added: ViewEntity? = null
-            val alert = builder.setTitle(R.string.new_filter_title)
-                .setTitle(R.string.add_view_title)
-                .setMessage(R.string.add_view_message)
-                // Specify the list array, the items to be selected by default (null for none),
-                // and the listener through which to receive callbacks when items are selected
-                .setView(content)
-                // Set the action buttons
-                .setPositiveButton(R.string.ok, null)
-                .setNegativeButton(R.string.cancel, null)
-                .setOnDismissListener {
-                    cont.resume(added)
+        return coroutineScope {
+            // Get the filter from the UI
+            val filterList = filterTable.filter.value
+            val orderList = orderTable.order.value
+            // Create an entity to add to the database. Set the filter to the filter from the UI
+            val entity = currentView?.copy(
+                filter = if (filterList.isNullOrEmpty() && orderList.isNullOrEmpty())
+                    null
+                else {
+                    BookFilter(
+                        orderList ?: emptyArray(),
+                        filterList ?: emptyArray()
+                    )
                 }
-                .create()
+            ) ?: ViewEntity(0, "", "")
 
-            // When the dialog is show, we want to setup some things
-            alert.setOnShowListener {
-                val ok = alert.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+            // Get the content view for the dialog
+            val content = parentFragment!!.layoutInflater.inflate(R.layout.new_filter, null)
+            val name = content.findViewById<EditText>(R.id.edit_view_name)
+                .also { it.text = SpannableStringBuilder(entity.name) }
+            val desc = content.findViewById<EditText>(R.id.edit_view_desc)
+                .also { it.text = SpannableStringBuilder(entity.desc) }
+
+            // Create an alert dialog with the content view
+            return@coroutineScope coroutineAlert<ViewEntity?>(context!!, null) { alert ->
+                alert.builder.setTitle(R.string.new_filter_title)
+                    .setTitle(R.string.add_view_title)
+                    .setMessage(R.string.add_view_message)
+                    // Specify the list array, the items to be selected by default (null for none),
+                    // and the listener through which to receive callbacks when items are selected
+                    .setView(content)
+                    // Set the action buttons
+                    .setPositiveButton(R.string.ok, null)
+                    .setNegativeButton(R.string.cancel, null)
+            }.setPosListener {alert,  _, _ ->
+                // Present the dialog and return the new view entity, or null if it wasn't added
+                entity.name = name.text.toString().trim { it <= ' ' }
+                entity.desc = desc.text.toString().trim { it <= ' ' }
+
+                // Add or update the tag
+                entity.id = booksViewModel.repo.addOrUpdateView(entity) {
+                    // We got a conflict, ask the user if that is OK
+                    // Return true for OK and false for not ok
+                    coroutineAlert(context!!, false) { alert ->
+                        alert.builder.setTitle(R.string.view_conflict_title)
+                            .setMessage(R.string.view_conflict_message)
+                            .setCancelable(false)
+                            .setPositiveButton(R.string.yes, null)
+                            .setNegativeButton(
+                                R.string.no,
+                                null
+                            )   // Don't nee to do anything for No
+                    }.setPosListener {alert,  _, _ ->
+                        // OK sets the result to true
+                        alert.result = true
+                        // Dismiss the dialog
+                        true
+                    }.show()
+                }
+
+                // Entity id is non-zero if we added, or updated it
+                if (entity.id != 0L)
+                    alert.result = entity     // Done return the result
+                entity.id != 0L         // Dismiss the dialog if we are done
+            }.show {
                 // Make sure we start with the name selected
-                context?.getSystemService(InputMethodManager::class.java)?.also {imm ->
+                context?.getSystemService(InputMethodManager::class.java)?.also { imm ->
                     name.requestFocus()
                     imm.showSoftInput(name, InputMethodManager.SHOW_IMPLICIT)
                 }
-
-                // Listen for the OK click. When OK is clicked we check to see if the
-                // there is a conflict for the tag name and ask the user if it is OK
-                ok.setOnClickListener {
-                    entity.name = name.text.toString().trim { it <= ' ' }
-                    entity.desc = desc.text.toString().trim { it <= ' ' }
-
-                    // Do this in a coroutine, to use the repo coroutine methods
-                    booksViewModel.viewModelScope.launch {
-                        // Add or update the tag
-                        val id = booksViewModel.repo.addOrUpdateView(entity) {
-                            // We got a conflict, ask the use if that is OK
-                            // Here we suspend the coroutine, until the user replies
-                            // The return value of suspendCoroutine is the return
-                            // value of the this lambda
-                            suspendCoroutine { cont ->
-                                // Switch the coroutine back to the main thread so we
-                                // can safely present the dialog
-                                booksViewModel.viewModelScope.launch {
-                                    // This keeps track of the users reply, Yes=true, No=false
-                                    var accept = false
-                                    // Present the dialog
-                                    AlertDialog.Builder(context!!)
-                                        .setTitle(R.string.view_conflict_title)
-                                        .setMessage(R.string.view_conflict_message)
-                                        .setCancelable(false)
-                                        .setPositiveButton(R.string.yes) { _, _ ->
-                                            // Pressed Yes, so set accept to true
-                                            accept = true
-                                        }
-                                        .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
-                                        .setOnDismissListener {
-                                            // When the dialog is dismissed return the
-                                            // user's reply to the coroutine
-                                            cont.resume(accept)
-                                        }
-                                        .show()
-                                }
-                            }
-                        }
-
-                        added = entity
-                        if (id != 0L)
-                            alert.dismiss()
-                    }
-                }
             }
-
-            alert.show()
         }
     }
 }

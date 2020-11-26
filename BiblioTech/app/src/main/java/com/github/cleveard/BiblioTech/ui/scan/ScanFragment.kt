@@ -3,14 +3,10 @@ package com.github.cleveard.BiblioTech.ui.scan
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.gb.*
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.app.Dialog
 import android.content.*
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.os.Bundle
-import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.*
@@ -19,7 +15,6 @@ import androidx.camera.core.*
 import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
@@ -37,22 +32,21 @@ import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
 import com.github.cleveard.BiblioTech.utils.AutoFitPreviewBuilder
+import com.github.cleveard.BiblioTech.utils.CoroutineAlert
+import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.io.Serializable
 import java.lang.Exception
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -342,26 +336,6 @@ class ScanFragment : Fragment() {
             setTargetRotation(viewFinder.display.rotation)
         }.build()
 
-        /**
-         * Select a book from a google query
-         * @param list List of books in first page returned from the book query
-         * @param spec query used to get the page of books
-         * @param totalItems Total number of books the query found
-         */
-        suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int): BookAndAuthors? {
-            if (list.size == 1) {
-                // If the query resulted in a single book, then select it
-                return list[0]
-            }
-
-            // Otherwise display a dialog to select the book
-            return suspendCoroutine { cont ->
-                SelectBookDialogFragment.createDialog(list, spec, totalItems) {
-                    cont.resume(it)
-                }.show(fragmentManager!!, "select_book")
-            }
-        }
-
         // Setup the image analyzer to scan for bar codes
         val repo = booksViewModel.repo
         imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
@@ -387,7 +361,7 @@ class ScanFragment : Fragment() {
                             }
 
                             // Select a book from the ones we found
-                            selectBook(result.list, isbn, result.itemCount)?.let {book ->
+                            selectBook(result.list, isbn, result.itemCount)?.let { book ->
                                 // When a book is selected, set the title
                                 container.findViewById<TextView>(R.id.scan_title).text =
                                     book.book.title
@@ -564,104 +538,87 @@ class ScanFragment : Fragment() {
     }
 
     /**
-     * Dialog to present book titles to be selected by the user
-     * Private class not allowed by Android
+     * Select a book from a google query
+     * @param list List of books in first page returned from the book query
+     * @param spec query used to get the page of books
+     * @param totalItems Total number of books the query found
      */
-    internal class SelectBookDialogFragment private constructor() : DialogFragment() {
-        companion object {
-            /**
-             * Argument bundle name for the first page of the books
-             */
-            private const val kList = "list"
+    private suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int): BookAndAuthors? {
+        return coroutineScope {
+            if (list.size == 1) {
+                // If the query resulted in a single book, then select it
+                return@coroutineScope list[0]
+            }
+            val pageCount = list.size
+            val itemCount = if (totalItems > 0) totalItems else pageCount
+            var pagerJob: Job? = null
+            return@coroutineScope try {
+                // Otherwise display a dialog to select the book
+                coroutineAlert<BookAndAuthors?>(context!!, null) { alert ->
 
-            /**
-             * Argument bundle name for the book query
-             */
-            private const val kSpec = "spec"
+                    // Get the content view for the dialog
+                    val content =
+                        parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
 
-            /**
-             * Argument bundle name for the total number of items
-             */
-            private const val kItemCount = "itemCount"
+                    // Create a pager to drive the recycler view
+                    val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
+                    val pager = Pager(
+                        config
+                    ) {
+                        GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
+                    }
+                    val flow = pager.flow.cachedIn(booksViewModel.viewModelScope)
 
-            /**
-             * Argument bundle name for the call back
-             */
-            private const val kCallback = "callback"
+                    // Find the recycler view and set the layout manager and adapter
+                    val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
+                    val adapter = getAdapter(alert)
+                    titles.layoutManager = LinearLayoutManager(activity)
+                    titles.adapter = adapter
 
-            /**
-             * Create the dialog and set the argument bundle to callers arguments
-             * @param list The first page of books from the query
-             * @param spec The query
-             * @param totalItems The total number of books from the query
-             * @param callback Callback made when the user makes a choice
-             */
-            fun createDialog(list: List<BookAndAuthors>, spec: String, totalItems: Int, callback: (BookAndAuthors?) -> Unit) : DialogFragment {
-                // Bundle the arguments
-                val bundle = Bundle()
-                bundle.putParcelableArrayList(kList, list as ArrayList<out Parcelable>?)
-                bundle.putString(kSpec, spec)
-                bundle.putInt(kItemCount, totalItems)
-                bundle.putSerializable(kCallback, callback as Serializable)
-                // Create the dialog
-                val dialog = SelectBookDialogFragment()
-                // Set the argument bundle
-                dialog.arguments = bundle
-                return dialog
+                    // Start the book stream to the recycler view
+                    pagerJob = booksViewModel.viewModelScope.launch {
+                        flow.collectLatest { data ->
+                            adapter.submitData(data)
+                        }
+                    }
+
+                    // Create an alert dialog with the content view
+                    alert.builder.setTitle(R.string.select_title)
+                        // Specify the list array, the items to be selected by default (null for none),
+                        // and the listener through which to receive callbacks when items are selected
+                        .setView(content)
+                        // Set the action buttons
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.cancel, null)
+                }.show()
+            } finally {
+                pagerJob?.cancel()
             }
         }
+    }
 
-        /**
-         * The un-bundled first page of books
-         */
-        private lateinit var list: List<BookAndAuthors>
-
-        /**
-         * The un-bundled query
-         */
-        private lateinit var spec: String
-
-        /**
-         * The un-bundled callback
-         */
-        private lateinit var callback: (BookAndAuthors?) -> Unit
-
-        /**
-         * The content view in the dialog
-         */
-        private lateinit var content: View
-
-        /**
-         * The un-bundled total number of items
-         */
-        private var itemCount = 0
-
-        /**
-         * Job used for the Pager flow
-         */
-        private lateinit var pagerJob: Job
-
-        /**
-         * Selected book
-         */
-        private var book: BookAndAuthors? = null
-
-        /**
-         * Selected book position
-         */
-        private var selectedPosition = -1
-
-        /**
-         * Selected radio button view
-         */
-        private var selectedView: RadioButton? = null
-
+    /**
+     * Get a paging adapter to show book titles
+     * @param alert The CoroutineAlert object for the dialog
+     * @return the paging adapter
+     */
+    private fun getAdapter(alert: CoroutineAlert<BookAndAuthors?>): PagingDataAdapter<Any, BooksAdapter.ViewHolder> {
         /**
          * Recycler adapter to display the  books
          */
-        inner class BookPagingAdapter : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
+        class BookPagingAdapter : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
             BooksAdapter.DIFF_CALLBACK
         ) {
+            /**
+             * Selected book position
+             */
+            private var selectedPosition = -1
+
+            /**
+             * Selected radio button view
+             */
+            private var selectedView: RadioButton? = null
+
             // On click listener for the radio buttons. Need to handle this manually because
             // the recycler view doesn't
             private val onRadioClick = View.OnClickListener { v ->
@@ -677,7 +634,7 @@ class ScanFragment : Fragment() {
                         // Save the position, view and book selected
                         selectedPosition = position
                         selectedView = button
-                        book = getItem(position) as BookAndAuthors
+                        alert.result = getItem(position) as BookAndAuthors
                     }
                 }
                 catch(e: Exception) {
@@ -714,79 +671,6 @@ class ScanFragment : Fragment() {
             }
         }
 
-        /**
-         * @inheritDoc
-         */
-        @SuppressLint("InflateParams")
-        override fun onCreateDialog(savedInstanceState: Bundle?) : Dialog {
-            // Get the argument bundle and un-bundle the interesting data
-            val args = arguments!!
-            list = args.getParcelableArrayList(kList)!!
-            val pageCount = list.size
-            // If itemCount is 0, then use the count of books already returned
-            val i = args.getInt(kItemCount)
-            itemCount = if (i > 0) i else pageCount
-            spec = args.getString(kSpec)!!
-            @Suppress("UNCHECKED_CAST")
-            callback = args.getSerializable(kCallback) as (BookAndAuthors?) -> Unit
-            book = null
-
-            // Get the content view for the dialog
-            content = parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
-
-            // Create a pager to drive the recycler view
-            val scope = MainScope()
-            val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
-            val pager = Pager(
-                config
-            ) {
-                GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
-            }
-            val flow = pager.flow.cachedIn(scope)
-
-            // Find the recycler view and set the layout manager and adapter
-            val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-            val adapter = BookPagingAdapter()
-            titles.layoutManager = LinearLayoutManager(activity)
-            titles.adapter = adapter
-
-            // Start the book stream to the recycler view
-            pagerJob = scope.launch {
-                flow.collectLatest {
-                    data -> adapter.submitData(data)
-                }
-            }
-
-            // Create an alert dialog with the content view
-            val builder = AlertDialog.Builder(activity)
-            builder.setTitle(R.string.select_title)
-                // Specify the list array, the items to be selected by default (null for none),
-                // and the listener through which to receive callbacks when items are selected
-                .setView(content)
-                // Set the action buttons
-                .setPositiveButton(
-                    R.string.ok
-                ) { _, _ ->
-                    // Don't need to do anything, callback is done in onDismiss
-                }
-                .setNegativeButton(
-                    R.string.cancel
-                ) { _, _ ->
-                    // Clear return book value
-                    book = null
-                }
-            return builder.create()
-        }
-
-        /**
-         * @inheritDoc
-         */
-        override fun onDismiss(dialog: DialogInterface) {
-            super.onDismiss(dialog)
-            // Return the selected book and cancel the Pager flow job
-            callback(book)
-            pagerJob.cancel()
-        }
+        return BookPagingAdapter()
     }
-
 }

@@ -119,7 +119,7 @@ class BookRepository private constructor() {
      * Callback can ask the user if it is OK to change an existing tag. This method will also
      * merge two tags into one, when you edit an existing tag and rename it to another existing tag.
      */
-    suspend fun addOrUpdateTag(tag: TagEntity, callback: (suspend (conflict: TagEntity) -> Boolean)? = null): Long {
+    suspend fun addOrUpdateTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
         return db.getTagDao().add(tag, callback)
     }
 
@@ -203,7 +203,7 @@ class BookRepository private constructor() {
      *                   true to accept the conflict or false to abort the add
      * @return The id of the view in the database, or 0L if the add was aborted
      */
-    suspend fun addOrUpdateView(view: ViewEntity, onConflict: suspend (conflict: ViewEntity) -> Boolean): Long {
+    suspend fun addOrUpdateView(view: ViewEntity, onConflict: suspend CoroutineScope.(conflict: ViewEntity) -> Boolean): Long {
         return db.getViewDao().addOrUpdate(view, onConflict)
     }
 

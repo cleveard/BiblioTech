@@ -15,9 +15,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.BiblioTech.MainActivity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.*
 import java.lang.Exception
 import java.net.HttpURLConnection
@@ -155,6 +153,12 @@ class FilterConverters {
         } catch (e: Exception) {
             null
         }
+    }
+}
+
+private suspend fun <T> callConflict(conflict: T, callback: (suspend CoroutineScope.(T) -> Boolean)?): Boolean {
+    return coroutineScope {
+        callback?.let { it(conflict) } == true
     }
 }
 
@@ -743,7 +747,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * This is also be used to rename existing tags. If the renamed tag conflicts with an
      * existing tag, then we will merge the books for the two tags into a single tag
      */
-    open suspend fun add(tag: TagEntity, callback: (suspend (conflict: TagEntity) -> Boolean)? = null): Long {
+    open suspend fun add(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
         // Empty tag is not accepted
         if (tag.name == "")
             return 0
@@ -751,7 +755,7 @@ abstract class TagDao(private val db: BookDatabase) {
         val conflict = findByName(tag.name)
         if (conflict != null && conflict.id != tag.id) {
             // Yep, ask caller what to do, null or false return means do nothing
-            if (callback == null || !callback(conflict))
+            if (!callConflict(conflict, callback))
                 return 0
 
             // If the tag.id is 0, then this is a new tag. Replace the existing tag with the new one
@@ -1915,7 +1919,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      *                   true to accept the conflict or false to abort the add
      * @return The id of the view in the database, or 0L if the add was aborted
      */
-    suspend fun addOrUpdate(view: ViewEntity, onConflict: suspend (conflict: ViewEntity) -> Boolean): Long {
+    suspend fun addOrUpdate(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)?): Long {
         // Look for a conflicting view
         val conflict = findByName(view.name)
         if (conflict != null) {
@@ -1923,7 +1927,7 @@ abstract class ViewDao(private val db: BookDatabase) {
             // we treat this as a rename.
             if (conflict.id != view.id) {
                 //  Ask the onConflict handler to resolve the conflict
-                if (!onConflict(conflict))
+                if (!callConflict(conflict, onConflict))
                     return 0L       // onConflict says not to add or update
                 view.id = conflict.id
             }
