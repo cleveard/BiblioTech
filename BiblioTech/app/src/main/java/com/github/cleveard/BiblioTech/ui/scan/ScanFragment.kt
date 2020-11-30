@@ -5,10 +5,12 @@ import com.github.cleveard.BiblioTech.gb.*
 import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
+import android.util.SparseArray
 import android.view.*
 import android.widget.*
 import androidx.camera.core.*
@@ -43,6 +45,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.lang.Exception
+import java.lang.StringBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
@@ -361,7 +364,9 @@ class ScanFragment : Fragment() {
                             }
 
                             // Select a book from the ones we found
-                            selectBook(result.list, isbn, result.itemCount)?.let { book ->
+                            val array = selectBook(result.list, isbn, result.itemCount, false)
+                            if (array.size() > 0) {
+                                val book = array.valueAt(0)
                                 // When a book is selected, set the title
                                 container.findViewById<TextView>(R.id.scan_title).text =
                                     book.book.title
@@ -543,18 +548,20 @@ class ScanFragment : Fragment() {
      * @param spec query used to get the page of books
      * @param totalItems Total number of books the query found
      */
-    private suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int): BookAndAuthors? {
+    private suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int, isMulti: Boolean): SparseArray<BookAndAuthors> {
         return coroutineScope {
             if (list.size == 1) {
                 // If the query resulted in a single book, then select it
-                return@coroutineScope list[0]
+                return@coroutineScope SparseArray<BookAndAuthors>(1).also {
+                    it.put(0, list[0])
+                }
             }
             val pageCount = list.size
             val itemCount = if (totalItems > 0) totalItems else pageCount
             var pagerJob: Job? = null
             return@coroutineScope try {
                 // Otherwise display a dialog to select the book
-                coroutineAlert<BookAndAuthors?>(context!!, null) { alert ->
+                coroutineAlert<SparseArray<BookAndAuthors>>(context!!, SparseArray()) { alert ->
 
                     // Get the content view for the dialog
                     val content =
@@ -571,7 +578,7 @@ class ScanFragment : Fragment() {
 
                     // Find the recycler view and set the layout manager and adapter
                     val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-                    val adapter = getAdapter(alert)
+                    val adapter = getAdapter(alert, isMulti)
                     titles.layoutManager = LinearLayoutManager(activity)
                     titles.adapter = adapter
 
@@ -583,7 +590,7 @@ class ScanFragment : Fragment() {
                     }
 
                     // Create an alert dialog with the content view
-                    alert.builder.setTitle(R.string.select_title)
+                    alert.builder.setTitle(if (isMulti) R.string.select_titles else R.string.select_title)
                         // Specify the list array, the items to be selected by default (null for none),
                         // and the listener through which to receive callbacks when items are selected
                         .setView(content)
@@ -600,41 +607,53 @@ class ScanFragment : Fragment() {
     /**
      * Get a paging adapter to show book titles
      * @param alert The CoroutineAlert object for the dialog
+     * @param isMulti True to select multiple titles
      * @return the paging adapter
      */
-    private fun getAdapter(alert: CoroutineAlert<BookAndAuthors?>): PagingDataAdapter<Any, BooksAdapter.ViewHolder> {
+    private fun getAdapter(alert: CoroutineAlert<SparseArray<BookAndAuthors>>, isMulti: Boolean): PagingDataAdapter<Any, BooksAdapter.ViewHolder> {
         /**
          * Recycler adapter to display the  books
+         * @param multi True if we can select multiple titles
          */
-        class BookPagingAdapter : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
+        class BookPagingAdapter(private val multi: Boolean) : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
             BooksAdapter.DIFF_CALLBACK
         ) {
             /**
              * Selected book position
              */
-            private var selectedPosition = -1
-
-            /**
-             * Selected radio button view
-             */
-            private var selectedView: RadioButton? = null
+            private var selectedTitles = SparseArray<CompoundButton>()
 
             // On click listener for the radio buttons. Need to handle this manually because
             // the recycler view doesn't
             private val onRadioClick = View.OnClickListener { v ->
                 try {
-                    val button = v as RadioButton
+                    val button = v as CompoundButton
                     val position = v.tag as Int
                     // If we select a new book
-                    if (position != selectedPosition) {
-                        // Uncheck the previously selected book
-                        selectedView?.isChecked = false
+                    if (multi) {
+                        // Multiple selection, if we are checking, add it to the list
+                        if (button.isChecked) {
+                            selectedTitles.put(position, button)
+                            alert.result.put(position, getItem(position) as BookAndAuthors)
+                        } else {
+                            // Otherwise remove it from the list
+                            val title = selectedTitles [position]
+                            if (title != null) {
+                                selectedTitles.remove(position)
+                                alert.result.remove(position)
+                            }
+                        }
+                    } else {
+                        if (selectedTitles.size() > 0) {
+                            // Uncheck the previously selected book
+                            selectedTitles.valueAt(0).isChecked = false
+                            selectedTitles.removeAt(0)
+                            alert.result.removeAt(0)
+                        }
                         // Check this book
                         button.isChecked = true
-                        // Save the position, view and book selected
-                        selectedPosition = position
-                        selectedView = button
-                        alert.result = getItem(position) as BookAndAuthors
+                        selectedTitles.put(position, button)
+                        alert.result.put(position, getItem(position) as BookAndAuthors)
                     }
                 }
                 catch(e: Exception) {
@@ -649,9 +668,11 @@ class ScanFragment : Fragment() {
                 viewType: Int
             ): BooksAdapter.ViewHolder {
                 // Just create a single radio button for each book
-                val button = RadioButton(context)
+                val button = if(multi) CheckBox(context) else RadioButton(context)
                 val viewHolder = BooksAdapter.ViewHolder(button)
                 button.setOnClickListener(onRadioClick)
+                val pad = (2 * Resources.getSystem().getDisplayMetrics().density).toInt()
+                button.setPadding(0, pad, 0, pad)
                 return viewHolder
             }
 
@@ -660,17 +681,41 @@ class ScanFragment : Fragment() {
              */
             override fun onBindViewHolder(holder: BooksAdapter.ViewHolder, position: Int) {
                 val book = getItem(position)
-                val button = holder.itemView as RadioButton
-                // If we are binding the currently selected book, deselect it
-                if (button == selectedView && position != selectedPosition)
-                    selectedView = null
+                val button = holder.itemView as CompoundButton
+                // If we are binding a selected book, deselect it
+                val selected = selectedTitles[position]?.let {
+                    if (button != it) {
+                        it.isChecked = false
+                        selectedTitles.remove(position)
+                        alert.result.remove(position)
+                        null
+                    } else
+                        it
+                }
+
                 // Set the title, tag and checked
-                button.text = (book as? BookAndAuthors)?.book?.title?: ""
+                button.text = (book as? BookAndAuthors)?.let {
+                    val builder = StringBuilder()
+                    // Add the title and a new line
+                    builder.append(it.book.title)
+                    builder.append("\n")
+                    // Then all of the authors
+                    for ((i, a) in it.authors.withIndex()) {
+                        if (i > 0)
+                            builder.append(", ")
+                        when {
+                            a.remainingName.isEmpty() -> builder.append(a.lastName)
+                            a.lastName.isEmpty() -> builder.append(a.remainingName)
+                            else -> builder.append(a.remainingName + " " + a.lastName)
+                        }
+                    }
+                    builder.toString()
+                }?: ""
                 button.tag = position
-                button.isChecked = position == selectedPosition
+                button.isChecked = selected != null
             }
         }
 
-        return BookPagingAdapter()
+        return BookPagingAdapter(isMulti)
     }
 }

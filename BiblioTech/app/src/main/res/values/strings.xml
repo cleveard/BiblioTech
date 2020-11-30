@@ -23,6 +23,7 @@
     <string name="tags">Tags:</string>
     <string name="title">Title</string>
     <string name="select_title">Select the Book Title</string>
+    <string name="select_titles">Select the Book Titles</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="yes">Yes</string>
