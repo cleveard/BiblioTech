@@ -163,8 +163,8 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
      */
     override fun getItemViewType(position: Int): Int {
         if (getItem(position) is BookAndAuthors)
-            return R.layout.book_layout
-        return R.layout.text_view
+            return R.layout.books_adapter_book_item
+        return R.layout.books_adapter_header_item
     }
 
     /**
@@ -178,7 +178,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         val contactView: View = inflater.inflate(viewType, parent, false)
         // Create the holder
         val holder = ViewHolder(contactView)
-        if (viewType == R.layout.book_layout) {
+        if (viewType == R.layout.books_adapter_book_item) {
             // This is a book we want to display
             contactView.setOnClickListener {
                 // When a book is clicked, toggle the visibility of

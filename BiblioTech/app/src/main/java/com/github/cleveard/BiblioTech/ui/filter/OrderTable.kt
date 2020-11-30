@@ -147,7 +147,7 @@ class OrderTable(private val fragment: Fragment) {
     private fun addRow(inflater: LayoutInflater? = null): Int {
         // Create the table row
         val row = (inflater?: LayoutInflater.from(fragment.context))
-            .inflate(R.layout.order_row, layout, false) as TableRow
+            .inflate(R.layout.books_drawer_order_row, layout, false) as TableRow
         // Add the row to rows
         val index = rows.size
         rows.add(row)
@@ -244,7 +244,7 @@ class OrderTable(private val fragment: Fragment) {
         tableLayout.removeAllViews()
 
         // Add the header row
-        headerRow = (inflater.inflate(R.layout.order_header, tableLayout, false) as TableRow).also {
+        headerRow = (inflater.inflate(R.layout.books_drawer_order_header, tableLayout, false) as TableRow).also {
             // Set the add row on click listener
             it.findViewById<View>(R.id.action_add_order_row)?.setOnClickListener(addRowListener)
             // Add header row to the table layout

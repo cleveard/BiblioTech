@@ -9,7 +9,7 @@
         android:id="@+id/nav_books"
         android:name="com.github.cleveard.BiblioTech.ui.books.BooksFragment"
         android:label="@string/menu_books"
-        tools:layout="@layout/fragment_books">
+        tools:layout="@layout/books_fragment">
         <argument
             android:name="filterName"
             app:argType="string"
@@ -21,7 +21,7 @@
         android:id="@+id/nav_scan"
         android:name="com.github.cleveard.BiblioTech.ui.scan.ScanFragment"
         android:label="@string/menu_scan"
-        tools:layout="@layout/fragment_scan" />
+        tools:layout="@layout/scan_fragment" />
     <action
         android:id="@+id/filter_books"
         app:destination="@id/nav_books" />

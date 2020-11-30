@@ -242,7 +242,7 @@ class ScanFragment : Fragment() {
             ViewModelProviders.of(activity!!).get(BooksViewModel::class.java)
         tagViewModel =
             ViewModelProviders.of(activity!!).get(TagViewModel::class.java)
-        return inflater.inflate(R.layout.fragment_scan, container, false)
+        return inflater.inflate(R.layout.scan_fragment, container, false)
     }
 
     /**
@@ -558,7 +558,7 @@ class ScanFragment : Fragment() {
 
                     // Get the content view for the dialog
                     val content =
-                        parentFragment!!.layoutInflater.inflate(R.layout.select_book, null)
+                        parentFragment!!.layoutInflater.inflate(R.layout.scan_select_book, null)
 
                     // Create a pager to drive the recycler view
                     val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)

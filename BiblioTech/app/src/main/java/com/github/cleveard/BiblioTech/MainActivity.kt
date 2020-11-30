@@ -110,7 +110,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         BookRepository.initialize(applicationContext)
 
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.main_activity)
 
         // Setup the action toolbar
         val toolbar: Toolbar = findViewById(R.id.toolbar)

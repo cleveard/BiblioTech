@@ -63,7 +63,7 @@ class TagsFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Inflate the layout for this fragment
-        val content = inflater.inflate(R.layout.fragment_tags, container, false)
+        val content = inflater.inflate(R.layout.tags_fragment, container, false)
         // Get the view model
         tagViewModel =
             MainActivity.getViewModel(activity, TagViewModel::class.java)
@@ -249,7 +249,7 @@ class TagsFragment : Fragment() {
             }
 
             // Inflate the content for the edit tag dialog
-            val content = layoutInflater.inflate(R.layout.edit_tag, null)!!
+            val content = layoutInflater.inflate(R.layout.tags_edit_tag, null)!!
             // Fill in the name
             val name = content.findViewById<EditText>(R.id.edit_tag_name)
             name.setText(tag.name, TextView.BufferType.EDITABLE)

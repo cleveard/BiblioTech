@@ -33,7 +33,7 @@ import com.github.cleveard.BiblioTech.ui.modes.DeleteModalAction
 import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
-import kotlinx.android.synthetic.main.action_drawer.view.*
+import kotlinx.android.synthetic.main.books_drawer.view.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -173,7 +173,7 @@ class BooksFragment : Fragment() {
         }
 
         // Inflate the fragments view
-        val root = inflater.inflate(R.layout.fragment_books, container, false)
+        val root = inflater.inflate(R.layout.books_fragment, container, false)
 
         // Get the edit and filter drawer layout and add a listener to update buttons
         // when the drawer is opened or closed
@@ -474,7 +474,7 @@ class BooksFragment : Fragment() {
             ) ?: ViewEntity(0, "", "")
 
             // Get the content view for the dialog
-            val content = parentFragment!!.layoutInflater.inflate(R.layout.new_filter, null)
+            val content = parentFragment!!.layoutInflater.inflate(R.layout.books_drawer_new_filter, null)
             val name = content.findViewById<EditText>(R.id.edit_view_name)
                 .also { it.text = SpannableStringBuilder(entity.name) }
             val desc = content.findViewById<EditText>(R.id.edit_view_desc)

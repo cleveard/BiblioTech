@@ -170,7 +170,7 @@ class FilterTable(private val fragment: Fragment) {
                     // Get the adapter from the column description
                     val adapter = SimpleCursorAdapter(
                         fragment.context!!,
-                        R.layout.auto_complete,
+                        R.layout.books_drawer_filter_auto_complete,
                         cursor,
                         arrayOf("_result"),
                         intArrayOf(R.id.auto_complete_item),
@@ -484,8 +484,8 @@ class FilterTable(private val fragment: Fragment) {
     private fun addRow(inflater: LayoutInflater? = null): Int {
         val inf = (inflater?: LayoutInflater.from(fragment.context))
         // Create the table row
-        val topRow = inf.inflate(R.layout.filter_row, layout, false) as TableRow
-        val valueRow = inf.inflate(R.layout.filter_values, layout, false)
+        val topRow = inf.inflate(R.layout.books_drawer_filter_row, layout, false) as TableRow
+        val valueRow = inf.inflate(R.layout.books_drawer_filter_values, layout, false)
         val rowItem = UIRow(topRow, valueRow)
         // Add the row to rows
         val index = rows.size
@@ -589,7 +589,7 @@ class FilterTable(private val fragment: Fragment) {
         tableLayout.removeAllViews()
 
         // Add the header row
-        headerRow = (inflater.inflate(R.layout.filter_header, tableLayout, false) as TableRow).also {
+        headerRow = (inflater.inflate(R.layout.books_drawer_filter_header, tableLayout, false) as TableRow).also {
             // Set the add row on click listener
             it.findViewById<View>(R.id.action_add_filter_row)?.setOnClickListener(addRowListener)
             // Add header row to the table layout

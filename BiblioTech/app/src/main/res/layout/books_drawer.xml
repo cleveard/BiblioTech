@@ -208,8 +208,8 @@
             app:layout_constraintTop_toBottomOf="@id/order_label">
 
             <!-- Uncomment to see in designer -->
-            <include layout="@layout/order_header" />
-            <include layout="@layout/order_row" />
+            <include layout="@layout/books_drawer_order_header" />
+            <include layout="@layout/books_drawer_order_row" />
             <!-- -->
 
         </TableLayout>
@@ -243,9 +243,9 @@
             app:layout_constraintTop_toBottomOf="@id/criteria_label">
 
             <!-- Uncomment to see in designer -->
-            <include layout="@layout/filter_header" />
-            <include layout="@layout/filter_row" />
-            <include layout="@layout/filter_values" />
+            <include layout="@layout/books_drawer_filter_header" />
+            <include layout="@layout/books_drawer_filter_row" />
+            <include layout="@layout/books_drawer_filter_values" />
             <!-- -->
 
         </TableLayout>
