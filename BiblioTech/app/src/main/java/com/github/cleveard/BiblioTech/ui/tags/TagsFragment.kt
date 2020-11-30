@@ -162,7 +162,7 @@ class TagsFragment : Fragment() {
         }
 
         // Inflate a menu xml into the action menu
-        activity?.menuInflater?.inflate(R.menu.tag_fragment, menu)
+        activity?.menuInflater?.inflate(R.menu.tags_options, menu)
 
         // Get the menu items that we enable and disable
         deleteItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)

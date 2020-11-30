@@ -352,7 +352,7 @@ class BooksFragment : Fragment() {
      */
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         // Inflate the menu
-        inflater.inflate(R.menu.main, menu)
+        inflater.inflate(R.menu.books_options, menu)
         // Save the edit and filter drawer menu item
         drawerMenuItem = menu.findItem(R.id.action_drawer)
         super.onCreateOptionsMenu(menu, inflater)
