@@ -133,4 +133,7 @@
     <string name="add_view_message">Enter the name and description for the new filter</string>
     <string name="remove_view_title">Remove Filter</string>
     <string name="remove_view_message">Remove the current filter?</string>
+    <string name="no_books_found">No books were found.</string>
+    <string name="camera_permission_title">Camera Access</string>
+    <string name="camera_permission_message">BiblioTech needs access to the camera in order to scan book barcodes. Please grant access when asked.\n\nYou can search by author and title if you don\'t want to scan barcodes.</string>
 </resources>

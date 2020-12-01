@@ -3,6 +3,7 @@ package com.github.cleveard.BiblioTech.ui.scan
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.gb.*
 import android.Manifest
+import android.app.Activity
 import android.content.*
 import android.content.pm.PackageManager
 import android.content.res.Resources
@@ -16,6 +17,8 @@ import android.widget.*
 import androidx.camera.core.*
 import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.app.ActivityCompat
+import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
@@ -254,6 +257,7 @@ class ScanFragment : Fragment() {
     private fun clearView() {
         container.findViewById<TextView>(R.id.scan_isbn).text = ""
         container.findViewById<TextView>(R.id.scan_title).text = ""
+        container.findViewById<TextView>(R.id.scan_author).text = ""
     }
 
     /**
@@ -262,13 +266,19 @@ class ScanFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Setup local properties
-        container = view as ConstraintLayout
+        container = view.findViewById<ConstraintLayout>(R.id.scan_content)
         viewFinder = container.findViewById(R.id.view_finder)
         broadcastManager = LocalBroadcastManager.getInstance(view.context)
 
         // Clear the isbn and title
         clearView()
 
+        container.findViewById<Button>(R.id.scan_search).setOnClickListener {
+            searchForBooks(
+                container.findViewById<TextView>(R.id.scan_title).text.toString(),
+                container.findViewById<TextView>(R.id.scan_author).text.toString()
+            )
+        }
         // Set up the intent filter that will receive events from our main activity
         val filter = IntentFilter().apply { addAction(KEY_EVENT_ACTION) }
         broadcastManager.registerReceiver(volumeDownReceiver, filter)
@@ -286,8 +296,19 @@ class ScanFragment : Fragment() {
             if (hasPermissions(requireContext()))
                 bindCameraUseCases()
             else {
-                // Request camera-related permissions
-                requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
+                booksViewModel.viewModelScope.launch {
+                    if (activity!!.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+                        coroutineAlert(context!!, Unit) { alert ->
+                            // Present the dialog
+                            alert.builder.setTitle(R.string.camera_permission_title)
+                                .setMessage(R.string.camera_permission_message)
+                                .setCancelable(false)
+                                .setPositiveButton(R.string.ok, null)
+                        }.show()
+                        // Request camera-related permissions
+                        requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
+                    }
+                }
             }
         }
     }
@@ -370,6 +391,8 @@ class ScanFragment : Fragment() {
                                 // When a book is selected, set the title
                                 container.findViewById<TextView>(R.id.scan_title).text =
                                     book.book.title
+                                container.findViewById<TextView>(R.id.scan_author).text =
+                                    buildAuthors(StringBuilder(), book.authors)
 
                                 // Make sure the isbn in the book record is the one we searched
                                 book.book.ISBN = isbn
@@ -397,6 +420,51 @@ class ScanFragment : Fragment() {
         // Apply declared configs to CameraX using the same lifecycle owner
         CameraX.bindToLifecycle(
             viewLifecycleOwner, preview, imageCapture, imageAnalyzer)
+    }
+
+    private fun searchForBooks(title: String, author: String) {
+        // Don't search if no input
+        if (title.isEmpty() && author.isEmpty())
+            return
+
+        // Start a coroutine job to run query for the book
+        booksViewModel.viewModelScope.launch {
+            // Look through the codes we found
+            try {
+                // Lookup using isbn
+                val spec = GoogleBookLookup.getTitleAuthorQuery(title, author)
+                val result = GoogleBookLookup.generalLookup(spec)
+                // If we still didn't find anything, stop
+                if (result == null || result.list.isEmpty()) {
+                    Toast.makeText(
+                        context,
+                        context!!.resources.getString(R.string.no_books_found),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
+
+                // Select books from the ones we found
+                val array = selectBook(result.list, spec, result.itemCount, true)
+                val repo = booksViewModel.repo
+                for (i in 0 until array.size()) {
+                    val book = array.valueAt(i)
+
+                    // Add the book to the database
+                    repo.addOrUpdateBook(
+                        book, tagViewModel.selection.selection,
+                        tagViewModel.selection.inverted
+                    )
+                }
+            } catch (e: GoogleBookLookup.LookupException) {
+                // Display and error if we found one
+                Toast.makeText(
+                    context,
+                    "Error finding book: $e",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     /**
@@ -539,6 +607,19 @@ class ScanFragment : Fragment() {
         /** Convenience method used to check if all permissions required by this app are granted */
         fun hasPermissions(context: Context) = PERMISSIONS_REQUIRED.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+
+        private fun buildAuthors(builder: StringBuilder, list: List<AuthorEntity>): String {
+            for ((i, a) in list.withIndex()) {
+                if (i > 0)
+                    builder.append(", ")
+                when {
+                    a.remainingName.isEmpty() -> builder.append(a.lastName)
+                    a.lastName.isEmpty() -> builder.append(a.remainingName)
+                    else -> builder.append(a.remainingName + " " + a.lastName)
+                }
+            }
+            return builder.toString()
         }
     }
 
@@ -700,16 +781,7 @@ class ScanFragment : Fragment() {
                     builder.append(it.book.title)
                     builder.append("\n")
                     // Then all of the authors
-                    for ((i, a) in it.authors.withIndex()) {
-                        if (i > 0)
-                            builder.append(", ")
-                        when {
-                            a.remainingName.isEmpty() -> builder.append(a.lastName)
-                            a.lastName.isEmpty() -> builder.append(a.remainingName)
-                            else -> builder.append(a.remainingName + " " + a.lastName)
-                        }
-                    }
-                    builder.toString()
+                    buildAuthors(builder, it.authors)
                 }?: ""
                 button.tag = position
                 button.isChecked = selected != null

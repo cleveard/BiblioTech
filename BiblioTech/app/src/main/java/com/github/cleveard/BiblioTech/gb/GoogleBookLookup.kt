@@ -85,6 +85,8 @@ internal class GoogleBookLookup private constructor() {
         private const val kURL = "https://www.googleapis.com/books/v1"
         private const val kVolumesCollection = "volumes"
         private const val kISBNParameter = "isbn:%s"
+        private const val kTitleParameter = "title:\"%s\""
+        private const val kAuthorParameter = "author:\"%s\""
         private const val kKind = "kind"
         private const val kBooksVolumes = "books#volumes"
         private const val kItemCount = "totalItems"
@@ -128,6 +130,24 @@ internal class GoogleBookLookup private constructor() {
         @Throws(LookupException::class)
         suspend fun lookupISBN(isbn: String): LookupResult? {
             return queryBooks(buildUrl(kVolumesCollection, String.format(kISBNParameter, isbn)))
+        }
+
+        /**
+         * Get search terms for title and author lookup
+         * @param title The title to search for
+         * @param author The author to search for
+         * @return The query search terms
+         */
+        fun getTitleAuthorQuery(title: String, author: String): String {
+            return if (title.isNotEmpty()) {
+                if (author.isNotEmpty())
+                    "${String.format(kTitleParameter, title)} ${String.format(kAuthorParameter, author)}"
+                else
+                    String.format(kTitleParameter, title)
+            } else if (author.isNotEmpty())
+                String.format(kAuthorParameter, author)
+            else
+                ""
         }
 
         /**
