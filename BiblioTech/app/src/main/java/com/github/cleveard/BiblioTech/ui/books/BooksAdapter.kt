@@ -154,7 +154,7 @@ internal open class BooksAdapter(context: Context, private val access: ParentAcc
      * @param position The position of the book
      */
     fun getBook(position: Int): BookAndAuthors? {
-        return if (position >= 0 && position < itemCount)
+        return if (position in 0 until itemCount)
             getItem(position) as? BookAndAuthors
         else
             null
@@ -240,10 +240,11 @@ internal open class BooksAdapter(context: Context, private val access: ParentAcc
                     val pos = holder.layoutPosition
                     if (pos in 0 until itemCount) {
                         getItem(pos)?.apply {
-                            this as BookAndAuthors
-                            // Set the thumbnail if the ids are the same
-                            if (book.id == bookId)
-                                imageView.setImageBitmap(it)
+                            (this as? BookAndAuthors)?.let { book ->
+                                // Set the thumbnail if the ids are the same
+                                if (book.book.id == bookId)
+                                    imageView.setImageBitmap(it)
+                            }
                         }
                     }
                 }
