@@ -10,13 +10,13 @@ import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.R
-import com.github.cleveard.BiblioTech.utils.GenericViewModel
+import com.github.cleveard.BiblioTech.utils.ParentAccess
 
 /**
  * Recycler view adaptor to for tags in the book database
- * @param viewModel The view model for the tag fragment
+ * @param access The view model for the tag fragment
  */
-internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
+internal open class TagsAdapter(private val access: ParentAccess) :
     PagingDataAdapter<Tag, TagsAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     /**
@@ -62,7 +62,7 @@ internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
         // Set a click listener to toggle the tag selection
         contactView.setOnClickListener {view ->
             (view.tag as? Long)?.let {id ->
-                viewModel.selection.toggle(id)
+                access.toggleSelection(id)
             }
         }
 
@@ -78,13 +78,12 @@ internal open class TagsAdapter(private val viewModel: GenericViewModel<Tag>) :
 
         // Set the name of the tag
         name.text = tag?.tag?.name ?: ""
-        val id = tag?.id ?: 0L
+        val id = tag?.tag?.id ?: 0L
         // Set the id of the tag
         holder.itemView.tag = id
         // Set the background color
-        val selected = viewModel.selection.isSelected(id)
         holder.itemView.setBackgroundColor(
-            if (selected)
+            if (tag?.selected == true)
                 selectColor
             else
                 Color.WHITE

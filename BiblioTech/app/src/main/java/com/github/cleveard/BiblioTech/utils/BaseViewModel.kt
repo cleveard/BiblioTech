@@ -2,25 +2,61 @@ package com.github.cleveard.BiblioTech.utils
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.PorterDuff
 import android.view.Menu
 import android.view.MenuItem
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import com.github.cleveard.BiblioTech.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+/**
+ * Interface used by adapters to access the app
+ */
+internal interface ParentAccess {
+    /**
+     * Toggle the selection for and id
+     * @param id The id to toggle
+     */
+    fun toggleSelection(id: Long)
+
+    /**
+     * Launch a coroutine task
+     * @param task The lambda called to execute the task
+     * @return The coroutine job
+     */
+    fun launch(task: suspend CoroutineScope.() -> Unit): Job
+
+    /**
+     * Get a thumbnail for a book
+     * @param bookId The id of the book
+     * @param large True to get the large thumbnail. False to get the small
+     */
+    suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap?
+}
 
 /**
  * Base view model for fragments that need a context
  */
-abstract class BaseViewModel(app: Application) : AndroidViewModel(app) {
+abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAccess {
     /**
      * Handler for selection based on database ids
      * This class keeps a list of ids and a flag to indicate
      * whether the ids are the selected ids or the unselected ids
      */
-    inner class Selection {
+    class SelectionSet {
         private var _inverted: Boolean = false
+
+        /**
+         * Lister for selection changed
+         */
+        var onSelectionChanged: (() -> Unit)? = null
+
         /**
          * Flag to indicate whether ids are selected (false) or unselected (true)
          */
@@ -81,7 +117,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app) {
             _hasSelection.value = value
             // Invalidate the UI. This is here because this
             // method is called on all selection changes
-            invalidateUI()
+            onSelectionChanged?.invoke()
         }
 
         /**
@@ -166,12 +202,28 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * This is the selection object for the view model
      */
-    val selection = Selection()
+    val selection = SelectionSet()
 
     /**
-     * Invalidate the UI for the view model
+     * @inheritDoc
      */
-    abstract fun invalidateUI()
+    override fun toggleSelection(id: Long) {
+        selection.toggle(id)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun launch(task: suspend CoroutineScope.() -> Unit): Job {
+        return viewModelScope.launch(block = task)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+        return null
+    }
 
     companion object {
         /**

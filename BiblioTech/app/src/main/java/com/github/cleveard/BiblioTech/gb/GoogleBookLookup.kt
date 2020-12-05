@@ -39,7 +39,7 @@ internal class GoogleBookLookup private constructor() {
      * @param list The list of item in the first page of the query. We immediately return these
      *             the first time we ask for the first page.
      */
-    private class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private var list: List<BookAndAuthors>? = null) : PagingSource<Int, Any>() {
+    private class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null) : PagingSource<Int, Any>() {
         /**
          * Load a page from the query
          * @param params The params for the load
@@ -50,16 +50,15 @@ internal class GoogleBookLookup private constructor() {
             val loadSize = params.loadSize
             val index = params.key?:0
 
-            val result: List<BookAndAuthors>?
+            val result: List<BookAndAuthors>
             if (index == 0 && list != null && itemCount != 0) {
                 // The first time we asl for page 0, return the list we already loaded
                 result = list
-                list = null     // And clear it
             } else {
                 try {
                     // query Google books to get the list
                     val query = generalLookup(query, index, loadSize)
-                    result = query?.list
+                    result = query?.list?: emptyList()
                     itemCount = query?.itemCount?: itemCount
                 } catch (e: Exception) {
                     // Return an error if we got one
@@ -67,13 +66,17 @@ internal class GoogleBookLookup private constructor() {
                 }
             }
 
+            // Set a temporary id for the books to be their position in the stream
+            for ((i, b) in result.withIndex())
+                b.book.id = (index + i).toLong()
+
             // Calculate the next page key. Add the number of books we loaded to the current page index
             // If the result is null, or empty or we get to the number of books, set the key to null
             // which means that we are at the end of the pages
-            val nextKey = if (result == null || result.isEmpty() || index + result.size >= itemCount) null else index + result.size
+            val nextKey = if (result.isEmpty() || index + result.size >= itemCount) null else index + result.size
             // Return the loaded books
             return LoadResult.Page(
-                data = result?: emptyList(),
+                data = result,
                 prevKey = null,
                 nextKey = nextKey
             )
@@ -218,8 +221,8 @@ internal class GoogleBookLookup private constructor() {
         /**
          * Get a thumbnail link from a json object
          * @param json The json object
-         * @param thumbs The list of possible thumbnail value names in proprity order
-         * @return The thumnail URL or ""
+         * @param thumbs The list of possible thumbnail value names in proper order
+         * @return The thumbnail URL or ""
          * We search for the URL using the names in thumbs and return the first one found
          */
         private fun getThumbnail(json: JSONObject, thumbs: Array<String>) : String {
@@ -389,7 +392,7 @@ internal class GoogleBookLookup private constructor() {
         @Suppress("BlockingMethodInNonBlockingContext")
         @Throws(LookupException::class)
         private suspend fun queryBooks(spec: String?) : LookupResult? {
-            // Run in an IO context to handle coroutines propertly
+            // Run in an IO context to handle coroutines properly
             return withContext(Dispatchers.IO) {
                 var bookClient: HttpURLConnection? = null
                 try {

@@ -2,6 +2,7 @@ package com.github.cleveard.BiblioTech.ui.books
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
@@ -27,6 +28,12 @@ import kotlin.collections.HashSet
  * The view model for the book list
  */
 class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(app) {
+    init {
+        // Setup the selection handler
+        applyExtra = {
+            it.selected = selection.isSelected(it.book.id)
+        }
+    }
 
     /**
      * The book database repository
@@ -97,6 +104,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
+        selection.onSelectionChanged = {
+            adapter.refresh()
+        }
     }
 
     /**
@@ -105,13 +115,6 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     override fun onCleared() {
         filterView.removeObserver(viewObserver)
         super.onCleared()
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun invalidateUI() {
-        adapter.refresh()
     }
 
     /**
@@ -324,5 +327,12 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
             }
         }
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+        return repo.getThumbnail(bookId, large)
     }
 }

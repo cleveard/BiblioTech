@@ -5,82 +5,8 @@
     android:layout_height="wrap_content"
     tools:context="ui.books.BooksFragment" >
 
-    <RelativeLayout
-        android:id="@+id/book_list_always"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginVertical="5dp">
-
-        <LinearLayout
-            android:layout_width="360dp"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <ViewFlipper
-                android:id="@+id/book_list_flipper"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:layout_marginLeft="3dp">
-
-                <ImageView
-                    android:id="@+id/book_list_thumb"
-                    android:layout_width="27dp"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center"
-                    android:contentDescription="@string/book_thumb"
-                    android:scaleType="fitCenter" />
-
-                <ImageView
-                    android:layout_width="27dp"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center"
-                    android:layout_marginHorizontal="5dp"
-                    android:scaleType="fitCenter"
-                    android:src="@android:drawable/star_big_on" />
-            </ViewFlipper>
-
-            <RelativeLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="3dp"
-                android:layout_weight="10"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/book_list_title"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:contentDescription="@string/title_desc"
-                    android:textSize="@dimen/book_list_title_size"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/book_list_subtitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@id/book_list_title"
-                    android:contentDescription="@string/subtitle_desc" />
-
-                <TextView
-                    android:id="@+id/book_list_by"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_below="@id/book_list_subtitle"
-                    android:layout_marginRight="3dp"
-                    android:text="@string/authors_by" />
-
-                <TextView
-                    android:id="@+id/book_list_authors"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_alignBaseline="@+id/book_list_by"
-                    android:layout_toRightOf="@+id/book_list_by"
-                    android:contentDescription="@string/authors_desc" />
-            </RelativeLayout>
-
-        </LinearLayout>
-
-    </RelativeLayout>
+    <include layout="@layout/books_adapter_book_item_always"
+        android:id="@+id/book_list_always" />
 
     <RelativeLayout
         android:id="@+id/book_list_open"
@@ -102,11 +28,10 @@
             android:layout_height="wrap_content"
             android:layout_alignBottom="@id/book_list_rating"
             android:layout_marginHorizontal="5dp"
-            android:layout_toRightOf="@id/book_list_rating"
-            android:layout_toLeftOf="@id/book_list_pages"
+            android:layout_toEndOf="@id/book_list_rating"
+            android:layout_toStartOf="@id/book_list_pages"
             android:clickable="true"
-            android:maxLines="1"
-            android:text="TextView" />
+            android:maxLines="1" />
 
 
         <TextView
@@ -114,16 +39,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_list_pages_label"
-            android:layout_marginLeft="3dp"
-            android:layout_toLeftOf="@+id/book_list_pages_label" />
+            android:layout_marginStart="3dp"
+            android:layout_toStartOf="@+id/book_list_pages_label" />
 
         <TextView
             android:id="@+id/book_list_pages_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_list_link"
-            android:layout_alignParentRight="true"
-            android:layout_marginLeft="3dp"
+            android:layout_alignParentEnd="true"
+            android:layout_marginStart="3dp"
             android:text="@string/pages" />
 
         <TextView
@@ -131,8 +56,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/book_list_link"
-            android:layout_alignParentLeft="true"
-            android:layout_marginRight="3dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="3dp"
             android:text="@string/categories" />
 
         <TextView
@@ -140,15 +65,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_categories_label"
-            android:layout_toRightOf="@+id/book_categories_label" />
+            android:layout_toEndOf="@+id/book_categories_label" />
 
         <TextView
             android:id="@+id/book_tags_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/book_categories"
-            android:layout_alignParentLeft="true"
-            android:layout_marginRight="3dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="3dp"
             android:text="@string/tags" />
 
         <TextView
@@ -156,15 +81,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_tags_label"
-            android:layout_toRightOf="@+id/book_tags_label" />
+            android:layout_toEndOf="@+id/book_tags_label" />
 
         <TextView
             android:id="@+id/book_id_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_isbn"
-            android:layout_alignParentLeft="true"
-            android:layout_marginRight="3dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="3dp"
             android:text="@string/id" />
 
         <TextView
@@ -172,16 +97,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_isbn"
-            android:layout_toLeftOf="@+id/book_isbn_label"
-            android:layout_toRightOf="@+id/book_id_label" />
+            android:layout_toStartOf="@+id/book_isbn_label"
+            android:layout_toEndOf="@+id/book_id_label" />
 
         <TextView
             android:id="@+id/book_isbn_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_isbn"
-            android:layout_marginRight="3dp"
-            android:layout_toLeftOf="@+id/book_isbn"
+            android:layout_marginEnd="3dp"
+            android:layout_toStartOf="@+id/book_isbn"
             android:text="@string/isbn" />
 
         <TextView
@@ -189,15 +114,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/book_tags"
-            android:layout_alignParentRight="true" />
+            android:layout_alignParentEnd="true" />
 
         <TextView
             android:id="@+id/book_list_added_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_list_modified"
-            android:layout_alignParentLeft="true"
-            android:layout_marginRight="3dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="3dp"
             android:text="@string/added" />
 
         <TextView
@@ -205,16 +130,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_list_modified"
-            android:layout_toLeftOf="@+id/book_list_modified_label"
-            android:layout_toRightOf="@+id/book_list_added_label" />
+            android:layout_toStartOf="@+id/book_list_modified_label"
+            android:layout_toEndOf="@+id/book_list_added_label" />
 
         <TextView
             android:id="@+id/book_list_modified_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignBaseline="@+id/book_list_modified"
-            android:layout_marginRight="3dp"
-            android:layout_toLeftOf="@+id/book_list_modified"
+            android:layout_marginEnd="3dp"
+            android:layout_toStartOf="@+id/book_list_modified"
             android:text="@string/modified" />
 
         <TextView
@@ -222,7 +147,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/book_isbn"
-            android:layout_alignParentRight="true" />
+            android:layout_alignParentEnd="true" />
 
         <ImageView
             android:id="@+id/book_thumb"
@@ -243,11 +168,5 @@
             android:layout_marginTop="3dp" />
 
     </RelativeLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_below="@id/book_list_open"
-        android:background="?android:attr/listDivider" />
 
 </RelativeLayout>

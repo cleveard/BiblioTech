@@ -3,10 +3,9 @@ package com.github.cleveard.BiblioTech.ui.scan
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.gb.*
 import android.Manifest
-import android.app.Activity
 import android.content.*
 import android.content.pm.PackageManager
-import android.content.res.Resources
+import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.util.DisplayMetrics
@@ -17,17 +16,12 @@ import android.widget.*
 import androidx.camera.core.*
 import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.app.ActivityCompat
-import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.PagingDataAdapter
-import androidx.paging.cachedIn
+import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.*
@@ -36,18 +30,18 @@ import com.github.cleveard.BiblioTech.gb.GoogleBookLookup.Companion.generalLooku
 import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
-import com.github.cleveard.BiblioTech.utils.AutoFitPreviewBuilder
-import com.github.cleveard.BiblioTech.utils.CoroutineAlert
-import com.github.cleveard.BiblioTech.utils.coroutineAlert
+import com.github.cleveard.BiblioTech.utils.*
+import com.github.cleveard.BiblioTech.utils.ParentAccess
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.lang.Exception
 import java.lang.StringBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
@@ -266,7 +260,7 @@ class ScanFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Setup local properties
-        container = view.findViewById<ConstraintLayout>(R.id.scan_content)
+        container = view.findViewById(R.id.scan_content)
         viewFinder = container.findViewById(R.id.view_finder)
         broadcastManager = LocalBroadcastManager.getInstance(view.context)
 
@@ -370,6 +364,7 @@ class ScanFragment : Fragment() {
 
                 // Start a coroutine job to run query for the book
                 booksViewModel.viewModelScope.launch {
+                    var notFound = true         // Flag if we found anything
                     // Look through the codes we found
                     for (isbn in codes) {
                         try {
@@ -385,6 +380,7 @@ class ScanFragment : Fragment() {
                             }
 
                             // Select a book from the ones we found
+                            notFound = false
                             val array = selectBook(result.list, isbn, result.itemCount, false)
                             if (array.size() > 0) {
                                 val book = array.valueAt(0)
@@ -413,6 +409,15 @@ class ScanFragment : Fragment() {
                             ).show()
                         }
                     }
+
+                    if (notFound) {
+                        // If we got here we didn't find anything
+                        Toast.makeText(
+                            context,
+                            context!!.resources.getString(R.string.no_books_found),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             })
         }
@@ -433,7 +438,7 @@ class ScanFragment : Fragment() {
             try {
                 // Lookup using isbn
                 val spec = GoogleBookLookup.getTitleAuthorQuery(title, author)
-                val result = GoogleBookLookup.generalLookup(spec)
+                val result = generalLookup(spec)
                 // If we still didn't find anything, stop
                 if (result == null || result.list.isEmpty()) {
                     Toast.makeText(
@@ -631,22 +636,83 @@ class ScanFragment : Fragment() {
      */
     private suspend fun selectBook(list: List<BookAndAuthors>, spec: String, totalItems: Int, isMulti: Boolean): SparseArray<BookAndAuthors> {
         return coroutineScope {
-            if (list.size == 1) {
+            if (list.size == 1 && !isMulti) {
                 // If the query resulted in a single book, then select it
                 return@coroutineScope SparseArray<BookAndAuthors>(1).also {
                     it.put(0, list[0])
                 }
             }
+            // Get the page and item counts
             val pageCount = list.size
             val itemCount = if (totalItems > 0) totalItems else pageCount
+            // This is where we keep the pager job
             var pagerJob: Job? = null
-            return@coroutineScope try {
+            // Setup separate thumbnails for this query
+            val thumbnails = Thumbnails("gb")
+            try {
                 // Otherwise display a dialog to select the book
                 coroutineAlert<SparseArray<BookAndAuthors>>(context!!, SparseArray()) { alert ->
 
                     // Get the content view for the dialog
                     val content =
                         parentFragment!!.layoutInflater.inflate(R.layout.scan_select_book, null)
+
+                    // Create an object the book adapter uses to get info
+                    val access = object: ParentAccess {
+                        // This array is used to map positions to selected books
+                        // and is the final result of the select book dialog
+                        val selection = alert.result
+                        // This is the adapter
+                        lateinit var adapter: BooksAdapter
+                        // Toggle the selection for an id
+                        override fun toggleSelection(id: Long) {
+                            val index = id.toInt()
+                            if (selection.indexOfKey(index) >= 0) {
+                                // Selection contains the key, remove it
+                                // for multi selection, do nothing for single
+                                if (!isMulti)
+                                    return      // Don't refresh the adapter
+                                selection.get(index).selected = false
+                                selection.remove(index)
+                            } else {
+                                // Selection doesn't contain the key, add it
+                                // clear any other selections if not multi selection
+                                if (!isMulti) {
+                                    for (i in 0 until selection.size()) {
+                                        selection.valueAt(i).selected = false
+                                        adapter.notifyItemChanged(selection.keyAt(i))
+                                    }
+                                    selection.clear()
+                                }
+                                // Add the boo
+                                adapter.getBook(index)?.let {
+                                    it.selected = true
+                                    selection.put(index, it)
+                                }
+                            }
+                            // Refresh the adapter
+                            adapter.notifyItemChanged(index)
+                        }
+
+                        // Launch a coroutine. Use this scope
+                        override fun launch(task: suspend CoroutineScope.() -> Unit): Job {
+                            return this@coroutineScope.launch(block = task)
+                        }
+
+                        // Get a thumbnail
+                        override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+                            // Use the thumbnails we constructed above
+                            return thumbnails.getThumbnail(bookId, large) {b, l ->
+                                // Get the book from the adapter and the url from the book
+                                adapter.getBook(b.toInt())?.let {
+                                    if (l)
+                                        it.book.largeThumb
+                                    else
+                                        it.book.smallThumb
+                                }
+                            }
+                        }
+                    }
 
                     // Create a pager to drive the recycler view
                     val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
@@ -655,18 +721,21 @@ class ScanFragment : Fragment() {
                     ) {
                         GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
                     }
-                    val flow = pager.flow.cachedIn(booksViewModel.viewModelScope)
-
+                    val flow = pager.flow.map {
+                        it.map { b ->
+                            (b as? BookAndAuthors)?.apply { selected = access.selection.indexOfKey(book.id.toInt()) >= 0 }?: b
+                        }
+                    }.cachedIn(booksViewModel.viewModelScope)
                     // Find the recycler view and set the layout manager and adapter
                     val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-                    val adapter = getAdapter(alert, isMulti)
+                    access.adapter = BooksAdapter(context!!, access, R.layout.books_adapter_book_item_always)
                     titles.layoutManager = LinearLayoutManager(activity)
-                    titles.adapter = adapter
+                    titles.adapter = access.adapter
 
                     // Start the book stream to the recycler view
                     pagerJob = booksViewModel.viewModelScope.launch {
                         flow.collectLatest { data ->
-                            adapter.submitData(data)
+                            access.adapter.submitData(data)
                         }
                     }
 
@@ -681,113 +750,8 @@ class ScanFragment : Fragment() {
                 }.show()
             } finally {
                 pagerJob?.cancel()
+                thumbnails.deleteAllThumbFiles()
             }
         }
-    }
-
-    /**
-     * Get a paging adapter to show book titles
-     * @param alert The CoroutineAlert object for the dialog
-     * @param isMulti True to select multiple titles
-     * @return the paging adapter
-     */
-    private fun getAdapter(alert: CoroutineAlert<SparseArray<BookAndAuthors>>, isMulti: Boolean): PagingDataAdapter<Any, BooksAdapter.ViewHolder> {
-        /**
-         * Recycler adapter to display the  books
-         * @param multi True if we can select multiple titles
-         */
-        class BookPagingAdapter(private val multi: Boolean) : PagingDataAdapter<Any, BooksAdapter.ViewHolder>(
-            BooksAdapter.DIFF_CALLBACK
-        ) {
-            /**
-             * Selected book position
-             */
-            private var selectedTitles = SparseArray<CompoundButton>()
-
-            // On click listener for the radio buttons. Need to handle this manually because
-            // the recycler view doesn't
-            private val onRadioClick = View.OnClickListener { v ->
-                try {
-                    val button = v as CompoundButton
-                    val position = v.tag as Int
-                    // If we select a new book
-                    if (multi) {
-                        // Multiple selection, if we are checking, add it to the list
-                        if (button.isChecked) {
-                            selectedTitles.put(position, button)
-                            alert.result.put(position, getItem(position) as BookAndAuthors)
-                        } else {
-                            // Otherwise remove it from the list
-                            val title = selectedTitles [position]
-                            if (title != null) {
-                                selectedTitles.remove(position)
-                                alert.result.remove(position)
-                            }
-                        }
-                    } else {
-                        if (selectedTitles.size() > 0) {
-                            // Uncheck the previously selected book
-                            selectedTitles.valueAt(0).isChecked = false
-                            selectedTitles.removeAt(0)
-                            alert.result.removeAt(0)
-                        }
-                        // Check this book
-                        button.isChecked = true
-                        selectedTitles.put(position, button)
-                        alert.result.put(position, getItem(position) as BookAndAuthors)
-                    }
-                }
-                catch(e: Exception) {
-                }
-            }
-
-            /**
-             * @inheritDoc
-             */
-            override fun onCreateViewHolder(
-                parent: ViewGroup,
-                viewType: Int
-            ): BooksAdapter.ViewHolder {
-                // Just create a single radio button for each book
-                val button = if(multi) CheckBox(context) else RadioButton(context)
-                val viewHolder = BooksAdapter.ViewHolder(button)
-                button.setOnClickListener(onRadioClick)
-                val pad = (2 * Resources.getSystem().getDisplayMetrics().density).toInt()
-                button.setPadding(0, pad, 0, pad)
-                return viewHolder
-            }
-
-            /**
-             * @inheritDoc
-             */
-            override fun onBindViewHolder(holder: BooksAdapter.ViewHolder, position: Int) {
-                val book = getItem(position)
-                val button = holder.itemView as CompoundButton
-                // If we are binding a selected book, deselect it
-                val selected = selectedTitles[position]?.let {
-                    if (button != it) {
-                        it.isChecked = false
-                        selectedTitles.remove(position)
-                        alert.result.remove(position)
-                        null
-                    } else
-                        it
-                }
-
-                // Set the title, tag and checked
-                button.text = (book as? BookAndAuthors)?.let {
-                    val builder = StringBuilder()
-                    // Add the title and a new line
-                    builder.append(it.book.title)
-                    builder.append("\n")
-                    // Then all of the authors
-                    buildAuthors(builder, it.authors)
-                }?: ""
-                button.tag = position
-                button.isChecked = selected != null
-            }
-        }
-
-        return BookPagingAdapter(isMulti)
     }
 }

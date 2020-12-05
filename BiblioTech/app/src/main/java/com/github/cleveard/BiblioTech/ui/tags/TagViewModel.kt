@@ -10,6 +10,12 @@ import com.github.cleveard.BiblioTech.utils.GenericViewModel
  * @param app The application
  */
 class TagViewModel(app: Application): GenericViewModel<Tag>(app) {
+    init {
+        // Setup the selection handler
+        applyExtra = {
+            it.selected = selection.isSelected(it.tag.id)
+        }
+    }
 
     /**
      * Repository with the tag data
@@ -21,10 +27,9 @@ class TagViewModel(app: Application): GenericViewModel<Tag>(app) {
      */
     internal val adapter = TagsAdapter(this)
 
-    /**
-     * @inheritDoc
-     */
-    override fun invalidateUI() {
-        adapter.refresh()
+    init {
+        selection.onSelectionChanged = {
+            adapter.refresh()
+        }
     }
 }

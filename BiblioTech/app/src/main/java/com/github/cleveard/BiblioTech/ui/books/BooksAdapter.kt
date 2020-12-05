@@ -14,20 +14,17 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
-import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.BiblioTech.utils.GenericViewModel
-import kotlinx.coroutines.launch
+import com.github.cleveard.BiblioTech.utils.ParentAccess
 import java.lang.StringBuilder
 import java.text.DateFormat
-
 
 /**
  * Paging Adapter for the Books fragment book list
  */
-internal open class BooksAdapter(context: Context, private val viewModel: GenericViewModel<BookAndAuthors>) :
+internal open class BooksAdapter(context: Context, private val access: ParentAccess, private val bookLayout: Int = R.layout.books_adapter_book_item) :
     PagingDataAdapter<Any, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     /**
@@ -56,7 +53,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
             arg1: View
         ) {
             val view = arg1.findViewById<View>(R.id.book_list_open)
-            view.visibility = if (visible) View.VISIBLE else View.GONE
+            view?.visibility = if (visible) View.VISIBLE else View.GONE
         }
 
         /**
@@ -65,7 +62,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
          */
         fun toggleViewVisibility(arg1: View): Boolean {
             val view = arg1.findViewById<View>(R.id.book_list_open)
-            val visible = view.visibility != View.VISIBLE
+            val visible = view?.visibility != View.VISIBLE
             changeViewVisibility(visible, arg1)
             return visible
         }
@@ -90,7 +87,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
          */
         private fun String?.setField(parent: View, id: Int) {
             val text = parent.findViewById<TextView>(id)
-            text.text = this ?: ""
+            text?.text = this ?: ""
         }
 
         /**
@@ -103,24 +100,25 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         private fun <T> List<T>?.setField(parent: View, id: Int, separator: String,
                                           toString: (T) -> String) {
             // Get the text view
-            val text = parent.findViewById<TextView>(id)
-            if (this == null) {
-                // Null list - set the view to ""
-                text.text = ""
-            } else {
-                // Build the string
-                val value = StringBuilder()
-                for (entry in this) {
-                    // Convert the entry to a string
-                    val s = toString(entry)
-                    if (s.isNotEmpty()) {
-                        // Append the separator and then the string
-                        if (value.isNotEmpty())
-                            value.append(separator)
-                        value.append(s)
+            parent.findViewById<TextView>(id)?.let { text ->
+                if (this == null) {
+                    // Null list - set the view to ""
+                    text.text = ""
+                } else {
+                    // Build the string
+                    val value = StringBuilder()
+                    for (entry in this) {
+                        // Convert the entry to a string
+                        val s = toString(entry)
+                        if (s.isNotEmpty()) {
+                            // Append the separator and then the string
+                            if (value.isNotEmpty())
+                                value.append(separator)
+                            value.append(s)
+                        }
                     }
+                    text.text = value
                 }
-                text.text = value
             }
         }
 
@@ -152,6 +150,17 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
     }
 
     /**
+     * Get the book at position or null
+     * @param position The position of the book
+     */
+    fun getBook(position: Int): BookAndAuthors? {
+        return if (position >= 0 && position < itemCount)
+            getItem(position) as? BookAndAuthors
+        else
+            null
+    }
+
+    /**
      * ViewHolder for the adapter - Nothing is added
      */
     internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
@@ -163,7 +172,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
      */
     override fun getItemViewType(position: Int): Int {
         if (getItem(position) is BookAndAuthors)
-            return R.layout.books_adapter_book_item
+            return bookLayout
         return R.layout.books_adapter_header_item
     }
 
@@ -178,7 +187,7 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         val contactView: View = inflater.inflate(viewType, parent, false)
         // Create the holder
         val holder = ViewHolder(contactView)
-        if (viewType == R.layout.books_adapter_book_item) {
+        if (viewType != R.layout.books_adapter_header_item) {
             // This is a book we want to display
             contactView.setOnClickListener {
                 // When a book is clicked, toggle the visibility of
@@ -186,16 +195,16 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
                 toggleViewVisibility(it)
             }
             // When the view flipper is click, change the view and toggle it's selection
-            contactView.findViewById<ViewFlipper>(R.id.book_list_flipper).setOnClickListener {
+            contactView.findViewById<ViewFlipper>(R.id.book_list_flipper)?.setOnClickListener {
                 if (it is ViewFlipper) {
                     getItem(holder.layoutPosition)?.apply {
                         this as BookAndAuthors
-                        viewModel.selection.toggle(book.id)
+                        access.toggleSelection(book.id)
                     }
                 }
             }
             // When the books link is clicked go to the web site
-            contactView.findViewById<TextView>(R.id.book_list_link).setOnClickListener {
+            contactView.findViewById<TextView>(R.id.book_list_link)?.setOnClickListener {
                 if (it is TextView) {
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.text.toString()))
@@ -219,21 +228,23 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
      * @param viewId The viewId for the view the thumbnail is bound to
      */
     private fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
-        // Start a coroutine
-        viewModel.viewModelScope.launch {
-            // Get the thumbnail
-            BookRepository.repo.getThumbnail(
-                bookId,
-                large
-            )?.also {
-                // Ok we got it, make sure the view holder is referring to the same book
-                val pos = holder.layoutPosition
-                if (pos in 0 until itemCount) {
-                    getItem(pos)?.apply {
-                        this as BookAndAuthors
-                        // Set the thumbnail if the ids are the same
-                        if (book.id == bookId)
-                            holder.itemView.findViewById<ImageView>(viewId).setImageBitmap(it)
+        holder.itemView.findViewById<ImageView>(viewId)?.let { imageView ->
+            // Start a coroutine
+            access.launch {
+                // Get the thumbnail
+                access.getThumbnail(
+                    bookId,
+                    large
+                )?.also {
+                    // Ok we got it, make sure the view holder is referring to the same book
+                    val pos = holder.layoutPosition
+                    if (pos in 0 until itemCount) {
+                        getItem(pos)?.apply {
+                            this as BookAndAuthors
+                            // Set the thumbnail if the ids are the same
+                            if (book.id == bookId)
+                                imageView.setImageBitmap(it)
+                        }
                     }
                 }
             }
@@ -264,11 +275,6 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
 
         // Make sure view is visible
         holder.itemView.visibility = View.VISIBLE
-        // Get the views to the thumbnails
-        val thumbSmall =
-            holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)
-        val thumbLarge =
-            holder.itemView.findViewById<ImageView>(R.id.book_thumb)
 
         // Set the fields for the views using the extension functions
         book.book.title.setField(holder.itemView, R.id.book_list_title)
@@ -297,19 +303,18 @@ internal open class BooksAdapter(context: Context, private val viewModel: Generi
         book.book.linkUrl.setField(holder.itemView, R.id.book_list_link)
         book.book.pageCount.toString().setField(holder.itemView, R.id.book_list_pages)
         // Set the rating
-        holder.itemView.findViewById<RatingBar>(R.id.book_list_rating).rating = book.book.rating.toFloat()
+        holder.itemView.findViewById<RatingBar>(R.id.book_list_rating)?.rating = book.book.rating.toFloat()
         // Set the dates using the date format
         format.format(book.book.added).setField(holder.itemView, R.id.book_list_added)
         format.format(book.book.modified).setField(holder.itemView, R.id.book_list_modified)
         // Set the icon to the thumbnail or selected icon
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
-        box.displayedChild = if (book.selected) 1 else 0
+        box?.displayedChild = if (book.selected) 1 else 0
         // Make the details invisible
         changeViewVisibility(false, holder.itemView)
-
         // Set the default thumbnails and get the real ones
-        thumbSmall.setImageDrawable(m_nothumb)
-        thumbLarge.setImageResource(0)
+        holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(m_nothumb)
+        holder.itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
         bindThumb(book.book.id, false, holder, R.id.book_list_thumb)
         bindThumb(book.book.id, true, holder, R.id.book_thumb)
     }
