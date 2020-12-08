@@ -1,6 +1,7 @@
 package com.github.cleveard.BiblioTech.ui.tags
 
 import android.os.Bundle
+import android.util.SparseArray
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -18,6 +19,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.TagEntity
+import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
+import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.coroutines.Job
@@ -35,19 +38,19 @@ class TagsFragment : Fragment() {
     private lateinit var tagViewModel: TagViewModel
 
     /**
+     * The view model for the tags fragment
+     */
+    private lateinit var booksViewModel: BooksViewModel
+
+    /**
      * Coroutine job for handling the pager flow
      */
     private lateinit var pagerJob: Job
 
     /**
-     * Delete tag menu item: used to enable/disable it
+     * Menu items that need to be enabled and disabled
      */
-    private lateinit var deleteItem: MenuItem
-
-    /**
-     * Edit tag menu item: used to enable/disable it
-     */
-    private lateinit var editItem: MenuItem
+    private val menuItems: SparseArray<MenuItem?> = SparseArray<MenuItem?>()
 
     /**
      * Observers to update menu when selection changes
@@ -64,9 +67,11 @@ class TagsFragment : Fragment() {
     ): View? {
         // Inflate the layout for this fragment
         val content = inflater.inflate(R.layout.tags_fragment, container, false)
-        // Get the view model
+        // Get the view models
         tagViewModel =
             MainActivity.getViewModel(activity, TagViewModel::class.java)
+        booksViewModel =
+            MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Setup the tag recycler view
         setupRecyclerView(content)
@@ -76,6 +81,7 @@ class TagsFragment : Fragment() {
 
         // Observe the tag selection to update the action menu
         tagViewModel.selection.hasSelection.observe(this, observerHasSelection)
+        booksViewModel.selection.hasSelection.observe(this, observerHasSelection)
         tagViewModel.selection.lastSelection.observe(this, observerLastSelection)
 
         return content
@@ -88,6 +94,7 @@ class TagsFragment : Fragment() {
         // Cancel the pager flow job
         pagerJob.cancel()
         // Remove the selection observer
+        booksViewModel.selection.hasSelection.removeObserver(observerHasSelection)
         tagViewModel.selection.hasSelection.removeObserver(observerHasSelection)
         tagViewModel.selection.lastSelection.removeObserver(observerLastSelection)
         super.onDestroyView()
@@ -128,6 +135,21 @@ class TagsFragment : Fragment() {
             R.id.action_new_tag -> onNewTag()       // Create a new tag
             R.id.action_delete -> onDeleteTags()    // Delete selected tags
             R.id.action_edit -> onEditTag()         // Edit last selected tag
+            R.id.action_add_tags -> {
+                // Add tags to books menu item or button
+                TagModalAction.doAddTags(this)
+                true
+            }
+            R.id.action_remove_tags -> {
+                // Remove tags from books menu item or button
+                TagModalAction.doRemoveTags(this)
+                true
+            }
+            R.id.action_replace_tags -> {
+                // Replace tags for books menu item or button
+                TagModalAction.doReplaceTags(this)
+                true
+            }
             R.id.action_select_none -> {
                 // Deselect all tags
                 tagViewModel.selection.selectAll(false)
@@ -165,8 +187,15 @@ class TagsFragment : Fragment() {
         activity?.menuInflater?.inflate(R.menu.tags_options, menu)
 
         // Get the menu items that we enable and disable
-        deleteItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
-        editItem = BaseViewModel.setupIcon(context, menu, R.id.action_edit)
+        BaseViewModel.setupIcon(context, menu, R.id.action_new_tag)
+        menuItems.put(R.id.action_delete, BaseViewModel.setupIcon(context, menu, R.id.action_delete))
+        menuItems.put(R.id.action_edit, BaseViewModel.setupIcon(context, menu, R.id.action_edit))
+        menuItems.put(R.id.action_add_tags, BaseViewModel.setupIcon(context, menu, R.id.action_add_tags))
+        menuItems.put(R.id.action_remove_tags, BaseViewModel.setupIcon(context, menu, R.id.action_remove_tags))
+        menuItems.put(R.id.action_replace_tags, BaseViewModel.setupIcon(context, menu, R.id.action_replace_tags))
+        BaseViewModel.setupIcon(context, menu, R.id.action_select_none)
+        BaseViewModel.setupIcon(context, menu, R.id.action_select_all)
+        BaseViewModel.setupIcon(context, menu, R.id.action_select_invert)
     }
 
     /**
@@ -306,11 +335,17 @@ class TagsFragment : Fragment() {
      * Update the tags fragment action menu
      */
     private fun updateMenu() {
-        // Get the tag selection state
-        val selectedTags = tagViewModel.selection.hasSelection.value?: false
+        // Get the has selected state for books and tags
+        val selectedTags = tagViewModel.selection.hasSelection.value == true
         val lastSelection = tagViewModel.selection.lastSelection.value
+        val booksSelected = booksViewModel.selection.hasSelection.value == true
 
-        deleteItem.isEnabled = selectedTags
-        editItem.isEnabled = lastSelection != null
+        menuItems.get(R.id.action_delete)?.isEnabled = selectedTags
+        menuItems.get(R.id.action_edit)?.isEnabled = lastSelection != null
+        // Enable add and remove tags if any books and any tags are selected
+        menuItems.get(R.id.action_add_tags)?.isEnabled = booksSelected && selectedTags
+        menuItems.get(R.id.action_remove_tags)?.isEnabled = booksSelected && selectedTags
+        // Enable replace tags if any books are selected
+        menuItems.get(R.id.action_replace_tags)?.isEnabled = booksSelected
     }
 }

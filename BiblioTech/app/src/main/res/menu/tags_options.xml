@@ -18,9 +18,19 @@
         android:title="@string/edit_tag"
         app:showAsAction="always" />
     <item
-        android:id="@+id/action_select_all"
-        android:title="@string/select_all"
-        android:titleCondensed="@string/all"
+        android:id="@+id/action_add_tags"
+        android:icon="@drawable/ic_add_tags_24"
+        android:title="@string/tag_books"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_remove_tags"
+        android:icon="@drawable/ic_remove_tags_24"
+        android:title="@string/remove_tags"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_replace_tags"
+        android:icon="@drawable/ic_replace_tags_24"
+        android:title="@string/replace_tags"
         app:showAsAction="always" />
     <item
         android:id="@+id/action_select_none"
@@ -28,8 +38,13 @@
         android:titleCondensed="@string/none"
         app:showAsAction="always" />
     <item
+        android:id="@+id/action_select_all"
+        android:title="@string/select_all"
+        android:titleCondensed="@string/all"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/action_select_invert"
         android:title="@string/select_invert"
         android:titleCondensed="@string/swap"
-        app:showAsAction="always" />
+        app:showAsAction="ifRoom" />
 </menu>

@@ -16,101 +16,6 @@
         android:paddingBottom="8dp">
 
         <TextView
-            android:id="@+id/edit_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/edit"
-            android:textSize="24sp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/action_delete"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="8dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:paddingStart="20dp"
-            android:text=""
-            app:cornerRadius="4dp"
-            app:icon="@android:drawable/ic_menu_delete"
-            app:iconGravity="textStart"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/edit_label"
-            app:strokeColor="@color/colorPrimaryDark" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/action_add_tags"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginTop="8dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:paddingStart="24dp"
-            android:paddingTop="8dp"
-            android:text=""
-            app:cornerRadius="4dp"
-            app:icon="@drawable/ic_add_tags_24"
-            app:iconGravity="textStart"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/action_delete"
-            app:strokeColor="@color/colorPrimaryDark" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/action_remove_tags"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:paddingStart="24dp"
-            android:paddingTop="8dp"
-            android:text=""
-            app:cornerRadius="4dp"
-            app:icon="@drawable/ic_remove_tags_24"
-            app:iconGravity="textStart"
-            app:layout_constraintBaseline_toBaselineOf="@id/action_add_tags"
-            app:layout_constraintStart_toEndOf="@id/action_add_tags"
-            app:strokeColor="@color/colorPrimaryDark" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/action_replace_tags"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            android:paddingStart="24dp"
-            android:paddingTop="8dp"
-            android:text=""
-            app:cornerRadius="4dp"
-            app:icon="@drawable/ic_replace_tags_24"
-            app:iconGravity="textStart"
-            app:layout_constraintBaseline_toBaselineOf="@id/action_add_tags"
-            app:layout_constraintStart_toEndOf="@id/action_remove_tags"
-            app:strokeColor="@color/colorPrimaryDark" />
-
-        <View
-            android:id="@+id/end_edit"
-            style="@style/Divider"
-            android:layout_marginTop="8dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/action_add_tags" />
-
-        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -176,7 +81,7 @@
             app:cornerRadius="4dp"
             app:icon="@drawable/ic_baseline_save_alt_24"
             app:iconGravity="textStart"
-            app:layout_constraintTop_toBottomOf="@id/end_edit"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:strokeColor="@color/colorPrimaryDark" />
 
@@ -249,25 +154,6 @@
             <!-- -->
 
         </TableLayout>
-
-        <View
-            android:id="@+id/end_criteria"
-            style="@style/Divider"
-            android:layout_marginTop="8dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/filter_table" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/action_apply_filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/apply_filter"
-            app:cornerRadius="4dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/end_criteria"
-            app:strokeColor="@color/colorPrimaryDark" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

@@ -32,6 +32,7 @@ import com.github.cleveard.BiblioTech.ui.filter.OrderTable
 import com.github.cleveard.BiblioTech.ui.modes.DeleteModalAction
 import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
+import com.github.cleveard.BiblioTech.utils.BaseViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.android.synthetic.main.books_drawer.view.*
 import kotlinx.coroutines.coroutineScope
@@ -60,6 +61,11 @@ class BooksFragment : Fragment() {
      * The menu item used to show and hide the edit and filter drawer
      */
     private var drawerMenuItem: MenuItem? = null
+
+    /**
+     * The menu item to delete books
+     */
+    private var deleteMenuItem: MenuItem? = null
 
     /**
      * Drawable to use in drawerMenuItem when the edit and filter drawer is visible
@@ -246,7 +252,6 @@ class BooksFragment : Fragment() {
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
 
         // Set the initial state of the menus and buttons
-        updateMenuAndButtons()
         return root
     }
 
@@ -355,7 +360,9 @@ class BooksFragment : Fragment() {
         inflater.inflate(R.menu.books_options, menu)
         // Save the edit and filter drawer menu item
         drawerMenuItem = menu.findItem(R.id.action_drawer)
+        deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
         super.onCreateOptionsMenu(menu, inflater)
+        updateMenuAndButtons()
     }
 
     /**
@@ -374,18 +381,6 @@ class BooksFragment : Fragment() {
             R.id.action_delete -> {
                 // Delete menu item or button
                 DeleteModalAction.doDelete(this)
-            }
-            R.id.action_add_tags -> {
-                // Add tags to books menu item or button
-                TagModalAction.doAddTags(this)
-            }
-            R.id.action_remove_tags -> {
-                // Remove tags from books menu item or button
-                TagModalAction.doRemoveTags(this)
-            }
-            R.id.action_replace_tags -> {
-                // Replace tags for books menu item or button
-                TagModalAction.doReplaceTags(this)
             }
             R.id.action_select_none -> {
                 // Select no books menu item
@@ -408,9 +403,6 @@ class BooksFragment : Fragment() {
             R.id.action_remove_filter -> {
                 removeFilter()
             }
-            R.id.action_apply_filter -> {
-                saveFilter()
-            }
             else -> return false
         }
         return true
@@ -428,20 +420,14 @@ class BooksFragment : Fragment() {
      * Update menu and buttons
      */
     private fun updateMenuAndButtons() {
-        // Get the has selected state for books and tags
+        // Get the has selected state for books
         val booksSelected = booksViewModel.selection.hasSelection.value == true
-        val tagsSelected = tagViewModel.selection.hasSelection.value == true
-
-        // Enable delete if any books are selected
-        actionButtons[R.id.action_delete]?.isEnabled = booksSelected
-        // Enable add and remove tags if any books and any tags are selected
-        actionButtons[R.id.action_add_tags]?.isEnabled = booksSelected && tagsSelected
-        actionButtons[R.id.action_remove_tags]?.isEnabled = booksSelected && tagsSelected
-        // Enable replace tags if any books are selected
-        actionButtons[R.id.action_replace_tags]?.isEnabled = booksSelected
 
         // Enable delete if this is not the global list
         actionButtons[R.id.action_remove_filter].isEnabled = args.filterName?.isNotEmpty() ?: false
+
+        // Enable delete if any books are selected
+        deleteMenuItem?.isEnabled = booksSelected
 
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?

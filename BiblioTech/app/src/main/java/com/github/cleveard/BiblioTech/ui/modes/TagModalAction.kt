@@ -258,7 +258,7 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_repl_tag_books, R.string.repl_tag_books_unknown) { bookIds, tagIds, booksInvert, tagsInvert ->
+                R.plurals.ask_repl_tag_books, R.string.repl_tag_books_unknown, true) { bookIds, tagIds, booksInvert, tagsInvert ->
                 booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksInvert, !tagsInvert)
                 booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksInvert, tagsInvert)
                 // Finish the acton
@@ -281,6 +281,7 @@ class TagModalAction private constructor(
             tagViewModel: TagViewModel,
             pluralMessage: Int,
             unkMessage: Int,
+            allowEmptyTags: Boolean = false,
             callback: suspend (bookIds: Array<Any>, tagIds: Array<Any>,
                        booksInvert: Boolean, tagsInvert: Boolean) -> Unit
         ): Boolean {
@@ -290,7 +291,7 @@ class TagModalAction private constructor(
             val tagIds = tagViewModel.selection.selection
             val tagsInverted = tagViewModel.selection.inverted
             if ((booksInverted || bookIds.isNotEmpty()) &&
-                (tagsInverted || tagIds.isNotEmpty())){
+                (allowEmptyTags || tagsInverted || tagIds.isNotEmpty())){
                 // Make sure we really want to tag the books
                 val builder = AlertDialog.Builder(context)
                 builder.setMessage(

@@ -74,7 +74,7 @@
     </plurals>
     <string name="untag_books_unknown">Remove tags from books?</string>
     <plurals name="ask_repl_tag_books">
-        <item quantity="one">Replace tags fos %d books?</item>
+        <item quantity="one">Replace tags for %d books?</item>
         <item quantity="other">Replace tags for %d books?</item>
     </plurals>
     <string name="repl_tag_books_unknown">Replace tags for books?</string>
