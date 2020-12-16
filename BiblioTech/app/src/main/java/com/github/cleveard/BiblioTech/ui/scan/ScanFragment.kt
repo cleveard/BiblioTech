@@ -5,6 +5,7 @@ import com.github.cleveard.BiblioTech.gb.*
 import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
+import android.database.Cursor
 import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
 import android.os.Bundle
@@ -18,6 +19,8 @@ import androidx.camera.core.ImageCapture.CaptureMode
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -30,18 +33,18 @@ import com.github.cleveard.BiblioTech.gb.GoogleBookLookup.Companion.generalLooku
 import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
+import com.github.cleveard.BiblioTech.ui.tags.TagsFragment
+import com.github.cleveard.BiblioTech.ui.widget.ChipBox
 import com.github.cleveard.BiblioTech.utils.*
 import com.github.cleveard.BiblioTech.utils.ParentAccess
+import com.google.android.material.chip.Chip
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import java.lang.StringBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
@@ -72,6 +75,11 @@ class ScanFragment : Fragment() {
      * The tags view model
      */
     private lateinit var tagViewModel: TagViewModel
+
+    /**
+     * The current tags
+     */
+    private var tags: LiveData<List<TagEntity>>? = null
 
     /**
      * Root of the scan fragment layout
@@ -130,6 +138,43 @@ class ScanFragment : Fragment() {
      * Set to false when you are done.
      */
     private var previewing = false
+
+    /**
+     * Selection changed listener
+     */
+    private val selectChange: () -> Unit = {
+        chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(tags?.value))
+    }
+
+    /**
+     * Observer of tag list live data
+     */
+    private val tagObserver: Observer<List<TagEntity>?> = Observer {list ->
+        chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(list))
+    }
+
+    private var chipBox: ChipBox? = null
+
+    private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
+        chip as TagChip
+        chipBox?.removeView(chip)
+        tagViewModel.selection.select(chip.tag.id, false)
+    }
+
+    private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
+        chip as TagChip
+        chipBox?.editChip(chip)
+        tagViewModel.selection.select(chip.tag.id, false)
+    }
+
+    private inner class TagChip(val tag: TagEntity, context: Context): Chip(context) {
+        init {
+            text = tag.name
+            isCloseIconVisible = true
+            setOnCloseIconClickListener(closeListener)
+            setOnClickListener(clickListener)
+        }
+    }
 
     /**
      * @inheritDoc
@@ -225,10 +270,14 @@ class ScanFragment : Fragment() {
      */
     override fun onDestroyView() {
         super.onDestroyView()
+        tags?.removeObserver(tagObserver)
+        tags = null
+        chipBox = null
 
         // Unregister the broadcast receivers and listeners
         broadcastManager.unregisterReceiver(volumeDownReceiver)
         displayManager.unregisterDisplayListener(displayListener)
+        tagViewModel.selection.onSelectionChanged.remove(selectChange)
     }
 
     /**
@@ -259,6 +308,13 @@ class ScanFragment : Fragment() {
      */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // Setup the chips for the selected tag
+        tagViewModel.selection.onSelectionChanged.add(selectChange)
+        chipBox = view.findViewById<ChipBox>(R.id.selected_tags)?.also {
+            setupChips(it)
+        }
+
         // Setup local properties
         container = view.findViewById(R.id.scan_content)
         viewFinder = container.findViewById(R.id.view_finder)
@@ -304,6 +360,148 @@ class ScanFragment : Fragment() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Return sequence of selected names
+     */
+    private fun selectedNames(list: List<TagEntity>?): Sequence<String>? {
+        return list?.asSequence()
+            ?.filter { tagViewModel.selection.isSelected(it.id) }
+            ?.map { it.name }
+    }
+
+    /**
+     * Call when we need to create a chip
+     * @param scope CoroutineScope to use for sub-jobs
+     * @param text The text for the chip
+     */
+    private suspend fun onCreateChip(scope: CoroutineScope, text: String): Chip? {
+        // Only process if we have the list of tags
+        return tags?.value?.let { list ->
+            // Find the tag with the text
+            val index = list.binarySearch {
+                it.name.compareTo(text, true)
+            }
+            if (index < 0) {
+                // Didn't find one, try to add one
+                val tag = TagEntity(0L, text, "")
+                tag.id = TagsFragment.addOrEdit(
+                    tag,
+                    LayoutInflater.from(context),
+                    tagViewModel.repo,
+                    scope
+                )
+                // If we added a tag, then make the chip
+                // otherwise return null
+                if (tag.id != 0L)
+                    makeChip(tag)
+                else
+                    null
+            } else
+                makeChip(list[index])
+        }
+    }
+
+    /**
+     * Setup the chips for the chip box
+     */
+    private fun setupChips(box: ChipBox) {
+        /**
+         * Get the auto complete query string for a column
+         */
+        fun getQuery(): Cursor {
+            // Extract the token at the end of the selection
+            val edit = box.textView
+            val token = edit.text.toString().trim { it <= ' ' }
+            // return the query string
+            return ColumnDataDescriptor.buildAutoCompleteCursor(
+                tagViewModel.repo, TAGS_ID_COLUMN,
+                TAGS_NAME_COLUMN, TAGS_TABLE, token
+            )
+        }
+
+        var autoCompleteJob: Job? = null
+        /**
+         * Handle a focus change on the filter, we only create the cursor
+         * and adapter when a value field gets focus
+         */
+        box.onEditorFocusListener = View.OnFocusChangeListener { _, hasFocus ->
+            // Get the value field
+            val edit = box.textView as AutoCompleteTextView
+            if (hasFocus) {
+                // Setting focus, setup adapter and set it in the text view
+                // This is done in a coroutine job and we use the job
+                // to flag that the job is still active. When we lose focus
+                // we cancel the job if it is still active
+                autoCompleteJob = booksViewModel.viewModelScope.launch {
+                    // Get the cursor for the column, null means no auto complete
+                    val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
+                        getQuery()
+                    }
+
+                    // Get the adapter from the column description
+                    val adapter = SimpleCursorAdapter(
+                        context,
+                        R.layout.books_drawer_filter_auto_complete,
+                        cursor,
+                        arrayOf("_result"),
+                        intArrayOf(R.id.auto_complete_item),
+                        0
+                    )
+                    adapter.stringConversionColumn = cursor.getColumnIndex("_result")
+                    adapter.setFilterQueryProvider { getQuery() }
+
+                    // Set the adapter on the text view
+                    edit.setAdapter(adapter)
+                    // Flag that the job is done
+                    autoCompleteJob = null
+                }
+            } else {
+                // If we lose focus and the set focus job isn't done, cancel it
+                autoCompleteJob?.let {
+                    it.cancel()
+                    autoCompleteJob = null
+                }
+                // Clear the adapter
+                edit.setAdapter(null)
+            }
+        }
+
+        box.coroutineScope = tagViewModel.viewModelScope
+        box.onCreateChip = { scope, text ->
+            onCreateChip(scope, text)
+        }
+        box.onChipCreated = {_, chip ->
+            // If we made a chip, then select the tag
+            tagViewModel.selection.select((chip as TagChip).tag.id, true)
+        }
+
+        (box.textView as AutoCompleteTextView).let {
+            it.threshold = 1
+            // If the view is an AutoComplete view, then add a chip when an item is selected
+            it.onItemClickListener =
+                AdapterView.OnItemClickListener { _, _, _, _ ->
+                    box.onCreateChipAction()
+                }
+        }
+
+        tagViewModel.viewModelScope.launch {
+            tags = tagViewModel.repo.getTagsLive().also {
+                it.observeForever(tagObserver)
+            }
+            box.setChips(this, selectedNames(tags?.value))
+        }
+    }
+
+    /**
+     * Make a chip from a tag
+     * @param tag The tag
+     */
+    private fun makeChip(tag: TagEntity?): TagChip? {
+        return tag?.let { t ->
+            TagChip(t, context!!)
         }
     }
 

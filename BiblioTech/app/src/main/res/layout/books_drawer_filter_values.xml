@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<MultiAutoCompleteTextView xmlns:android="http://schemas.android.com/apk/res/android"
+<com.github.cleveard.BiblioTech.ui.widget.ChipBox xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:id="@+id/filter_value"
-    android:singleLine="true"
-    android:imeOptions="actionSearch"
-    android:background="@android:color/transparent">
+    app:flexWrap="wrap"
+    app:alignItems="baseline">
 
-</MultiAutoCompleteTextView>
+    <AutoCompleteTextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:singleLine="true"
+        android:dropDownWidth="160dp"
+        android:hint="@string/value"
+        android:imeOptions="actionSearch"
+        android:background="@android:color/transparent">
+
+    </AutoCompleteTextView>
+
+</com.github.cleveard.BiblioTech.ui.widget.ChipBox>

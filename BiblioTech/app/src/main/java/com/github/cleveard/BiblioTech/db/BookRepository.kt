@@ -103,6 +103,14 @@ class BookRepository private constructor() {
     }
 
     /**
+     * Get all tags
+     * @return LiveData with the list of tags
+     */
+    suspend fun getTagsLive(): LiveData<List<TagEntity>> {
+        return db.getTagDao().getLive()
+    }
+
+    /**
      * Get a single tag
      * @param tagId The id of the tag
      * @return The TagEntity for the tag or null if it doesn't exist

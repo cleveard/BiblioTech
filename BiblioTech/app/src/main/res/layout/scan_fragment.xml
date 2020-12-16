@@ -37,12 +37,33 @@
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintStart_toEndOf="@id/scan_isbn_label" />
 
+        <com.github.cleveard.BiblioTech.ui.widget.ChipBox
+            android:id="@+id/selected_tags"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:flexWrap="wrap"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/scan_title"
+            app:layout_constraintTop_toBottomOf="@id/scan_isbn">
+
+            <AutoCompleteTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:hint="@string/selected_tags"
+                android:imeOptions="actionNone"
+                android:dropDownWidth="160dp"
+                android:autofillHints=""
+                android:inputType="textCapWords">
+            </AutoCompleteTextView>
+
+        </com.github.cleveard.BiblioTech.ui.widget.ChipBox>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/scan_search"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:layout_marginTop="8dp"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
@@ -69,7 +90,7 @@
             android:selectAllOnFocus="true"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@+id/scan_search"
-            app:layout_constraintTop_toBottomOf="@id/scan_isbn"
+            app:layout_constraintTop_toBottomOf="@id/selected_tags"
             android:autofillHints=""
             android:inputType="textCapWords" />
 

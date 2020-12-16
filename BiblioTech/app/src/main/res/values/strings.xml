@@ -60,6 +60,7 @@
     <string name="edit_message">Chnange the name and description for the tag</string>
     <string name="name">Name</string>
     <string name="description">Description</string>
+    <string name="selected_tags">Selected Tags</string>
     <string name="tag_conflict_title">Duplicate Tag</string>
     <string name="tag_conflict_add_message">The name of the tag you are adding already exists.\n\nReplace the duplicate tag?</string>
     <string name="tag_conflict_edit_message">The name of the tag you are editing already exists.\n\nMerge the duplicate tag with the one you are editing?</string>
@@ -125,6 +126,7 @@
     <string name="ge">&gt;=</string>
     <string name="lt">&lt;</string>
     <string name="le">&lt;=</string>
+    <string name="value">Value</string>
     <string name="month_year_pattern">M/y</string>
     <string name="new_filter_title">New Filtered View</string>
     <string name="view_conflict_title">Duplicate Filter</string>

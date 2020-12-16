@@ -2,11 +2,9 @@ package com.github.cleveard.BiblioTech.ui.filter
 
 import android.content.Context
 import android.database.Cursor
-import android.text.Editable
-import android.text.SpannableStringBuilder
-import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
@@ -16,8 +14,9 @@ import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
+import com.github.cleveard.BiblioTech.ui.widget.ChipBox
+import com.google.android.material.chip.Chip
 import kotlinx.coroutines.*
-import java.util.*
 import kotlin.collections.ArrayList
 
 /**
@@ -30,10 +29,7 @@ class FilterTable(private val fragment: Fragment) {
      */
     private val _filter: MutableLiveData<Array<FilterField>> = MutableLiveData()
     val filter: LiveData<Array<FilterField>>
-        get() {
-            valueListener.maybeBuildFilter()
-            return _filter
-        }
+        get() = _filter
 
     /**
      * Action Listener for keyboard actions when entering filter values
@@ -42,7 +38,7 @@ class FilterTable(private val fragment: Fragment) {
         set(listener) {
             field = listener
             for (ui in rows) {
-                ui.valueRow.findViewById<EditText>(R.id.filter_value)?.setOnEditorActionListener(listener)
+                ui.valueRow.findViewById<ChipBox>(R.id.filter_value)?.onEditorActionListener = listener
             }
         }
 
@@ -87,9 +83,13 @@ class FilterTable(private val fragment: Fragment) {
         private var predicateMap: Array<String> = emptyArray()
         /** Autocomplete cursor job */
         var autoCompleteJob: Job? = null
+        /** ChipBox for values */
+        var chipBox: ChipBox = valueRow.findViewById(R.id.filter_value)
 
         init {
             // Initialize fields that depend on the column
+            chipBox.coroutineScope = booksViewModel.viewModelScope
+            chipBox.onCreateChip = onCreateChip
             changeColumn()
         }
 
@@ -97,6 +97,9 @@ class FilterTable(private val fragment: Fragment) {
          * Change the fields that depend on the column
          */
         fun changeColumn() {
+            // If value has focus, redo autocomplete
+            if (chipBox.textView.hasFocus())
+                valueFocusChange(true)
             // Create the new predicate map.
             val newColumn = column
             val predicates = newColumn.desc.predicates
@@ -135,12 +138,8 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun getQuery(): Cursor {
             // Extract the token at the end of the selection
-            val edit = valueRow.findViewById<EditText>(R.id.filter_value)
-            val values = edit.text.toString()
-            val cursor = edit.selectionEnd
-            val tokenStart = autoCompleteTokenizer.findTokenStart(values, cursor)
-            val tokenEnd = autoCompleteTokenizer.findTokenEnd(values, cursor)
-            val token = values.substring(tokenStart, tokenEnd)
+            val edit = chipBox.textView
+            val token = edit.text.toString().trim { it <= ' ' }
             // return the query string
             return column.desc.getAutoCompleteCursor(BookRepository.repo, token)
         }
@@ -151,7 +150,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun valueFocusChange(hasFocus: Boolean) {
             // Get the value field
-            val edit = valueRow.findViewById<MultiAutoCompleteTextView>(R.id.filter_value)
+            val edit = chipBox.textView as AutoCompleteTextView
             if (hasFocus) {
                 // No autocomplete, don't do anything
                 if (!column.desc.hasAutoComplete())
@@ -224,20 +223,13 @@ class FilterTable(private val fragment: Fragment) {
         /** The array of values from the value text view */
         var values: Array<String>
             get() {
-                return valueRow.findViewById<EditText>(R.id.filter_value)
-                    // split the text using ;
-                    .text?.split(Regex(";"))
-                    // Trim whitespace for each value
-                    ?.map {str -> str.trim { it <= ' ' } }
-                    // Remove empty values
-                    ?.filter { it.isNotEmpty() }
-                    // Convert to array of string
-                    ?.toTypedArray()?: emptyArray()
+                val vSeq = chipBox.values.value!!.iterator()
+                return Array(chipBox.valueCount) { vSeq.next() }
             }
             set(value) {
                 // Form the value text by joining the values
-                valueRow.findViewById<EditText>(R.id.filter_value)
-                    .text = SpannableStringBuilder(value.joinToString(" ; ") { it })
+                chipBox.textView.text.clear()
+                chipBox.setChips(booksViewModel.viewModelScope, value.asSequence())
             }
     }
 
@@ -291,62 +283,27 @@ class FilterTable(private val fragment: Fragment) {
     }
 
     /**
-     * Listener for changes on the value text
-     * We add a delay to group changes into one
+     * Listener to close the chip, just removes it
      */
-    private val valueListener = object: TextWatcher {
-        /** Main thread scope used to wait to stop typing */
-        private val mainScope = MainScope()
-        /** Time to stop waiting */
-        private var then: Long = 0L
-        /** job that waits for typing to stop */
-        var job: Job? = null
+    private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
+        (chip.parent as ViewGroup).removeView(chip)
+        buildFilter()
+    }
 
-        /**
-         * @inheritDoc
-         */
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-        }
+    private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
+        (chip.parent as ChipBox).editChip(chip as Chip)
+        buildFilter()
+    }
 
-        /**
-         * @inheritDoc
-         */
-        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-            // This is when we will build the filter
-            then = Calendar.getInstance().timeInMillis + 1000
-            // Start the job if it isn't started
-            job = job?: mainScope.launch {
-                while (true) {
-                    // Wait
-                    delay(500)
-                    val now = Calendar.getInstance().timeInMillis
-                    // If there isn't any input break
-                    if (now >= then)
-                        break
-                }
-                maybeBuildFilter()
-            }
-        }
-
-        /**
-         * @inheritDoc
-         */
-        override fun afterTextChanged(s: Editable?) {
-        }
-
-        /**
-         * Build the filter and stop the job
-         */
-        fun maybeBuildFilter() {
-            job?.let {
-                // Build the filter
-                buildFilter()
-                // Clear the job
-                job = null
-                it.cancel()
-            }
-
-        }
+    private val onCreateChip: suspend (scope: CoroutineScope, text: String) -> Chip? = {_, text ->
+        // Make a chip, set the text and make the close icon visible
+        val chip = Chip(fragment.context)
+        chip.text = text
+        chip.isCloseIconVisible = true
+        // Set listeners to close and edit the chip
+        chip.setOnCloseIconClickListener(closeListener)
+        chip.setOnClickListener(clickListener)
+        chip
     }
 
     /**
@@ -360,41 +317,6 @@ class FilterTable(private val fragment: Fragment) {
                     rows[index].valueFocusChange(hasFocus)
             }
         }
-
-    /**
-     * Tokenizer for the value items
-     */
-    private val autoCompleteTokenizer: MultiAutoCompleteTextView.Tokenizer = object: MultiAutoCompleteTextView.Tokenizer {
-        override fun findTokenStart(text: CharSequence?, cursor: Int): Int {
-            text!!
-            var start = cursor
-            for (i in cursor - 1 downTo 0) {
-                val c = text[i]
-                if (c == ';')
-                    break
-                if (c > ' ')
-                    start = i
-            }
-            return start
-        }
-
-        override fun findTokenEnd(text: CharSequence?, cursor: Int): Int {
-            text!!
-            var end = cursor
-            for (i in cursor until text.length) {
-                val c = text[i]
-                if (c == ';')
-                    break
-                if (c > ' ')
-                    end = i
-            }
-            return end
-        }
-
-        override fun terminateToken(text: CharSequence?): CharSequence {
-            return text.toString() + " ; "
-        }
-    }
 
     /**
      * OnClickListener for add row button
@@ -461,20 +383,25 @@ class FilterTable(private val fragment: Fragment) {
         spinner.tag = row
 
         // Add values listener
-        val edit = rowItem.valueRow.findViewById<MultiAutoCompleteTextView>(R.id.filter_value)
+        val chips = rowItem.valueRow.findViewById<ChipBox>(R.id.filter_value)
         if (clear) {
-            edit.setOnEditorActionListener(null)
-            edit.onFocusChangeListener = null
-            edit.setTokenizer(null)
-            edit.removeTextChangedListener(valueListener)
+            chips.onEditorActionListener = null
+            chips.onEditorFocusListener = null
+            (chips.textView as AutoCompleteTextView).onItemClickListener = null
         } else {
-            edit.setOnEditorActionListener(actionListener)
-            edit.onFocusChangeListener = valueFocusListener
-            edit.setTokenizer(autoCompleteTokenizer)
-            edit.threshold = 1
-            edit.addTextChangedListener(valueListener)
+            chips.onEditorActionListener = actionListener
+            chips.onEditorFocusListener = valueFocusListener
+            (chips.textView as AutoCompleteTextView).let {
+                it.threshold = 1
+                // If the view is an AutoComplete view, then add a chip when an item is selected
+                it.onItemClickListener =
+                    AdapterView.OnItemClickListener { _, _, _, _ ->
+                        chips.onCreateChipAction()
+                    }
+            }
+            chips.onChipCreated = {_, _ -> buildFilter() }
         }
-        rowItem.valueRow.tag = row
+        chips.textView.tag = row
     }
 
     /**
@@ -633,9 +560,6 @@ class FilterTable(private val fragment: Fragment) {
      * Cleanup when the table layout is destroyed
      */
     fun onDestroyView() {
-        // Build the filter if there were any text changes
-        valueListener.maybeBuildFilter()
-
         // Clear the add row on click listener
         headerRow?.let { header ->
             headerRow = null

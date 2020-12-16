@@ -648,6 +648,22 @@ abstract class TagDao(private val db: BookDatabase) {
     abstract suspend fun get(tagId: Long): TagEntity?
 
     /**
+     * Get a LiveData of the list of tags ordered by name
+     * @param query The query to run
+     */
+    @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
+    protected abstract fun doGetLive(): LiveData<List<TagEntity>>
+
+    /**
+     * Get a LiveData of the list of tags ordered by name
+     */
+    public suspend fun getLive(): LiveData<List<TagEntity>> {
+        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
+            doGetLive()
+        }
+    }
+
+    /**
      * Add a tag
      * @param tag The tag to be added
      */

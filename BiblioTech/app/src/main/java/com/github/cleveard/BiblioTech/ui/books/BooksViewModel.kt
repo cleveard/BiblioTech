@@ -104,15 +104,20 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
-        selection.onSelectionChanged = {
-            adapter.refresh()
-        }
     }
+
+    /**
+     * Selection change listener
+     */
+    private val selectChange = {
+        adapter.refresh()
+    }.also { selection.onSelectionChanged.add(it) }
 
     /**
      * @inheritDoc
      */
     override fun onCleared() {
+        selection.onSelectionChanged.remove(selectChange)
         filterView.removeObserver(viewObserver)
         super.onCleared()
     }

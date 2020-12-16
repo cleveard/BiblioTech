@@ -55,7 +55,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /**
          * Lister for selection changed
          */
-        var onSelectionChanged: (() -> Unit)? = null
+        var onSelectionChanged: HashSet<() -> Unit> = HashSet()
 
         /**
          * Flag to indicate whether ids are selected (false) or unselected (true)
@@ -117,7 +117,8 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
             _hasSelection.value = value
             // Invalidate the UI. This is here because this
             // method is called on all selection changes
-            onSelectionChanged?.invoke()
+            for (c in onSelectionChanged)
+                c()
         }
 
         /**
@@ -143,10 +144,14 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
             if (select != _inverted) {
                 // When select is different from _inverted,
                 // We add to the ids to select/deselect
+                if (_selection.contains(id))
+                    return
                 _selection.add(id)
             } else {
                 // If select is the same as _inverted
                 // We remove ids to select/deselect
+                if (!_selection.contains(id))
+                    return
                 _selection.remove(id)
             }
             // Set the last select value only if selecting

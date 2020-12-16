@@ -27,9 +27,18 @@ class TagViewModel(app: Application): GenericViewModel<Tag>(app) {
      */
     internal val adapter = TagsAdapter(this)
 
-    init {
-        selection.onSelectionChanged = {
-            adapter.refresh()
-        }
+    /**
+     * Selection change listener
+     */
+    private val selectChange = {
+        adapter.refresh()
+    }.also { selection.onSelectionChanged.add(it) }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onCleared() {
+        selection.onSelectionChanged.remove(selectChange)
+        super.onCleared()
     }
 }

@@ -18,11 +18,13 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.R
+import com.github.cleveard.BiblioTech.db.BookRepository
 import com.github.cleveard.BiblioTech.db.TagEntity
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -263,11 +265,10 @@ class TagsFragment : Fragment() {
         // Do this in a coroutine, so we can use the repo coroutine methods
         tagViewModel.viewModelScope.launch {
             // Get or create the TagEntity for the tag
-            val tag: TagEntity?
+            val tag: TagEntity
             if (tagId != 0L) {
                 // Got an id, so get the tag
-                tag = tagViewModel.repo.getTag(tagId)
-                if (tag == null) {
+                tag = tagViewModel.repo.getTag(tagId)?: let {
                     // Tag not found. Clear the last selected tag and return
                     tagViewModel.selection.clearLastSelection()
                     return@launch
@@ -277,57 +278,7 @@ class TagsFragment : Fragment() {
                 tag = TagEntity(0, "", "")
             }
 
-            // Inflate the content for the edit tag dialog
-            val content = layoutInflater.inflate(R.layout.tags_edit_tag, null)!!
-            // Fill in the name
-            val name = content.findViewById<EditText>(R.id.edit_tag_name)
-            name.setText(tag.name, TextView.BufferType.EDITABLE)
-            // Fill in the description
-            val desc = content.findViewById<EditText>(R.id.edit_tag_desc)
-            desc.setText(tag.desc, TextView.BufferType.EDITABLE)
-
-            coroutineAlert(context!!, Unit) { alert ->
-                // Build the tag edit dialog. Don't listen for OK or Cancel.
-                // OK is handled in an on onClick listener, so we can cancel the OK
-                // Cancel doesn't need to do anything
-                alert.builder.setTitle(if (tagId == 0L) R.string.add_title else R.string.edit_title)
-                    .setMessage(if (tagId == 0L) R.string.add_message else R.string.edit_message)
-                    .setCancelable(true)
-                    .setView(content)
-                    .setPositiveButton(R.string.ok, null)
-                    .setNegativeButton(R.string.cancel, null)
-            }.setPosListener {_, _, _ ->
-                tag.name = name.text.toString().trim { it <= ' ' }
-                tag.desc = desc.text.toString().trim { it <= ' ' }
-
-                // Add or update the tag
-                val id = tagViewModel.repo.addOrUpdateTag(tag) {
-                    // We got a conflict, ask the use if that is OK
-                    // Here we suspend the coroutine, until the user replies
-                    // The return value of CoroutineAlert.show() is the return
-                    // value of the this lambda
-                    coroutineAlert(context!!, false) {alert ->
-                        // Present the dialog
-                        alert.builder.setTitle(R.string.tag_conflict_title)
-                            .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)
-                            .setCancelable(false)
-                            .setPositiveButton(R.string.yes, null)
-                            .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
-                    }.setPosListener {alert, _, _ ->
-                        alert.result = true
-                        true
-                    }.show()
-                }
-
-                // Dismiss if the id isn't 0
-                id != 0L
-            }.show {
-                // Make sure we start with the name selected
-                context?.getSystemService(InputMethodManager::class.java)?.also {imm ->
-                    name.requestFocus()
-                    imm.showSoftInput(name, InputMethodManager.SHOW_IMPLICIT)
-                }
-            }
+            addOrEdit(tag, layoutInflater, tagViewModel.repo, this)
         }
     }
 
@@ -347,5 +298,62 @@ class TagsFragment : Fragment() {
         menuItems.get(R.id.action_remove_tags)?.isEnabled = booksSelected && selectedTags
         // Enable replace tags if any books are selected
         menuItems.get(R.id.action_replace_tags)?.isEnabled = booksSelected
+    }
+
+    companion object {
+        suspend fun addOrEdit(tag: TagEntity, layoutInflater: LayoutInflater, repo: BookRepository, scope: CoroutineScope): Long {
+            // Inflate the content for the edit tag dialog
+            val content = layoutInflater.inflate(R.layout.tags_edit_tag, null)!!
+            // Fill in the name
+            val name = content.findViewById<EditText>(R.id.edit_tag_name)
+            name.setText(tag.name, TextView.BufferType.EDITABLE)
+            // Fill in the description
+            val desc = content.findViewById<EditText>(R.id.edit_tag_desc)
+            desc.setText(tag.desc, TextView.BufferType.EDITABLE)
+
+            return scope.coroutineAlert(layoutInflater.context, 0L) { alert ->
+                // Build the tag edit dialog. Don't listen for OK or Cancel.
+                // OK is handled in an on onClick listener, so we can cancel the OK
+                // Cancel doesn't need to do anything
+                alert.builder.setTitle(if (tag.id == 0L) R.string.add_title else R.string.edit_title)
+                    .setMessage(if (tag.id == 0L) R.string.add_message else R.string.edit_message)
+                    .setCancelable(true)
+                    .setView(content)
+                    .setPositiveButton(R.string.ok, null)
+                    .setNegativeButton(R.string.cancel, null)
+            }.setPosListener {alert, _, _ ->
+                tag.name = name.text.toString().trim { it <= ' ' }
+                tag.desc = desc.text.toString().trim { it <= ' ' }
+
+                // Add or update the tag
+                val id = repo.addOrUpdateTag(tag) {
+                    // We got a conflict, ask the use if that is OK
+                    // Here we suspend the coroutine, until the user replies
+                    // The return value of CoroutineAlert.show() is the return
+                    // value of the this lambda
+                    coroutineAlert(layoutInflater.context, false) {alert ->
+                        // Present the dialog
+                        alert.builder.setTitle(R.string.tag_conflict_title)
+                            .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)
+                            .setCancelable(false)
+                            .setPositiveButton(R.string.yes, null)
+                            .setNegativeButton(R.string.no, null)   // Don't nee to do anything for No
+                    }.setPosListener {alert, _, _ ->
+                        alert.result = true
+                        true
+                    }.show()
+                }
+                alert.result = id
+
+                // Dismiss if the id isn't 0
+                id != 0L
+            }.show {
+                // Make sure we start with the name selected
+                layoutInflater.context.getSystemService(InputMethodManager::class.java)?.also {imm ->
+                    name.requestFocus()
+                    imm.showSoftInput(name, InputMethodManager.SHOW_IMPLICIT)
+                }
+            }
+        }
     }
 }

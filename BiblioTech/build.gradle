@@ -8,6 +8,7 @@ buildscript {
         room_version = "2.3.0-alpha03"
         camerax_version = "1.0.0-alpha06"
         paging_version = "3.0.0-alpha10"
+        flexbox_version = "2.0.1"
     }
 
 
