@@ -336,7 +336,7 @@ open class ChipBox: FlexboxLayout {
                 cancelEdit()
             delegate.onEditorFocusChange(this, view, hasFocus)
         }
-        edit.setOnTouchListener {v, e ->
+        edit.setOnTouchListener {_, e ->
             if (editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
                 if (edit.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
                     cancelEdit()
