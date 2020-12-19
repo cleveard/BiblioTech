@@ -475,8 +475,6 @@ class ScanFragment : Fragment() {
 
                         // Set the adapter on the text view
                         edit.setAdapter(adapter)
-                        if (edit.isShown)
-                            edit.showDropDown()
                         // Flag that the job is done
                         // Flag that the job is done
                         autoCompleteJob = null

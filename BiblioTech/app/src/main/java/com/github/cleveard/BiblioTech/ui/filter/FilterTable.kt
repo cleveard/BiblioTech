@@ -172,8 +172,6 @@ class FilterTable(private val fragment: Fragment) {
 
                     // Set the adapter on the text view
                     edit.setAdapter(adapter)
-                    if (edit.isShown)
-                        edit.showDropDown()
                     // Flag that the job is done
                     autoCompleteJob = null
                 }

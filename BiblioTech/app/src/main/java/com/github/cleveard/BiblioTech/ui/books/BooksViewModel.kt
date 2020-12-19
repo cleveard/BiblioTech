@@ -48,6 +48,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     internal val adapter: BooksAdapter = BooksAdapter(this)
 
     /**
+     * Selection set used to mark open books
+     */
+    val openBooks: SelectionSet = SelectionSet()
+
+    /**
      * The layout manager for the book recycler view
      */
     internal lateinit var layoutManager: LinearLayoutManager
@@ -336,6 +341,20 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
         return repo.getThumbnail(bookId, large)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun toggleOpen(id: Long) {
+        openBooks.toggle(id)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun isOpen(id: Long): Boolean {
+        return openBooks.isSelected(id)
     }
 
     /**

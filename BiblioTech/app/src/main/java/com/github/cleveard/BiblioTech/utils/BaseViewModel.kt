@@ -25,6 +25,20 @@ internal interface ParentAccess {
     fun toggleSelection(id: Long)
 
     /**
+     * Toggle the open/close state of the boook
+     */
+    fun toggleOpen(id: Long) {}
+
+    /**
+     * Return whether the id is open
+     * @param id The id to check
+     * @return True if the id is open
+     */
+    fun isOpen(id: Long): Boolean {
+        return false
+    }
+
+    /**
      * Context from the parent
      */
     val context: Context

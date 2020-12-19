@@ -64,17 +64,6 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         }
 
         /**
-         * Toggle the visibility of the book details view
-         * @param arg1 The parent of the book details view
-         */
-        fun toggleViewVisibility(arg1: View): Boolean {
-            val view = arg1.findViewById<View>(R.id.book_list_open)
-            val visible = view?.visibility != View.VISIBLE
-            changeViewVisibility(visible, arg1)
-            return visible
-        }
-
-        /**
          * Get the thumbnail to use before we get the right one
          * @param context Application context
          */
@@ -209,6 +198,18 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
     }
 
     /**
+     * Toggle the visibility of the book details view
+     * @param arg1 The parent of the book details view
+     */
+    private fun toggleViewVisibility(arg1: View): Boolean {
+        val view = arg1.findViewById<View>(R.id.book_list_open)
+        val visible = view?.visibility != View.VISIBLE
+        changeViewVisibility(visible, arg1)
+        (arg1.tag as? Long)?.let {id -> access.toggleOpen(id) }
+        return visible
+    }
+
+    /**
      * Listener to select a book when flipper is clicked
      */
     private inner class ClickFlipperListener(private val holder: ViewHolder): View.OnClickListener {
@@ -324,8 +325,6 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
 
                     // Set the adapter on the text view
                     edit.setAdapter(adapter)
-                    if (edit.isShown)
-                        edit.showDropDown()
                     // Flag that the job is done
                     autoCompleteJob = null
                 }
@@ -424,6 +423,7 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
             return
         }
 
+        holder.itemView.tag = book.book.id
         // Make sure view is visible
         holder.itemView.visibility = View.VISIBLE
 
@@ -462,7 +462,7 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
         box?.displayedChild = if (book.selected) 1 else 0
         // Make the details invisible
-        changeViewVisibility(false, holder.itemView)
+        changeViewVisibility(access.isOpen(book.book.id), holder.itemView)
         // Set the default thumbnails and get the real ones
         holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(m_nothumb)
         holder.itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
