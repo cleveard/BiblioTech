@@ -1,11 +1,14 @@
 package com.github.cleveard.BiblioTech.ui.widget
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.text.Editable
 import android.text.InputType
 import android.text.SpannableStringBuilder
 import android.text.TextWatcher
 import android.util.AttributeSet
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
@@ -23,7 +26,113 @@ import kotlinx.coroutines.launch
 /**
  * ChipBox subclass of FlexBox that contains an edit text and chips
  */
+@Suppress("MemberVisibilityCanBePrivate")
 open class ChipBox: FlexboxLayout {
+    /**
+     * Delegate for interacting with the ChipBox
+     */
+    interface Delegate {
+        /**
+         * Scope to use for coroutine operations
+         * Default is MainScope(). You should replace this with your view model scope.
+         */
+        val scope: CoroutineScope
+            get() = MainScope()
+
+        /**
+         * Method used to make a chip.
+         * Default method just creates the chip
+         * @param chipBox The ChipBox making the request
+         * @param text The text for the chip
+         * @param scope A CoroutineScope used for coroutine operations
+         * @return The Chip or null if the text is not valid
+         * Default behaviour is to create a Chip and assign the text to it.
+         */
+        suspend fun onCreateChip(chipBox: ChipBox, text: String, scope: CoroutineScope): Chip? {
+            val chip = Chip(chipBox.context)
+            chip.text = text
+            return chip
+        }
+
+        /**
+         * Function call after a chip is added to the box
+         * @param chipBox The ChipBox making the request
+         * @param chip The chip that was added
+         * @param scope A CoroutineScope used for coroutine operations
+         * Default behavior does nothing. This method is not called from setChips()
+         */
+        suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {}
+
+        /**
+         * Function call after a chip is removed from the box
+         * @param chipBox The ChipBox making the request
+         * @param chip The chip that was added
+         * @param scope A CoroutineScope used for coroutine operations
+         * Default behavior does nothing. This method is not called from setChips()
+         */
+        suspend fun onChipRemoved(chipBox: ChipBox, chip: View, scope: CoroutineScope) {}
+
+        /**
+         * Function call after a chip is removed from the box
+         * @param chipBox The ChipBox making the request
+         * @param newChip The chip that was added
+         * @param oldChip The chip that was replaced
+         * @param scope A CoroutineScope used for coroutine operations
+         * Default behavior calls onChipRemoved and then onChipAdded
+         */
+        suspend fun onChipReplaced(chipBox: ChipBox, newChip: View, oldChip: View, scope: CoroutineScope) {
+            onChipRemoved(chipBox, oldChip, scope)
+            onChipAdded(chipBox, newChip, scope)
+        }
+
+        /**
+         * Called when the close icon of a chip is clicked
+         * @param chipBox The ChipBox making the request
+         * @param chip The chip that was clicked
+         * @param scope A CoroutineScope used for coroutine operations
+         * @return True to execute the default ChipBox behavior. False to ignore the click
+         * The default behavior returns true.
+         */
+        suspend fun onChipCloseClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            return true
+        }
+
+        /**
+         * Called when a chip is clicked
+         * @param chipBox The ChipBox making the request
+         * @param chip The chip that was clicked
+         * @param scope A CoroutineScope used for coroutine operations
+         * @return True to execute the default ChipBox behavior. False to ignore the click
+         * The default behavior returns true.
+         */
+        suspend fun onChipClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            return true
+        }
+
+        /**
+         * Called when the box EditText focus changes
+         * @param chipBox The ChipBox that owns the EditText
+         * @param edit The EditText
+         * @param hasFocus: True when the EditText gets focus. False When the EditText loses focus
+         * Default behavior does nothing.
+         */
+        fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {}
+
+        /**
+         * Called when the box EditText generates an action
+         * @param chipBox The ChipBox that owns the EditText
+         * @param edit The EditText
+         * @param actionId The id of the action
+         * @param event The event that generated the action
+         * @return True if the action was handled. Otherwise, false.
+         * Default behavior returns false. This is not called for the actions that create chips
+         */
+        fun onEditorAction(chipBox: ChipBox, edit: TextView, actionId: Int, event: KeyEvent?): Boolean {
+            return false
+        }
+
+    }
+
     /**
      * @inheritDoc
      */
@@ -58,6 +167,13 @@ open class ChipBox: FlexboxLayout {
         }
 
     /**
+     * Container for the edit text
+     */
+    private var _editContainer: View? = null
+    val editContainer: View?
+        get() = _editContainer
+
+    /**
      * The Main Action assigned to the edit text
      */
     private var mainAction: Int = 0
@@ -75,30 +191,27 @@ open class ChipBox: FlexboxLayout {
     /**
      * True to make the chip box keep text in chips unique
      */
-    private var uniqueChipText: Boolean = true
+    protected var uniqueChipText: Boolean = true
 
     /**
-     * Scope for coroutines
+     * True to show the chip close icon
      */
-    var coroutineScope: CoroutineScope = MainScope()
-    
-    /**
-     * Lambda used to make a chip.
-     * If this is null, a default function creates a Chip
-     */
-    var onCreateChip: (suspend (scope: CoroutineScope, text: String) -> Chip?)? = null
+    protected var showChipCloseIcon: Boolean = true
 
     /**
-     * Lambda called when a chip is created
+     * True to show the chip icon
      */
-    var onChipCreated: (suspend (scope: CoroutineScope, chip: Chip) -> Unit)? = null
+    protected var showChipIcon: Boolean = false
 
-    init {
-        coroutineScope.launch {
-            if (!this@ChipBox::_textView.isInitialized)
-                setupChipBox()
-        }
-    }
+    /**
+     * This is the chip we are editing, when we edit a chip
+     */
+    protected var editingChip: Chip? = null
+
+    /**
+     * Default delegate
+     */
+    var delegate: Delegate = object: Delegate {}
 
     /**
      * Get sequence of strings from the chip box
@@ -121,6 +234,38 @@ open class ChipBox: FlexboxLayout {
         }
 
     /**
+     * OnClickListener for chips in the ChipBox
+     */
+    protected val onChipClickListener: OnClickListener = OnClickListener {
+        delegate.scope.launch {
+            if (delegate.onChipClicked(this@ChipBox, it, this)) {
+                cancelEdit()
+                editChip(it as Chip)
+            }
+        }
+    }
+
+    /**
+     * OnClickListener for the close icon of chips in the ChipBox
+     */
+    protected val onChipCloseClickListener: OnClickListener = OnClickListener {
+        delegate.scope.launch {
+            if (delegate.onChipCloseClicked(this@ChipBox, it, this)) {
+                cancelEdit()
+                removeView(it)
+                delegate.onChipRemoved(this@ChipBox, it, this)
+            }
+        }
+    }
+
+    init {
+        delegate.scope.launch {
+            if (!this@ChipBox::_textView.isInitialized)
+                setupChipBox()
+        }
+    }
+
+    /**
      * Set the values sequence
      */
     private fun setValueSequence() {
@@ -133,15 +278,9 @@ open class ChipBox: FlexboxLayout {
     }
 
     /**
-     * Action listener for the edit text
+     * Listener for text changes on the EditText
+     * This listener changes the IME action of the EditText when the contents is not empty
      */
-    var onEditorActionListener: TextView.OnEditorActionListener? = null
-
-    /**
-     * Focus listener for the edit text
-     */
-    var onEditorFocusListener: OnFocusChangeListener? = null
-
     private var textWatcher: TextWatcher = object: TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
         }
@@ -154,12 +293,20 @@ open class ChipBox: FlexboxLayout {
         }
     }
 
+    /**
+     * Apply the XML attributes for the ChipBox
+     * @param attrs The attribute set with the attributes
+     * @param defStyleAttr The default style
+     * @param defStyleRes The default resource
+     */
     private fun applyAttributes(attrs: AttributeSet, defStyleAttr: Int = 0, defStyleRes: Int = 0) {
         context.theme.obtainStyledAttributes(attrs, R.styleable.ChipBox, defStyleAttr, defStyleRes)
             .apply {
                 try {
                     uniqueChipText = getBoolean(R.styleable.ChipBox_uniqueChipText, uniqueChipText)
                     imeAction = getInt(R.styleable.ChipBox_imeAction, imeAction) and EditorInfo.IME_MASK_ACTION
+                    showChipCloseIcon = getBoolean(R.styleable.ChipBox_showChipCloseIcon, showChipCloseIcon)
+                    showChipIcon = getBoolean(R.styleable.ChipBox_showChipIcon, showChipIcon)
                 } finally {
                     recycle()
                 }
@@ -169,6 +316,7 @@ open class ChipBox: FlexboxLayout {
     /**
      * Setup and return the edit text
      */
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupChipBox(): EditText {
         // Find an edit text in the flex box if there is one
         // Pick the last one
@@ -184,7 +332,18 @@ open class ChipBox: FlexboxLayout {
         edit.setOnFocusChangeListener { view, hasFocus ->
             if (hasFocus)
                 setAction(view as EditText)
-            onEditorFocusListener?.onFocusChange(view, hasFocus)
+            else
+                cancelEdit()
+            delegate.onEditorFocusChange(this, view, hasFocus)
+        }
+        edit.setOnTouchListener {v, e ->
+            if (editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
+                if (edit.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
+                    cancelEdit()
+                    return@setOnTouchListener true
+                }
+            }
+            false
         }
         // Don't allow the edit text to use InputType null
         if (edit.inputType == InputType.TYPE_NULL)
@@ -198,12 +357,15 @@ open class ChipBox: FlexboxLayout {
         setAction(edit)
         // Set the action listener for the edit text
         edit.setOnEditorActionListener { v, action, keyEvent ->
-            // If the action is done, then that means create a chip
-            // Otherwise call the client action listener
-            if (action == imeAction)
-                onCreateChipAction()
-            else
-                onEditorActionListener?.onEditorAction(v, action, keyEvent) == true
+            // If the action is the create chip action, and the text is not empty
+            // create a chip, otherwise call the client action listener
+            if (action == imeAction) {
+                if (textView.text.toString().trim { it <= ' ' }.isNotEmpty())
+                    return@setOnEditorActionListener onCreateChipAction()
+                else if (cancelEdit())
+                    return@setOnEditorActionListener true
+            }
+            delegate.onEditorAction(this, v, action, keyEvent)
         }
 
         return edit
@@ -213,7 +375,7 @@ open class ChipBox: FlexboxLayout {
      * Call this to simulate the editor action that creates a chip
      */
     fun onCreateChipAction(): Boolean {
-        coroutineScope.launch {
+        delegate.scope.launch {
             val text = textView.text.toString()
             val trim = text.trim { it <= ' ' }
             if (text != trim) {
@@ -221,12 +383,24 @@ open class ChipBox: FlexboxLayout {
                 @Suppress("BlockingMethodInNonBlockingContext")
                 textView.text.append(trim)
             }
-            createChip(this, trim)?.let {
-                onChipCreated?.invoke(this, it)
+            editingChip?.let {
+                if (it.text == trim || trim.isEmpty()) {
+                    // If we are editing a chip and the new text is the same
+                    // cancel the edit
+                    cancelEdit()
+                    return@launch
+                }
+            }
+            createChip(this, trim)?.let {newChip ->
+                editingChip?.let {oldChip ->
+                    delegate.onChipReplaced(this@ChipBox, newChip, oldChip, this)
+                    editingChip = null
+                }?: delegate.onChipAdded(this@ChipBox, newChip, this)
             }
         }
         return true
     }
+
     /**
      * Set the action of an edit text
      * @param edit The edit text that is changed
@@ -241,7 +415,7 @@ open class ChipBox: FlexboxLayout {
         if (isMainAction)
             mainAction = newOptions and EditorInfo.IME_MASK_ACTION
         newOptions = newOptions and EditorInfo.IME_MASK_ACTION.inv()
-        if (edit.text.toString().isEmpty()) {
+        if (edit.text.toString().isEmpty() && editingChip == null) {
             newOptions += mainAction
             isMainAction = true
         } else {
@@ -283,6 +457,11 @@ open class ChipBox: FlexboxLayout {
         }
     }
 
+    /**
+     * Get the index of a chip with a text value
+     * @param text The text
+     * @return The index or -1 if it isn't found
+     */
     private fun chipIndexWithText(text: CharSequence): Int {
         for (i in 0 until childCount) {
             val v = getChildAt(i) as? Chip
@@ -317,8 +496,13 @@ open class ChipBox: FlexboxLayout {
         }
 
         // Create the chip if we need to
-        chip = chip ?: onCreateChip?.invoke(scope, trim)
+        chip = chip ?: delegate.onCreateChip(this, trim, scope)
         if (chip != null) {
+            chip.isCloseIconVisible = showChipCloseIcon
+            chip.isChipIconVisible = showChipIcon
+            chip.setOnCloseIconClickListener(onChipCloseClickListener)
+            chip.setOnClickListener(onChipClickListener)
+
             // Add the chip where the edit text is
             var index = indexOfChild(textView)
             if (index < 0)
@@ -363,6 +547,7 @@ open class ChipBox: FlexboxLayout {
 
         // Move the edit text after the chip
         moveView(textView, index + 1)
+        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.ic_menu_close_clear_cancel, 0, 0, 0)
         // Set the edit text to the chip text
         textView.text.clear()
         textView.text.append(chip.text)
@@ -371,7 +556,29 @@ open class ChipBox: FlexboxLayout {
         textView.selectAll()
         // Remove the chip
         removeViewAt(index)
+        editingChip = chip
         setValueSequence()
+        return true
+    }
+
+    /**
+     * Cancel a current edit
+     * @return True if an edit was canceled. False if there wasn't an edit active
+     */
+    open fun cancelEdit(): Boolean {
+        val oldChip = editingChip?: return false
+        editingChip = null
+
+        // Put the old chip where the EditText is
+        var index = indexOfChild(textView)
+        if (index < 0)
+            index = childCount
+        addView(oldChip, index)
+        // Move the EditText to the end
+        moveView(textView)
+        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+        // Clear the text
+        textView.text.clear()
         return true
     }
 

@@ -11,9 +11,8 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.github.cleveard.BiblioTech.R
+import com.github.cleveard.BiblioTech.db.BookAndAuthors
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 /**
  * Interface used by adapters to access the app
@@ -26,11 +25,14 @@ internal interface ParentAccess {
     fun toggleSelection(id: Long)
 
     /**
-     * Launch a coroutine task
-     * @param task The lambda called to execute the task
-     * @return The coroutine job
+     * Context from the parent
      */
-    fun launch(task: suspend CoroutineScope.() -> Unit): Job
+    val context: Context
+
+    /**
+     * The CoroutineScope used to launch tasks
+     */
+    val scope: CoroutineScope
 
     /**
      * Get a thumbnail for a book
@@ -38,6 +40,20 @@ internal interface ParentAccess {
      * @param large True to get the large thumbnail. False to get the small
      */
     suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap?
+
+    /**
+     * Remove a tag from a book by name
+     */
+    suspend fun removeTag(ctx: Context, book: BookAndAuthors, tagName: String): Boolean {
+        return false
+    }
+
+    /**
+     * Add a tag to a book by name
+     */
+    suspend fun addTag(ctx: Context, book: BookAndAuthors, tagName: String): Boolean {
+        return false
+    }
 }
 
 /**
@@ -219,9 +235,15 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
     /**
      * @inheritDoc
      */
-    override fun launch(task: suspend CoroutineScope.() -> Unit): Job {
-        return viewModelScope.launch(block = task)
-    }
+    override val context: Context = app.applicationContext
+
+    /**
+     * @inheritDoc
+     */
+    override val scope: CoroutineScope
+        get() {
+            return viewModelScope
+        }
 
     /**
      * @inheritDoc

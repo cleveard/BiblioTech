@@ -423,59 +423,74 @@ class ScanFragment : Fragment() {
         }
 
         var autoCompleteJob: Job? = null
-        /**
-         * Handle a focus change on the filter, we only create the cursor
-         * and adapter when a value field gets focus
-         */
-        box.onEditorFocusListener = View.OnFocusChangeListener { _, hasFocus ->
-            // Get the value field
-            val edit = box.textView as AutoCompleteTextView
-            if (hasFocus) {
-                // Setting focus, setup adapter and set it in the text view
-                // This is done in a coroutine job and we use the job
-                // to flag that the job is still active. When we lose focus
-                // we cancel the job if it is still active
-                autoCompleteJob = booksViewModel.viewModelScope.launch {
-                    // Get the cursor for the column, null means no auto complete
-                    val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
-                        getQuery()
-                    }
+        box.delegate = object: ChipBox.Delegate {
+            override val scope: CoroutineScope
+                get() = tagViewModel.viewModelScope
 
-                    // Get the adapter from the column description
-                    val adapter = SimpleCursorAdapter(
-                        context,
-                        R.layout.books_drawer_filter_auto_complete,
-                        cursor,
-                        arrayOf("_result"),
-                        intArrayOf(R.id.auto_complete_item),
-                        0
-                    )
-                    adapter.stringConversionColumn = cursor.getColumnIndex("_result")
-                    adapter.setFilterQueryProvider { getQuery() }
-
-                    // Set the adapter on the text view
-                    edit.setAdapter(adapter)
-                    // Flag that the job is done
-                    autoCompleteJob = null
-                }
-            } else {
-                // If we lose focus and the set focus job isn't done, cancel it
-                autoCompleteJob?.let {
-                    it.cancel()
-                    autoCompleteJob = null
-                }
-                // Clear the adapter
-                edit.setAdapter(null)
+            override suspend fun onCreateChip(
+                chipBox: ChipBox,
+                text: String,
+                scope: CoroutineScope
+            ): Chip? {
+                return this@ScanFragment.onCreateChip(scope, text)
             }
-        }
 
-        box.coroutineScope = tagViewModel.viewModelScope
-        box.onCreateChip = { scope, text ->
-            onCreateChip(scope, text)
-        }
-        box.onChipCreated = {_, chip ->
-            // If we made a chip, then select the tag
-            tagViewModel.selection.select((chip as TagChip).tag.id, true)
+            override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
+                tagViewModel.selection.select((chip as TagChip).tag.id, true)
+            }
+
+            override suspend fun onChipRemoved(
+                chipBox: ChipBox,
+                chip: View,
+                scope: CoroutineScope
+            ) {
+                tagViewModel.selection.select((chip as TagChip).tag.id, false)
+            }
+
+            override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
+                // Get the value field
+                edit as AutoCompleteTextView
+                if (hasFocus) {
+                    // Setting focus, setup adapter and set it in the text view
+                    // This is done in a coroutine job and we use the job
+                    // to flag that the job is still active. When we lose focus
+                    // we cancel the job if it is still active
+                    autoCompleteJob = booksViewModel.viewModelScope.launch {
+                        // Get the cursor for the column, null means no auto complete
+                        val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
+                            getQuery()
+                        }
+
+                        // Get the adapter from the column description
+                        val adapter = SimpleCursorAdapter(
+                            context,
+                            R.layout.books_drawer_filter_auto_complete,
+                            cursor,
+                            arrayOf("_result"),
+                            intArrayOf(R.id.auto_complete_item),
+                            0
+                        )
+                        adapter.stringConversionColumn = cursor.getColumnIndex("_result")
+                        adapter.setFilterQueryProvider { getQuery() }
+
+                        // Set the adapter on the text view
+                        edit.setAdapter(adapter)
+                        if (edit.isShown)
+                            edit.showDropDown()
+                        // Flag that the job is done
+                        // Flag that the job is done
+                        autoCompleteJob = null
+                    }
+                } else {
+                    // If we lose focus and the set focus job isn't done, cancel it
+                    autoCompleteJob?.let {
+                        it.cancel()
+                        autoCompleteJob = null
+                    }
+                    // Clear the adapter
+                    edit.setAdapter(null)
+                }
+            }
         }
 
         (box.textView as AutoCompleteTextView).let {
@@ -892,10 +907,13 @@ class ScanFragment : Fragment() {
                             adapter.notifyItemChanged(index)
                         }
 
-                        // Launch a coroutine. Use this scope
-                        override fun launch(task: suspend CoroutineScope.() -> Unit): Job {
-                            return this@coroutineScope.launch(block = task)
-                        }
+                        // Get the context
+                        override val context: Context
+                            get() = this@ScanFragment.context!!
+
+                        // Get the coroutine scope
+                        override val scope: CoroutineScope
+                            get() = this@coroutineScope
 
                         // Get a thumbnail
                         override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
@@ -926,7 +944,7 @@ class ScanFragment : Fragment() {
                     }.cachedIn(booksViewModel.viewModelScope)
                     // Find the recycler view and set the layout manager and adapter
                     val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-                    access.adapter = BooksAdapter(context!!, access, R.layout.books_adapter_book_item_always)
+                    access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always)
                     titles.layoutManager = LinearLayoutManager(activity)
                     titles.adapter = access.adapter
 

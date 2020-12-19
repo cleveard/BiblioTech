@@ -3,5 +3,7 @@
     <declare-styleable name="ChipBox">
         <attr name="uniqueChipText" format="boolean" />
         <attr name="imeAction" format="integer" />
+        <attr name="showChipCloseIcon" format="boolean" />
+        <attr name="showChipIcon" format="boolean" />
     </declare-styleable>
 </resources>

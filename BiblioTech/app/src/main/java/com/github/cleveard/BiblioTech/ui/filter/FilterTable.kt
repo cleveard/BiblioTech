@@ -2,9 +2,9 @@ package com.github.cleveard.BiblioTech.ui.filter
 
 import android.content.Context
 import android.database.Cursor
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
@@ -15,7 +15,6 @@ import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.widget.ChipBox
-import com.google.android.material.chip.Chip
 import kotlinx.coroutines.*
 import kotlin.collections.ArrayList
 
@@ -35,12 +34,6 @@ class FilterTable(private val fragment: Fragment) {
      * Action Listener for keyboard actions when entering filter values
      */
     var actionListener: TextView.OnEditorActionListener? = null
-        set(listener) {
-            field = listener
-            for (ui in rows) {
-                ui.valueRow.findViewById<ChipBox>(R.id.filter_value)?.onEditorActionListener = listener
-            }
-        }
 
     /**
      * View model
@@ -63,7 +56,7 @@ class FilterTable(private val fragment: Fragment) {
     private inner class UIRow(
         val topRow: TableRow,
         val valueRow: View,
-    ) {
+    ): ChipBox.Delegate {
         /** The column spinner in the row */
         private val columnSpinner: Spinner = topRow.findViewById<Spinner>(R.id.action_filter_by).also {
             it.adapter = columnAdapter
@@ -84,12 +77,11 @@ class FilterTable(private val fragment: Fragment) {
         /** Autocomplete cursor job */
         var autoCompleteJob: Job? = null
         /** ChipBox for values */
-        var chipBox: ChipBox = valueRow.findViewById(R.id.filter_value)
+        var tagBox: ChipBox = valueRow.findViewById(R.id.filter_value)
 
         init {
             // Initialize fields that depend on the column
-            chipBox.coroutineScope = booksViewModel.viewModelScope
-            chipBox.onCreateChip = onCreateChip
+            tagBox.delegate = this
             changeColumn()
         }
 
@@ -98,7 +90,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun changeColumn() {
             // If value has focus, redo autocomplete
-            if (chipBox.textView.hasFocus())
+            if (tagBox.textView.hasFocus())
                 valueFocusChange(true)
             // Create the new predicate map.
             val newColumn = column
@@ -138,7 +130,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun getQuery(): Cursor {
             // Extract the token at the end of the selection
-            val edit = chipBox.textView
+            val edit = tagBox.textView
             val token = edit.text.toString().trim { it <= ' ' }
             // return the query string
             return column.desc.getAutoCompleteCursor(BookRepository.repo, token)
@@ -150,7 +142,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun valueFocusChange(hasFocus: Boolean) {
             // Get the value field
-            val edit = chipBox.textView as AutoCompleteTextView
+            val edit = tagBox.textView as AutoCompleteTextView
             if (hasFocus) {
                 // No autocomplete, don't do anything
                 if (!column.desc.hasAutoComplete())
@@ -180,6 +172,8 @@ class FilterTable(private val fragment: Fragment) {
 
                     // Set the adapter on the text view
                     edit.setAdapter(adapter)
+                    if (edit.isShown)
+                        edit.showDropDown()
                     // Flag that the job is done
                     autoCompleteJob = null
                 }
@@ -223,14 +217,38 @@ class FilterTable(private val fragment: Fragment) {
         /** The array of values from the value text view */
         var values: Array<String>
             get() {
-                val vSeq = chipBox.values.value!!.iterator()
-                return Array(chipBox.valueCount) { vSeq.next() }
+                val vSeq = tagBox.values.value!!.iterator()
+                return Array(tagBox.valueCount) { vSeq.next() }
             }
             set(value) {
                 // Form the value text by joining the values
-                chipBox.textView.text.clear()
-                chipBox.setChips(booksViewModel.viewModelScope, value.asSequence())
+                tagBox.textView.text.clear()
+                tagBox.setChips(booksViewModel.viewModelScope, value.asSequence())
             }
+
+        override val scope: CoroutineScope
+            get() = booksViewModel.viewModelScope
+
+        override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
+            buildFilter()
+        }
+
+        override suspend fun onChipRemoved(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
+            buildFilter()
+        }
+
+        override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
+            valueFocusChange(hasFocus)
+        }
+
+        override fun onEditorAction(
+            chipBox: ChipBox,
+            edit: TextView,
+            actionId: Int,
+            event: KeyEvent?
+        ): Boolean {
+            return actionListener?.onEditorAction(edit, actionId, event) == true
+        }
     }
 
     /**
@@ -281,42 +299,6 @@ class FilterTable(private val fragment: Fragment) {
             // Do nothing when nothing is selected
         }
     }
-
-    /**
-     * Listener to close the chip, just removes it
-     */
-    private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
-        (chip.parent as ViewGroup).removeView(chip)
-        buildFilter()
-    }
-
-    private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
-        (chip.parent as ChipBox).editChip(chip as Chip)
-        buildFilter()
-    }
-
-    private val onCreateChip: suspend (scope: CoroutineScope, text: String) -> Chip? = {_, text ->
-        // Make a chip, set the text and make the close icon visible
-        val chip = Chip(fragment.context)
-        chip.text = text
-        chip.isCloseIconVisible = true
-        // Set listeners to close and edit the chip
-        chip.setOnCloseIconClickListener(closeListener)
-        chip.setOnClickListener(clickListener)
-        chip
-    }
-
-    /**
-     * Listener for the value fields to get and lose focus
-     * This is used to setup and tear down the cursor adaptor for auto complete
-     */
-    private val valueFocusListener: View.OnFocusChangeListener =
-        View.OnFocusChangeListener { v, hasFocus ->
-            (v?.tag as? Int)?.let { index ->
-                if (index < rows.size)
-                    rows[index].valueFocusChange(hasFocus)
-            }
-        }
 
     /**
      * OnClickListener for add row button
@@ -385,12 +367,10 @@ class FilterTable(private val fragment: Fragment) {
         // Add values listener
         val chips = rowItem.valueRow.findViewById<ChipBox>(R.id.filter_value)
         if (clear) {
-            chips.onEditorActionListener = null
-            chips.onEditorFocusListener = null
+            chips.delegate = object: ChipBox.Delegate {}
             (chips.textView as AutoCompleteTextView).onItemClickListener = null
         } else {
-            chips.onEditorActionListener = actionListener
-            chips.onEditorFocusListener = valueFocusListener
+            chips.delegate = rowItem
             (chips.textView as AutoCompleteTextView).let {
                 it.threshold = 1
                 // If the view is an AutoComplete view, then add a chip when an item is selected
@@ -399,7 +379,6 @@ class FilterTable(private val fragment: Fragment) {
                         chips.onCreateChipAction()
                     }
             }
-            chips.onChipCreated = {_, _ -> buildFilter() }
         }
         chips.textView.tag = row
     }

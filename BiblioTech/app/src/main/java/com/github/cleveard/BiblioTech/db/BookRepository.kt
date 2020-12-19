@@ -111,6 +111,14 @@ class BookRepository private constructor() {
     }
 
     /**
+     * Find a tag by name
+     * @param tagName The name of the tag
+     * @return The TagEntity or null if it wasn't found
+     */
+    suspend fun findTagByName(tagName: String): TagEntity? {
+        return db.getTagDao().findByName(tagName)
+    }
+    /**
      * Get a single tag
      * @param tagId The id of the tag
      * @return The TagEntity for the tag or null if it doesn't exist

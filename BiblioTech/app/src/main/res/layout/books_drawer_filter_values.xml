@@ -4,6 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:id="@+id/filter_value"
+    android:descendantFocusability="beforeDescendants"
+    android:focusableInTouchMode="true"
     app:flexWrap="wrap"
     app:alignItems="baseline">
 

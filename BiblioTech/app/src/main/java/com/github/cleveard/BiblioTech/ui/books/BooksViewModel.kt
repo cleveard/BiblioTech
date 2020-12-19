@@ -7,6 +7,7 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
 import android.util.SparseArray
+import android.view.LayoutInflater
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.*
+import com.github.cleveard.BiblioTech.ui.tags.TagsFragment
 import com.github.cleveard.BiblioTech.utils.GenericViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -43,7 +45,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * The adapter for the book recycler view
      */
-    internal val adapter: BooksAdapter = BooksAdapter(app.applicationContext, this)
+    internal val adapter: BooksAdapter = BooksAdapter(this)
 
     /**
      * The layout manager for the book recycler view
@@ -74,11 +76,6 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private var itemStyles: Array<TextAppearanceSpan>
 
     /**
-     * Locale to use for headers and separators and dates
-     */
-    private var context: Context = app.applicationContext
-
-    /**
      * Column names for the filter columns om headers and separators
      */
     private val names = SparseArray<String>()
@@ -87,7 +84,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         // Get the locale
         // TODO: change the local when changed on the phone
         val resources = context.resources
-        // Get the text appearances for column names in separators
+        val context = this.context
         nameStyles = arrayOf(
             TextAppearanceSpan(context, R.style.HeaderName0),
             TextAppearanceSpan(context, R.style.HeaderName1),
@@ -339,5 +336,58 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
         return repo.getThumbnail(bookId, large)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override suspend fun removeTag(ctx: Context, book: BookAndAuthors, tagName: String): Boolean {
+        // Find the tag
+        val trim = tagName.trim { it <= ' ' }
+        val index = book.tags.indexOfFirst { it.name == trim }
+        // Doesn't exist for the book. Do nothing
+        if (index < 0)
+            return false
+        repo.removeTagsFromBooks(arrayOf(book.book.id), arrayOf(book.tags[index].id))
+        book.tags = book.tags.filter { it.name != trim }
+        return true
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override suspend fun addTag(ctx: Context, book: BookAndAuthors, tagName: String): Boolean {
+        // Find the tag
+        val trim = tagName.trim { it <= ' ' }
+        val index = book.tags.indexOfFirst { it.name == trim }
+        // Already on the book, Do nothing
+        if (index >= 0)
+            return true
+        // Is the tag in the repo
+        var tag = repo.findTagByName(tagName)
+        if (tag == null) {
+            // Didn't find one, try to add one
+            tag = TagEntity(0L, tagName, "")
+            tag.id = TagsFragment.addOrEdit(
+                tag,
+                LayoutInflater.from(ctx),
+                repo,
+                scope
+            )
+            // If we added a tag, then make the chip
+            // otherwise return null
+            if (tag.id == 0L)
+                return false
+        }
+
+        // Add the tag to the book
+        repo.addTagsToBooks(arrayOf(book.book.id), arrayOf(tag.id))
+        book.tags = ArrayList(book.tags).also {
+            var i = it.indexOfFirst { it.id > tag.id }
+            if (i < 0)
+                i = it.size
+            it.add(i, tag)
+        }
+        return true
     }
 }
