@@ -720,7 +720,8 @@ abstract class TagDao(private val db: BookDatabase) {
      */
     open suspend fun add(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
         // Empty tag is not accepted
-        if (tag.name == "")
+        tag.name = tag.name.trim { it <= ' ' }
+        if (tag.name.isEmpty())
             return 0
         // See if there is a conflicting tag with the same name.
         val conflict = findByName(tag.name)
@@ -1105,6 +1106,8 @@ abstract class AuthorDao {
     @Transaction
     open suspend fun add(bookId: Long, author: AuthorEntity) {
         // Find the author
+        author.lastName = author.lastName.trim { it <= ' ' }
+        author.remainingName = author.lastName.trim { it <= ' ' }
         val list: List<AuthorEntity> = findByName(author.lastName, author.remainingName)
         // Get the author id if it isn't empty, otherwise add the author
         author.id = if (list.isNotEmpty()) {
@@ -1283,6 +1286,7 @@ abstract class CategoryDao {
     @Transaction
     open suspend fun add(bookId: Long, category: CategoryEntity) {
         // Find the category
+        category.category = category.category.trim { it <= ' ' }
         val list: List<CategoryEntity> = findByName(category.category)
         // Use existing id, or add the category
         category.id = if (list.isNotEmpty()) {
@@ -1744,6 +1748,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      */
     suspend fun addOrUpdate(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)?): Long {
         // Look for a conflicting view
+        view.name = view.name.trim { it <= ' ' }
         val conflict = findByName(view.name)
         if (conflict != null) {
             // Found one. If the conflict id and view id are the same
