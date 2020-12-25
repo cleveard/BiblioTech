@@ -22,7 +22,7 @@ internal interface ParentAccess {
      * Toggle the selection for and id
      * @param id The id to toggle
      */
-    fun toggleSelection(id: Long)
+    fun toggleSelection(id: Long, position: Int)
 
     /**
      * Toggle the open/close state of the boook
@@ -242,7 +242,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
     /**
      * @inheritDoc
      */
-    override fun toggleSelection(id: Long) {
+    override fun toggleSelection(id: Long, position: Int) {
         selection.toggle(id)
     }
 

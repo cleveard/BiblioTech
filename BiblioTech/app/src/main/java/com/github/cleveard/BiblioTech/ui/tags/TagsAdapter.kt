@@ -62,7 +62,7 @@ internal open class TagsAdapter(private val access: ParentAccess) :
         // Set a click listener to toggle the tag selection
         contactView.setOnClickListener {view ->
             (view.tag as? Long)?.let {id ->
-                access.toggleSelection(id)
+                access.toggleSelection(id, holder.layoutPosition)
             }
         }
 

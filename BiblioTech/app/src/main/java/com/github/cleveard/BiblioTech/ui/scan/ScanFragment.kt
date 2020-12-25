@@ -9,6 +9,8 @@ import android.database.Cursor
 import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.DisplayMetrics
 import android.util.Log
 import android.util.SparseArray
@@ -43,8 +45,8 @@ import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
 import java.lang.StringBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
@@ -840,6 +842,135 @@ class ScanFragment : Fragment() {
     }
 
     /**
+     * Class to handle filter terms from an edit text
+     * @param scope A coroutine scope for coroutine operations
+     */
+    private abstract class FilterHandler(val scope: CoroutineScope): TextWatcher {
+        protected val filterTerms: ArrayList<String> = ArrayList()
+        private var edit: EditText? = null
+        private var adapter: BooksAdapter? = null
+        private var changed: Boolean = false
+        private var channel: Channel<Boolean> = Channel()
+        private var job: Job? = null
+
+        /**
+         * Initialize the handler
+         * @param edit The EditText that has the filter terms
+         * @param adapter The recycler adapter that shows the filtered books
+         */
+        fun initialize(edit: EditText, adapter: BooksAdapter): Flow<Boolean> {
+            this.edit = edit
+            edit.addTextChangedListener(this)
+            this.adapter = adapter
+
+            // This flow is used send the filter terms to the adapter
+            return flow {
+                emit(true)
+                for (l in channel) {
+                    emit(l)
+                }
+            }
+        }
+
+        /**
+         * Parse a string into filter terms
+         * @param data The string to parse
+         */
+        fun parseFilter(data: Editable) {
+            filterTerms.clear()
+            val trim = data.toString().trim { it <= ' ' }
+            if (trim.isEmpty()) {
+                return
+            }
+
+            val term = StringBuilder(trim.length)
+            // Extract filter terms
+            var i = 0
+            while (i < trim.length) {
+                var ch = trim[i++]
+                // We terminate a term on an unquoted whitespace
+                if (ch.isWhitespace()) {
+                    // If we collected anything add it to the list and clear the term
+                    if (term.isNotEmpty()) {
+                        filterTerms.add(term.toString())
+                        term.clear()
+                    }
+                } else if (ch == '"') {
+                    // If we get a quote the we start a quoted section
+                    if (i < trim.length) {
+                        // "" just becomes a single unquoted character
+                        if (trim[i] == '"') {
+                            // Add the " and skip the second one
+                            term.append(ch)
+                            i++
+                        } else {
+                            // Quoted section. collect characters until we get
+                            // to the end of the string or the matching quote
+                            do {
+                                ch = trim[i++]
+                                if (ch == '"') {
+                                    // Found a quote, if it isn't "" then stop
+                                    if (i >= trim.length || trim[i + 1] != '"')
+                                        break
+                                    i++ // skip the second "
+                                }
+                                // Add the character
+                                term.append(ch)
+                            } while (i < trim.length)
+                        }
+                    }
+                } else
+                    term.append(ch)     // Add other characters
+            }
+            // Add the last term, if there is one
+            if (term.isNotEmpty())
+                filterTerms.add(term.toString())
+        }
+
+        fun cancel() {
+            channel.close()
+            edit?.removeTextChangedListener(this)
+            job?.cancel()
+        }
+
+        /**
+         * @inheritDoc
+         */
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) { }
+
+        /**
+         * @inheritDoc
+         */
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { }
+
+        /**
+         * @inheritDoc
+         */
+        override fun afterTextChanged(data: Editable?) {
+            // Delay the parse to collect multiple characters
+            changed = true
+            job = job?: scope.launch {
+                while (changed) {
+                    changed = false
+                    delay(750)
+                }
+
+                // parse the filter and notify that the data set has changed
+                data?.let { parseFilter(it) }
+                channel.send(true)
+                job = null
+            }
+        }
+
+        /**
+         * Filter a book
+         * @param book The book to filter
+         * @return True if the book is kept, false if it is removed
+         */
+        abstract fun filter(book: BookAndAuthors): Boolean
+    }
+
+    /**
      * Select a book from a google query
      * @param list List of books in first page returned from the book query
      * @param spec query used to get the page of books
@@ -860,6 +991,38 @@ class ScanFragment : Fragment() {
             var pagerJob: Job? = null
             // Setup separate thumbnails for this query
             val thumbnails = Thumbnails("gb")
+
+            // Filter for titles
+            val titleFilter = object: FilterHandler(this) {
+                override fun filter(book: BookAndAuthors): Boolean {
+                    // If there are no filter terms, then keep the book
+                    return if (filterTerms.isNotEmpty()) {
+                        for (s in filterTerms) {
+                            if (book.book.title.contains(s, true))
+                                return true
+                        }
+                        false
+                    } else
+                        true
+                }
+            }
+
+            // Filter for authors
+            val authorFilter = object: FilterHandler(this) {
+                override fun filter(book: BookAndAuthors): Boolean {
+                    return if (filterTerms.isNotEmpty()) {
+                        for (s in filterTerms) {
+                            for (a in book.authors) {
+                                if ((a.remainingName + " " + a.lastName).contains(s, true))
+                                    return true
+                            }
+                        }
+                        false
+                    } else
+                        true
+                }
+            }
+
             try {
                 // Otherwise display a dialog to select the book
                 coroutineAlert<SparseArray<BookAndAuthors>>(context!!, SparseArray()) { alert ->
@@ -873,10 +1036,19 @@ class ScanFragment : Fragment() {
                         // This array is used to map positions to selected books
                         // and is the final result of the select book dialog
                         val selection = alert.result
+                        var selectedPos = -1
                         // This is the adapter
                         lateinit var adapter: BooksAdapter
+
+                        // Clear the selected items - only use for !isMulti
+                        fun clearSelection(selected: Boolean) {
+                            for (i in 0 until selection.size())
+                                selection.valueAt(i).selected = selected
+                            selectedPos = -1
+                            selection.clear()
+                        }
                         // Toggle the selection for an id
-                        override fun toggleSelection(id: Long) {
+                        override fun toggleSelection(id: Long, position: Int) {
                             val index = id.toInt()
                             if (selection.indexOfKey(index) >= 0) {
                                 // Selection contains the key, remove it
@@ -889,20 +1061,19 @@ class ScanFragment : Fragment() {
                                 // Selection doesn't contain the key, add it
                                 // clear any other selections if not multi selection
                                 if (!isMulti) {
-                                    for (i in 0 until selection.size()) {
-                                        selection.valueAt(i).selected = false
-                                        adapter.notifyItemChanged(selection.keyAt(i))
-                                    }
-                                    selection.clear()
+                                    if (selectedPos >= 0)
+                                        adapter.notifyItemChanged(selectedPos)
+                                    clearSelection(false)
                                 }
                                 // Add the boo
-                                adapter.getBook(index)?.let {
+                                adapter.getBook(position)?.let {
                                     it.selected = true
                                     selection.put(index, it)
+                                    selectedPos = position
                                 }
                             }
                             // Refresh the adapter
-                            adapter.notifyItemChanged(index)
+                            adapter.notifyItemChanged(position)
                         }
 
                         // Get the context
@@ -928,6 +1099,20 @@ class ScanFragment : Fragment() {
                         }
                     }
 
+                    // Find the recycler view and set the layout manager and adapter
+                    val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
+                    access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always)
+                    titles.layoutManager = LinearLayoutManager(activity)
+                    titles.adapter = access.adapter
+
+                    // initialize the title and author filters
+                    val filterFlow = titleFilter.initialize(content.findViewById(R.id.title_filter), access.adapter)
+                        .combine(
+                            authorFilter.initialize(content.findViewById(R.id.author_filter), access.adapter)
+                        ) {t1, t2 ->
+                            t1 || t2
+                        }
+
                     // Create a pager to drive the recycler view
                     val config = PagingConfig(pageSize = 20, initialLoadSize = pageCount)
                     val pager = Pager(
@@ -939,16 +1124,31 @@ class ScanFragment : Fragment() {
                         it.map { b ->
                             (b as? BookAndAuthors)?.apply { selected = access.selection.indexOfKey(book.id.toInt()) >= 0 }?: b
                         }
-                    }.cachedIn(booksViewModel.viewModelScope)
-                    // Find the recycler view and set the layout manager and adapter
-                    val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-                    access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always)
-                    titles.layoutManager = LinearLayoutManager(activity)
-                    titles.adapter = access.adapter
+                    }.cachedIn(booksViewModel.viewModelScope).combine(filterFlow) {data, b ->
+                        val clone = data.map {book ->
+                            if (book is BookAndAuthors) {
+                                book.copy()
+                            } else
+                                book
+                        }
+                        if (b) {
+                            clone.filter { book ->
+                                // filter the books using the title and author edit text contents
+                                if (book is BookAndAuthors) {
+                                    access.selection.indexOfKey(book.book.id.toInt()) >= 0 ||
+                                        (titleFilter.filter(book) && authorFilter.filter(book))
+                                } else
+                                    true
+                            }
+                        } else
+                            clone
+                    }
 
                     // Start the book stream to the recycler view
                     pagerJob = booksViewModel.viewModelScope.launch {
                         flow.collectLatest { data ->
+                            if (!isMulti && access.selectedPos >= 0)
+                                access.clearSelection(true)
                             access.adapter.submitData(data)
                         }
                     }
@@ -963,6 +1163,8 @@ class ScanFragment : Fragment() {
                         .setNegativeButton(R.string.cancel, null)
                 }.show()
             } finally {
+                titleFilter.cancel()
+                authorFilter.cancel()
                 pagerJob?.cancel()
                 thumbnails.deleteAllThumbFiles()
             }

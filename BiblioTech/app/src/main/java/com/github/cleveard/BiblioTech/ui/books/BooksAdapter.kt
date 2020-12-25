@@ -215,9 +215,10 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
     private inner class ClickFlipperListener(private val holder: ViewHolder): View.OnClickListener {
         override fun onClick(v: View?) {
             if (v is ViewFlipper) {
-                getItem(holder.layoutPosition)?.apply {
+                val pos = holder.layoutPosition
+                getItem(pos)?.apply {
                     this as BookAndAuthors
-                    access.toggleSelection(book.id)
+                    access.toggleSelection(book.id, pos)
                 }
             }
         }
