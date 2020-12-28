@@ -68,9 +68,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private val viewObserver = Observer<ViewEntity> {
         buildFlow()
     }
-    private val _filterView: MutableLiveData<ViewEntity> = MutableLiveData(ViewEntity(0, "", "")).also {
-        it.observeForever(viewObserver)
-    }
+    private val _filterView: MutableLiveData<ViewEntity> = MutableLiveData(ViewEntity(0, "", ""))
     val filterView: LiveData<ViewEntity>
         get() { return _filterView }
 
@@ -106,6 +104,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
+        _filterView.observeForever(viewObserver)
     }
 
     /**

@@ -105,6 +105,9 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         // Create the view model factory
         mViewModelFactory = ViewModelProvider.AndroidViewModelFactory(application)
 
+        // Remember the cache directory
+        mCache = cacheDir
+
         // Create the data base
         BookDatabase.initialize(applicationContext)
         BookRepository.initialize(applicationContext)
@@ -163,9 +166,6 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                 updateViews(it)
             }
         }
-
-        // Remember the cache directory
-        mCache = cacheDir
     }
 
     /**
