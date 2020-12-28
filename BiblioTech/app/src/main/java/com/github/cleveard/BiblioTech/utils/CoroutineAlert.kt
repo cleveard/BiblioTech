@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.DialogInterface
 import kotlinx.coroutines.*
+import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -129,12 +130,15 @@ fun <T> CoroutineScope.coroutineAlert(
             return withContext(mainContext) {
                 // Suspend the thread until the dialog is finished
                 suspendCoroutine { cont ->
+                    var c: Continuation<R>? = cont
                     builder.setOnDismissListener {
                         // Finish with the last result we got
-                        cont.resume(result)
+                        c?.resume(result)
+                        c = null
                     }.setOnCancelListener {
                         // Finish with the cancel result
-                        cont.resume(cancelVal)
+                        c?.resume(cancelVal)
+                        c = null
                     }
 
                     // Create the dialog and set the onShowListener
