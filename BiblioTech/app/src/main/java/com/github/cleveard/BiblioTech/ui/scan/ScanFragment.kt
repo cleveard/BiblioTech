@@ -240,8 +240,6 @@ class ScanFragment : Fragment() {
                 KeyEvent.KEYCODE_VOLUME_UP -> {
                     // Clear the isbn and title fields
                     clearView()
-                    // Focus the camera
-                    focus()
                     // Turn on bar code scanning in the analyzer
                     previewing = true
                 }
@@ -756,35 +754,6 @@ class ScanFragment : Fragment() {
             return AspectRatio.RATIO_4_3
         }
         return AspectRatio.RATIO_16_9
-    }
-
-    /**
-     * Start auto focus for the camera
-     */
-    private fun focus(): Boolean {
-        // Position where we want to focus
-        val x = viewFinder.x + viewFinder.width / 2f
-        val y = viewFinder.y + viewFinder.height / 2f
-
-        val pointFactory = SurfaceOrientedMeteringPointFactory(
-            viewFinder.width.toFloat(), viewFinder.height.toFloat())
-        val afPointWidth = 1.0f / 6.0f  // 1/6 total area
-        val aePointWidth = afPointWidth * 1.5f
-        val afPoint = pointFactory.createPoint(x, y, afPointWidth)
-        val aePoint = pointFactory.createPoint(x, y, aePointWidth)
-
-        try {
-            // Start the auto focus
-            camera?.cameraControl?.startFocusAndMetering(
-                FocusMeteringAction.Builder(afPoint, FocusMeteringAction.FLAG_AF)
-                                           .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
-                                           .build()
-            )
-        } catch (e: CameraInfoUnavailableException) {
-            Log.d(TAG, "cannot access camera", e)
-        }
-
-        return true
     }
 
     /**
