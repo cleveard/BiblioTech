@@ -13,12 +13,12 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelProviders
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
          * @param classType The java class for the view model to be created.
          */
         fun <T: ViewModel> getViewModel(activity: FragmentActivity?, classType: Class<T>): T {
-            return ViewModelProviders.of(activity!!, mViewModelFactory).get(classType)
+            return ViewModelProvider(activity!!, mViewModelFactory).get(classType)
         }
     }
 
@@ -186,7 +186,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                     // Need isCheckable for the navigation selection listener to work
                     it.isCheckable = true
                     it.isChecked = false
-                    it.icon = applicationContext.resources.getDrawable(R.drawable.ic_baseline_filter_alt_24, null)
+                    it.icon = ResourcesCompat.getDrawable(applicationContext.resources,
+                        R.drawable.ic_baseline_filter_alt_24, null)
                 }
             }
         }

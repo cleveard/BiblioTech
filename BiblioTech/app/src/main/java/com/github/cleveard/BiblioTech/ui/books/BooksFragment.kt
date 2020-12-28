@@ -12,6 +12,7 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.children
 import androidx.drawerlayout.widget.DrawerLayout
@@ -30,11 +31,9 @@ import com.github.cleveard.BiblioTech.db.ViewEntity
 import com.github.cleveard.BiblioTech.ui.filter.FilterTable
 import com.github.cleveard.BiblioTech.ui.filter.OrderTable
 import com.github.cleveard.BiblioTech.ui.modes.DeleteModalAction
-import com.github.cleveard.BiblioTech.ui.modes.TagModalAction
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
-import kotlinx.android.synthetic.main.books_drawer.view.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
@@ -127,7 +126,7 @@ class BooksFragment : Fragment() {
         activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
             // The view changed, set the title and subtitle
             it.title = if (filterView.name.isEmpty())
-                context!!.resources.getString(R.string.menu_books)
+                requireContext().resources.getString(R.string.menu_books)
             else
                 filterView.name
             it.subtitle = filterView.desc
@@ -165,17 +164,19 @@ class BooksFragment : Fragment() {
     ): View? {
         // Get the books and tags view models
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
-            it.selection.hasSelection.observe(this, selectionObserver)
-            it.filterView.observe(this, filterViewObserver)
+            it.selection.hasSelection.observe(viewLifecycleOwner, selectionObserver)
+            it.filterView.observe(viewLifecycleOwner, filterViewObserver)
         }
         tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java).also {
-            it.selection.hasSelection.observe(this, selectionObserver)
+            it.selection.hasSelection.observe(viewLifecycleOwner, selectionObserver)
         }
 
         // Get the edit and filter drawer menu icons
         context?.let {context ->
-            closeDrawer = context.resources.getDrawable(R.drawable.ic_close_action_drawer_24, null)
-            openDrawer = context.resources.getDrawable(R.drawable.ic_open_action_drawer_24, null)
+            closeDrawer = ResourcesCompat.getDrawable(context.resources,
+                R.drawable.ic_close_action_drawer_24, null)!!
+            openDrawer = ResourcesCompat.getDrawable(context.resources,
+                R.drawable.ic_open_action_drawer_24, null)!!
         }
 
         // Inflate the fragments view
@@ -196,7 +197,7 @@ class BooksFragment : Fragment() {
                 // Dismiss the keyboard
                 val imm =
                     context?.getSystemService(Activity.INPUT_METHOD_SERVICE) as? InputMethodManager
-                imm?.hideSoftInputFromWindow(actionDrawer.action_drawer_view.windowToken, 0)
+                imm?.hideSoftInputFromWindow(actionDrawer.rootView.windowToken, 0)
                 updateMenuAndButtons()
             }
 
@@ -298,7 +299,7 @@ class BooksFragment : Fragment() {
         // can safely present the dialog
         booksViewModel.viewModelScope.launch {
 
-            val yes = coroutineAlert(context!!, false) { alert ->
+            val yes = coroutineAlert(requireContext(), false) { alert ->
                 // Present the dialog
                 alert.builder.setTitle(R.string.remove_view_title)
                     .setMessage(R.string.remove_view_message)
@@ -460,14 +461,14 @@ class BooksFragment : Fragment() {
             ) ?: ViewEntity(0, "", "")
 
             // Get the content view for the dialog
-            val content = parentFragment!!.layoutInflater.inflate(R.layout.books_drawer_new_filter, null)
+            val content = requireParentFragment().layoutInflater.inflate(R.layout.books_drawer_new_filter, null)
             val name = content.findViewById<EditText>(R.id.edit_view_name)
                 .also { it.text = SpannableStringBuilder(entity.name) }
             val desc = content.findViewById<EditText>(R.id.edit_view_desc)
                 .also { it.text = SpannableStringBuilder(entity.desc) }
 
             // Create an alert dialog with the content view
-            return@coroutineScope coroutineAlert<ViewEntity?>(context!!, null) { alert ->
+            return@coroutineScope coroutineAlert<ViewEntity?>(requireContext(), null) { alert ->
                 alert.builder.setTitle(R.string.new_filter_title)
                     .setTitle(R.string.add_view_title)
                     .setMessage(R.string.add_view_message)
@@ -486,7 +487,7 @@ class BooksFragment : Fragment() {
                 entity.id = booksViewModel.repo.addOrUpdateView(entity) {
                     // We got a conflict, ask the user if that is OK
                     // Return true for OK and false for not ok
-                    coroutineAlert(context!!, false) { alert ->
+                    coroutineAlert(requireContext(), false) { alert ->
                         alert.builder.setTitle(R.string.view_conflict_title)
                             .setMessage(R.string.view_conflict_message)
                             .setCancelable(false)

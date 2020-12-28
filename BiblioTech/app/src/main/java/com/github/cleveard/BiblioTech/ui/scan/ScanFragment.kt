@@ -24,7 +24,6 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
 import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
@@ -306,10 +305,8 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
-        booksViewModel =
-            ViewModelProviders.of(activity!!).get(BooksViewModel::class.java)
-        tagViewModel =
-            ViewModelProviders.of(activity!!).get(TagViewModel::class.java)
+        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
+        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
         return inflater.inflate(R.layout.scan_fragment, container, false)
     }
 
@@ -369,8 +366,8 @@ class ScanFragment : Fragment() {
                 setUpCamera()
             } else {
                 booksViewModel.viewModelScope.launch {
-                    if (activity!!.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                        coroutineAlert(context!!, Unit) { alert ->
+                    if (requireActivity().shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+                        coroutineAlert(requireContext(), Unit) { alert ->
                             // Present the dialog
                             alert.builder.setTitle(R.string.camera_permission_title)
                                 .setMessage(R.string.camera_permission_message)
@@ -536,7 +533,7 @@ class ScanFragment : Fragment() {
      */
     private fun makeChip(tag: TagEntity?): TagChip? {
         return tag?.let { t ->
-            TagChip(t, context!!)
+            TagChip(t, requireContext())
         }
     }
 
@@ -668,7 +665,7 @@ class ScanFragment : Fragment() {
                             // If we got here we didn't find anything
                             Toast.makeText(
                                 context,
-                                context!!.resources.getString(R.string.no_books_found),
+                                requireContext().resources.getString(R.string.no_books_found),
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -708,7 +705,7 @@ class ScanFragment : Fragment() {
                 if (result == null || result.list.isEmpty()) {
                     Toast.makeText(
                         context,
-                        context!!.resources.getString(R.string.no_books_found),
+                        requireContext().resources.getString(R.string.no_books_found),
                         Toast.LENGTH_LONG
                     ).show()
                     return@launch
@@ -1051,11 +1048,11 @@ class ScanFragment : Fragment() {
 
             try {
                 // Otherwise display a dialog to select the book
-                coroutineAlert<SparseArray<BookAndAuthors>>(context!!, SparseArray()) { alert ->
+                coroutineAlert<SparseArray<BookAndAuthors>>(requireContext(), SparseArray()) { alert ->
 
                     // Get the content view for the dialog
                     val content =
-                        parentFragment!!.layoutInflater.inflate(R.layout.scan_select_book, null)
+                        requireParentFragment().layoutInflater.inflate(R.layout.scan_select_book, null)
 
                     // Create an object the book adapter uses to get info
                     val access = object: ParentAccess {
@@ -1104,7 +1101,7 @@ class ScanFragment : Fragment() {
 
                         // Get the context
                         override val context: Context
-                            get() = this@ScanFragment.context!!
+                            get() = this@ScanFragment.requireContext()
 
                         // Get the coroutine scope
                         override val scope: CoroutineScope
