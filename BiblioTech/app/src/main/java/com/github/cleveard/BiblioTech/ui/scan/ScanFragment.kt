@@ -17,7 +17,8 @@ import android.util.SparseArray
 import android.view.*
 import android.widget.*
 import androidx.camera.core.*
-import androidx.camera.core.ImageCapture.CaptureMode
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -47,9 +48,12 @@ import com.yanzhenjie.zbar.Symbol
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import java.lang.Exception
 import java.lang.StringBuilder
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
 import kotlin.math.abs
@@ -91,7 +95,12 @@ class ScanFragment : Fragment() {
     /**
      * The view that displays the camera preview
      */
-    private lateinit var viewFinder: TextureView
+    private lateinit var viewFinder: PreviewView
+
+    /**
+     * The camera
+     */
+    private var camera: Camera? = null
 
     /**
      * Broadcast manager for the app. Used to react to volume up/down button presses
@@ -116,7 +125,12 @@ class ScanFragment : Fragment() {
     /**
      * Lens to use for scanning
      */
-    private var lensFacing = CameraX.LensFacing.BACK
+    private var lensFacing = CameraSelector.LENS_FACING_BACK
+
+    /**
+     * Camera provider
+     */
+    private var cameraProvider: ProcessCameraProvider? = null
 
     /**
      * Preview camera stream
@@ -133,6 +147,9 @@ class ScanFragment : Fragment() {
      * Image analyzer - used to analyze images captured from the camera
      */
     private var imageAnalyzer: ImageAnalysis? = null
+
+    /** Blocking camera operations are performed using this executor */
+    private lateinit var cameraExecutor: ExecutorService
 
     /**
      * Flag that turns bar code scanning on and off.
@@ -204,7 +221,7 @@ class ScanFragment : Fragment() {
             if (PackageManager.PERMISSION_GRANTED == grantResults.firstOrNull()) {
                 // Take the user to the success fragment when permission is granted
                 Toast.makeText(context, "Permission request granted", Toast.LENGTH_LONG).show()
-                bindCameraUseCases()
+                setUpCamera()
             } else {
                 Toast.makeText(context, "Permission request denied", Toast.LENGTH_LONG).show()
             }
@@ -248,9 +265,8 @@ class ScanFragment : Fragment() {
         override fun onDisplayChanged(displayId: Int) = view?.let { view ->
             if (displayId == this@ScanFragment.displayId) {
                 Log.d(TAG, "Rotation changed: ${view.display.rotation}")
-                preview?.setTargetRotation(view.display.rotation)
-                imageCapture?.setTargetRotation(view.display.rotation)
-                imageAnalyzer?.setTargetRotation(view.display.rotation)
+                imageCapture?.targetRotation = view.display.rotation
+                imageAnalyzer?.targetRotation = view.display.rotation
             }
         } ?: Unit
     }
@@ -275,6 +291,9 @@ class ScanFragment : Fragment() {
         tags?.removeObserver(tagObserver)
         tags = null
         chipBox = null
+
+        // Shut down our background executor
+        cameraExecutor.shutdown()
 
         // Unregister the broadcast receivers and listeners
         broadcastManager.unregisterReceiver(volumeDownReceiver)
@@ -311,6 +330,9 @@ class ScanFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Initialize our background executor
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
         // Setup the chips for the selected tag
         tagViewModel.selection.onSelectionChanged.add(selectChange)
         chipBox = view.findViewById<ChipBox>(R.id.selected_tags)?.also {
@@ -345,9 +367,9 @@ class ScanFragment : Fragment() {
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
 
-            if (hasPermissions(requireContext()))
-                bindCameraUseCases()
-            else {
+            if (hasPermissions(requireContext())) {
+                setUpCamera()
+            } else {
                 booksViewModel.viewModelScope.launch {
                     if (activity!!.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
                         coroutineAlert(context!!, Unit) { alert ->
@@ -520,6 +542,30 @@ class ScanFragment : Fragment() {
         }
     }
 
+    /** Initialize CameraX, and prepare to bind the camera use cases  */
+    private fun setUpCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
+        cameraProviderFuture.addListener(Runnable {
+
+            // CameraProvider
+            cameraProvider = cameraProviderFuture.get()
+
+            // Select lensFacing depending on the available cameras
+            lensFacing = when {
+                hasBackCamera() -> CameraSelector.LENS_FACING_BACK
+                else -> throw IllegalStateException("Back camera is unavailable")
+            }
+
+            // Build and bind the camera use cases
+            bindCameraUseCases()
+        }, ContextCompat.getMainExecutor(requireContext()))
+    }
+
+    /** Returns true if the device has an available back camera. False otherwise */
+    private fun hasBackCamera(): Boolean {
+        return cameraProvider?.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) ?: false
+    }
+
     /**
      * Declare and bind preview, capture and analysis use cases
      */
@@ -528,116 +574,124 @@ class ScanFragment : Fragment() {
         // Get screen metrics used to setup camera for full screen resolution
         val metrics = DisplayMetrics().also { viewFinder.display.getRealMetrics(it) }
         Log.d(TAG, "Screen metrics: ${metrics.widthPixels} x ${metrics.heightPixels}")
+
         val screenAspectRatio = aspectRatio(metrics.widthPixels, metrics.heightPixels)
         Log.d(TAG, "Preview aspect ratio: $screenAspectRatio")
-        // Set up the view finder use case to display camera preview
-        val viewFinderConfig = PreviewConfig.Builder().apply {
-            setLensFacing(lensFacing)
-            // We request aspect ratio but no resolution to let CameraX optimize our use cases
-            setTargetAspectRatio(screenAspectRatio)
-            // Set initial target rotation, we will have to call this again if rotation changes
-            // during the lifecycle of this use case
-            setTargetRotation(viewFinder.display.rotation)
-        }.build()
 
-        // Use the auto-fit preview builder to automatically handle size and orientation changes
-        preview = AutoFitPreviewBuilder.build(viewFinderConfig, viewFinder)
+        val rotation = viewFinder.display.rotation
+
+        val cameraProvider = cameraProvider?: throw IllegalStateException("Camera initialization failed.")
+
+        // CameraSelector
+        val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+
+        // Preview
+        preview = Preview.Builder()
+            // We request aspect ratio but no resolution
+            .setTargetAspectRatio(screenAspectRatio)
+            // Set initial target rotation
+            .setTargetRotation(rotation)
+            .build()
 
         // Set up the capture use case to allow users to take photos
-        val imageCaptureConfig = ImageCaptureConfig.Builder().apply {
-            setLensFacing(lensFacing)
-            setCaptureMode(CaptureMode.MIN_LATENCY)
+        imageCapture = ImageCapture.Builder()
             // We request aspect ratio but no resolution to match preview config but letting
             // CameraX optimize for whatever specific resolution best fits requested capture mode
-            setTargetAspectRatio(screenAspectRatio)
+            .setTargetAspectRatio(screenAspectRatio)
             // Set initial target rotation, we will have to call this again if rotation changes
             // during the lifecycle of this use case
-            setTargetRotation(viewFinder.display.rotation)
-        }.build()
-
-        imageCapture = ImageCapture(imageCaptureConfig)
+            .setTargetRotation(rotation)
+            .build()
 
         // Setup image analysis pipeline that computes average pixel luminance in real time
-        val analyzerConfig = ImageAnalysisConfig.Builder().apply {
-            setLensFacing(lensFacing)
-            // In our analysis, we care more about the latest image than analyzing *every* image
-            setImageReaderMode(ImageAnalysis.ImageReaderMode.ACQUIRE_LATEST_IMAGE)
+        imageAnalyzer = ImageAnalysis.Builder()
+            // We request aspect ratio but no resolution to match preview config but letting
+            // CameraX optimize for whatever specific resolution best fits requested capture mode
+            .setTargetAspectRatio(screenAspectRatio)
             // Set initial target rotation, we will have to call this again if rotation changes
             // during the lifecycle of this use case
-            setTargetRotation(viewFinder.display.rotation)
-        }.build()
+            .setTargetRotation(rotation)
+            .build()
+            .also {
+                // Run the analysis on the main thread and use the BarcodeScanner class
+                it.setAnalyzer(cameraExecutor, BarcodeScanner { codes ->
+                    // Start a coroutine job to run query for the book
+                    booksViewModel.viewModelScope.launch {
+                        // Display the bar codes in the UI
+                        container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
 
-        // Setup the image analyzer to scan for bar codes
-        val repo = booksViewModel.repo
-        imageAnalyzer = ImageAnalysis(analyzerConfig).apply {
-            // Run the analysis on the main thread and use the BarcodeScanner class
-            setAnalyzer(mainExecutor, BarcodeScanner {codes ->
-                // Display the bar codes in the UI
-                container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
+                        var notFound = true         // Flag if we found anything
+                        // Look through the codes we found
+                        for (isbn in codes) {
+                            try {
+                                // Lookup using isbn
+                                var result = GoogleBookLookup.lookupISBN(isbn)
+                                if (result == null || result.list.isEmpty()) {
+                                    // If we didn't find anything find books with the isbn
+                                    // somewhere in the book data
+                                    result = generalLookup(isbn, 0, 20)
+                                    // If we still didn't find anything, continue with next code
+                                    if (result == null || result.list.isEmpty())
+                                        continue
+                                }
 
-                // Start a coroutine job to run query for the book
-                booksViewModel.viewModelScope.launch {
-                    var notFound = true         // Flag if we found anything
-                    // Look through the codes we found
-                    for (isbn in codes) {
-                        try {
-                            // Lookup using isbn
-                            var result = GoogleBookLookup.lookupISBN(isbn)
-                            if (result == null || result.list.isEmpty()) {
-                                // If we didn't find anything find books with the isbn
-                                // somewhere in the book data
-                                result = generalLookup(isbn, 0, 20)
-                                // If we still didn't find anything, continue with next code
-                                if (result == null || result.list.isEmpty())
-                                    continue
+                                // Select a book from the ones we found
+                                notFound = false
+                                val array = selectBook(result.list, isbn, result.itemCount, false)
+                                if (array.size() > 0) {
+                                    val book = array.valueAt(0)
+                                    // When a book is selected, set the title
+                                    container.findViewById<TextView>(R.id.scan_title).text =
+                                        book.book.title
+                                    container.findViewById<TextView>(R.id.scan_author).text =
+                                        buildAuthors(StringBuilder(), book.authors)
+
+                                    // Make sure the isbn in the book record is the one we searched
+                                    book.book.ISBN = isbn
+                                    // Add the book to the database
+                                    booksViewModel.repo.addOrUpdateBook(
+                                        book, tagViewModel.selection.selection,
+                                        tagViewModel.selection.inverted
+                                    )
+                                    // Stop looking
+                                    return@launch
+                                }
+                            } catch (e: GoogleBookLookup.LookupException) {
+                                // Display and error if we found one
+                                Toast.makeText(
+                                    context,
+                                    "Error finding book: $e",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
+                        }
 
-                            // Select a book from the ones we found
-                            notFound = false
-                            val array = selectBook(result.list, isbn, result.itemCount, false)
-                            if (array.size() > 0) {
-                                val book = array.valueAt(0)
-                                // When a book is selected, set the title
-                                container.findViewById<TextView>(R.id.scan_title).text =
-                                    book.book.title
-                                container.findViewById<TextView>(R.id.scan_author).text =
-                                    buildAuthors(StringBuilder(), book.authors)
-
-                                // Make sure the isbn in the book record is the one we searched
-                                book.book.ISBN = isbn
-                                // Add the book to the database
-                                repo.addOrUpdateBook(
-                                    book, tagViewModel.selection.selection,
-                                    tagViewModel.selection.inverted
-                                )
-                                // Stop looking
-                                return@launch
-                            }
-                        } catch (e: GoogleBookLookup.LookupException) {
-                            // Display and error if we found one
+                        if (notFound) {
+                            // If we got here we didn't find anything
                             Toast.makeText(
                                 context,
-                                "Error finding book: $e",
+                                context!!.resources.getString(R.string.no_books_found),
                                 Toast.LENGTH_LONG
                             ).show()
                         }
                     }
+                })
+            }
 
-                    if (notFound) {
-                        // If we got here we didn't find anything
-                        Toast.makeText(
-                            context,
-                            context!!.resources.getString(R.string.no_books_found),
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            })
+        // Must unbind the use-cases before rebinding them
+        cameraProvider.unbindAll()
+
+        try {
+            // Apply declared configs to CameraX using the same lifecycle owner
+            camera = cameraProvider.bindToLifecycle(
+                this, cameraSelector, preview, imageCapture, imageAnalyzer
+            )
+
+            // Attach the viewfinder's surface provider to preview use case
+            preview?.setSurfaceProvider(viewFinder.surfaceProvider)
+        } catch(e: Exception) {
+            Log.e(TAG, "Use case binding failed", e)
         }
-
-        // Apply declared configs to CameraX using the same lifecycle owner
-        CameraX.bindToLifecycle(
-            viewLifecycleOwner, preview, imageCapture, imageAnalyzer)
     }
 
     private fun searchForBooks(title: String, author: String) {
@@ -686,7 +740,7 @@ class ScanFragment : Fragment() {
     }
 
     /**
-     *  [androidx.camera.core.ImageAnalysisConfig] requires enum value of
+     *  [androidx.camera.core.ImageAnalysis] requires enum value of
      *  [androidx.camera.core.AspectRatio]. Currently it has values of 4:3 & 16:9.
      *
      *  Detecting the most suitable ratio for dimensions provided in @params by counting absolute
@@ -696,9 +750,8 @@ class ScanFragment : Fragment() {
      *  @param height - preview height
      *  @return suitable aspect ratio
      */
-    private fun aspectRatio(width: Int, height: Int): AspectRatio {
+    private fun aspectRatio(width: Int, height: Int): Int {
         val previewRatio = max(width, height).toDouble() / min(width, height)
-
         if (abs(previewRatio - RATIO_4_3_VALUE) <= abs(previewRatio - RATIO_16_9_VALUE)) {
             return AspectRatio.RATIO_4_3
         }
@@ -713,18 +766,18 @@ class ScanFragment : Fragment() {
         val x = viewFinder.x + viewFinder.width / 2f
         val y = viewFinder.y + viewFinder.height / 2f
 
-        val pointFactory = DisplayOrientedMeteringPointFactory(viewFinder.display,
-            lensFacing, viewFinder.width.toFloat(), viewFinder.height.toFloat())
+        val pointFactory = SurfaceOrientedMeteringPointFactory(
+            viewFinder.width.toFloat(), viewFinder.height.toFloat())
         val afPointWidth = 1.0f / 6.0f  // 1/6 total area
         val aePointWidth = afPointWidth * 1.5f
-        val afPoint = pointFactory.createPoint(x, y, afPointWidth, 1.0f)
-        val aePoint = pointFactory.createPoint(x, y, aePointWidth, 1.0f)
+        val afPoint = pointFactory.createPoint(x, y, afPointWidth)
+        val aePoint = pointFactory.createPoint(x, y, aePointWidth)
 
         try {
             // Start the auto focus
-            CameraX.getCameraControl(lensFacing).startFocusAndMetering(
-                FocusMeteringAction.Builder.from(afPoint, FocusMeteringAction.MeteringMode.AF_ONLY)
-                                           .addPoint(aePoint, FocusMeteringAction.MeteringMode.AE_ONLY)
+            camera?.cameraControl?.startFocusAndMetering(
+                FocusMeteringAction.Builder(afPoint, FocusMeteringAction.FLAG_AF)
+                                           .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
                                            .build()
             )
         } catch (e: CameraInfoUnavailableException) {
@@ -766,9 +819,12 @@ class ScanFragment : Fragment() {
          * automatically closed after this method returns
          * @return the image analysis result
          */
-        override fun analyze(image: ImageProxy, rotationDegrees: Int) {
+        override fun analyze(image: ImageProxy) {
             // If there are no listeners attached, we don't need to perform analysis
-            if (listeners.isEmpty() || !previewing) return
+            if (listeners.isEmpty() || !previewing) {
+                image.close()
+                return
+            }
 
             // Keep track of frames analyzed
             val currentTime = System.currentTimeMillis()
@@ -807,6 +863,7 @@ class ScanFragment : Fragment() {
                     listeners.forEach { it(codes) }
                 }
             }
+            image.close()
         }
     }
 
