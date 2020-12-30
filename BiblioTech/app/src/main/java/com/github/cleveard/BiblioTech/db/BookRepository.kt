@@ -187,11 +187,7 @@ class BookRepository private constructor() {
         bookId: Long,
         large: Boolean
     ): Bitmap? {
-        try {
-            return db.getBookDao().getThumbnail(bookId, large)
-        } catch (e: Exception) {}
-        // Return null if there is an error
-        return null
+        return db.getBookDao().getThumbnail(bookId, large)
     }
 
     /**

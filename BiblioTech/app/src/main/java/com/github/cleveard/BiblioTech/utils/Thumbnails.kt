@@ -6,6 +6,8 @@ import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.db.kSmallThumb
 import com.github.cleveard.BiblioTech.db.kThumb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.lang.Exception
@@ -14,6 +16,7 @@ import java.net.MalformedURLException
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import kotlin.coroutines.coroutineContext
 
 class Thumbnails(dir: String = "db") {
 
@@ -106,28 +109,47 @@ class Thumbnails(dir: String = "db") {
      * @param large True to get the large thumbnail file. False for the small thumbnail file.
      */
     suspend fun getThumbnail(bookId: Long, large: Boolean, getUrl: suspend (bookId: Long, large: Boolean) -> String?): Bitmap? {
-        // Get the file path
-        val file = getThumbFile(bookId, large)
-        // Load the bitmap return null, if the load succeeds return the bitmap
-        val result = loadBitmap(file)
-        if (result != null)
-            return result
-        // If the file already exists, then don't try to download it again
-        if (file.exists())
-            return null
+        return try {
+            run {
+                // Get the file path
+                val file = getThumbFile(bookId, large)
+                // Load the bitmap return null, if the load succeeds return the bitmap
+                val result = loadBitmap(file)
+                if (result != null)
+                    return@run result
+                // If the file already exists, then don't try to download it again
+                if (file.exists())
+                    return@run null
 
-        var tmpFile: File
-        do {
-            // Get the URL to the image, return null if it fails
-            val url = getThumbUrl(getUrl(bookId, large), file)?: return null
+                var tmpFile: File
+                do {
+                    // If coroutine is canceled, return
+                    if (!coroutineContext.isActive)
+                        return@run null
 
-            // Download the bitmap, return null if files
-            tmpFile = downloadBitmap(url, file)?: return null
+                    // Get the URL to the image, return null if it fails
+                    val url = getThumbUrl(getUrl(bookId, large), file) ?: return null
+                    // If coroutine is canceled, return
+                    if (!coroutineContext.isActive)
+                        return@run null
 
-            // Move the downloaded bitmap to the proper file, retry if it fails
-        } while (!moveFile(tmpFile, file))
+                    // Download the bitmap, return null if files
+                    tmpFile = downloadBitmap(url, file) ?: return null
+                    // If coroutine is canceled, return
+                    if (!coroutineContext.isActive)
+                        return@run null
 
-        return loadBitmap(file)
+                    // Move the downloaded bitmap to the proper file, retry if it fails
+                } while (!moveFile(tmpFile, file))
+
+                loadBitmap(file)
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            // If coroutine is cancled throw exception
+            coroutineContext.ensureActive()
+        }
     }
 
     /**
@@ -136,7 +158,13 @@ class Thumbnails(dir: String = "db") {
      * @return The bitmap of null if the file doesn't exist
      */
     private suspend fun loadBitmap(file: File): Bitmap? {
-        return withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.absolutePath) }
+        return try {
+            withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.absolutePath) }
+        } catch (e: Exception) {
+            null
+        } finally {
+            coroutineContext.ensureActive()
+        }
     }
 
     /**

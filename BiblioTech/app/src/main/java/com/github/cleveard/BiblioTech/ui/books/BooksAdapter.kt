@@ -15,16 +15,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.core.content.res.ResourcesCompat
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.ui.widget.ChipBox
 import com.github.cleveard.BiblioTech.utils.ParentAccess
 import com.google.android.material.chip.Chip
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.lang.StringBuilder
 import java.text.DateFormat
 
@@ -51,19 +49,6 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         private var m_nothumb: Drawable? = null
 
         /**
-         * Change the visibility of the book details view
-         * @param visible True for visible, false for gone
-         * @param arg1 The parent of the book details view
-         */
-        private fun changeViewVisibility(
-            visible: Boolean,
-            arg1: View
-        ) {
-            val view = arg1.findViewById<View>(R.id.book_list_open)
-            view?.visibility = if (visible) View.VISIBLE else View.GONE
-        }
-
-        /**
          * Get the thumbnail to use before we get the right one
          * @param context Application context
          */
@@ -71,7 +56,7 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
             // Is this already done
             if (m_nothumb == null) {
                 // Get the thumbnail
-                m_nothumb = context.resources.getDrawable(R.drawable.nothumb, null)
+                m_nothumb = ResourcesCompat.getDrawable(context.resources, R.drawable.nothumb, null)
             }
             return m_nothumb
         }
@@ -173,9 +158,258 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
     }
 
     /**
-     * ViewHolder for the adapter - Nothing is added
+     * ViewHolder for a book in the adapter - nothing is added
      */
-    internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
+    internal open inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        open fun thumbCancel() { }
+    }
+
+    /**
+     * ViewHolder for a book in the adapter
+     */
+    internal inner class BookViewHolder(view: View) : ViewHolder(view) {
+        var boundBook: BookAndAuthors? = null
+        private var smallJob: Job? = null
+        private var largeJob: Job? = null
+
+        /**
+         * Listener to select a book when flipper is clicked
+         */
+        private val clickFlipperListener: View.OnClickListener = View.OnClickListener {v ->
+            if (v is ViewFlipper) {
+                val pos = layoutPosition
+                boundBook?.apply {
+                    access.toggleSelection(book.id, pos)
+                }
+            }
+        }
+
+        /**
+         * Delegate for interacting with ChipBox
+         */
+        private val chipBoxDelegate: ChipBox.Delegate = object: ChipBox.Delegate {
+            /**
+             * Job used to get the autocomplete Cursors
+             */
+            private var autoCompleteJob: Job? = null
+
+            /**
+             * Provide a CoroutineScope for the ChipBox
+             */
+            override val scope = access.scope
+
+            /**
+             * Create a chip
+             */
+            override suspend fun onCreateChip(
+                chipBox: ChipBox,
+                text: String,
+                scope: CoroutineScope
+            ): Chip? {
+                if (boundBook?.let { book ->
+                        access.addTag(chipBox.context, book, text)
+                    } == true
+                ) {
+                    // We added the tag, create the chip
+                    return super.onCreateChip(chipBox, text, scope)
+                }
+
+                // No tag, return null
+                return null
+            }
+
+            /**
+             * Remove the tag when the chip is removed
+             */
+            override suspend fun onChipRemoved(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
+                chip as Chip
+                boundBook?.let { book ->
+                    access.removeTag(chipBox.context, book, chip.text.toString())
+                }
+            }
+
+            private fun getQuery(edit: EditText): Cursor {
+                // Extract the token at the end of the selection
+                val token = edit.text.toString().trim { it <= ' ' }
+                // return the query string
+                return ColumnDataDescriptor.buildAutoCompleteCursor(
+                    BookRepository.repo, TAGS_ID_COLUMN,
+                    TAGS_NAME_COLUMN, TAGS_TABLE, token
+                )
+            }
+
+            override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
+                // Cancel existing jobs
+                autoCompleteJob?.let {
+                    it.cancel()
+                    autoCompleteJob = null
+                }
+                // Get the value field
+                edit as AutoCompleteTextView
+                if (hasFocus) {
+                    // Setting focus, setup adapter and set it in the text view
+                    // This is done in a coroutine job and we use the job
+                    // to flag that the job is still active. When we lose focus
+                    // we cancel the job if it is still active
+                    autoCompleteJob = access.scope.launch {
+                        // Get the cursor for the column, null means no auto complete
+                        val cursor = withContext(BookRepository.repo.queryScope.coroutineContext) {
+                            getQuery(edit)
+                        }
+
+                        // Get the adapter from the column description
+                        val adapter = SimpleCursorAdapter(
+                            edit.context,
+                            R.layout.books_drawer_filter_auto_complete,
+                            cursor,
+                            arrayOf("_result"),
+                            intArrayOf(R.id.auto_complete_item),
+                            0
+                        )
+                        adapter.stringConversionColumn = cursor.getColumnIndex("_result")
+                        adapter.setFilterQueryProvider { getQuery(edit) }
+
+                        // Set the adapter on the text view
+                        edit.setAdapter(adapter)
+                        // Flag that the job is done
+                        autoCompleteJob = null
+                    }
+                } else {
+                    // Clear the adapter
+                    edit.setAdapter(null)
+                }
+            }
+        }
+
+        /**
+         * Toggle the visibility of the book details view
+         */
+        private fun toggleViewVisibility(): Boolean {
+            val view = itemView.findViewById<View>(R.id.book_list_open)
+            val visible = view?.visibility != View.VISIBLE
+            changeViewVisibility(visible, view)
+            (itemView.tag as? Long)?.let {id -> access.toggleOpen(id) }
+            return visible
+        }
+
+        /**
+         * Change the visibility of the book details view
+         * @param visible True for visible, false for gone
+         * @param view The book details view
+         */
+        internal fun changeViewVisibility(
+            visible: Boolean,
+            view: View?
+        ) {
+            view?.visibility = if (visible) View.VISIBLE else View.GONE
+            bindAdditionalViews()
+        }
+
+        /**
+         * Listener to open and close the book item
+         */
+        private val openCloseListener: View.OnClickListener = View.OnClickListener {
+            // When a book is clicked, toggle the visibility of
+            // the book details
+            toggleViewVisibility()
+        }
+
+        /**
+         * Bind a thumbnail to the view to display it
+         * @param bookId The book id
+         * @param large True for the large thumbnail, false for the small one
+         * @param viewId The viewId for the view the thumbnail is bound to
+         */
+        fun bindThumb(bookId: Long, large: Boolean, viewId: Int) {
+            itemView.findViewById<ImageView>(viewId).let {imageView ->
+                fun start(): Job {
+                    // Start a coroutine
+                    return access.scope.launch {
+                        // Get the thumbnail
+                        try {
+                            access.getThumbnail(
+                                bookId,
+                                large
+                            )?.let {bitmap ->
+                                // Ok we got it, make sure the view holder is referring to the same book
+                                if (boundBook != null)
+                                    imageView.setImageBitmap(bitmap)
+                            }
+                        } finally {
+                            thumbComplete(large)
+                        }
+                    }
+                }
+
+                if (large) {
+                    largeJob?.cancel()
+                    if (imageView != null)
+                        largeJob = start()
+                } else {
+                    smallJob?.cancel()
+                    if (imageView != null)
+                        smallJob = start()
+                }
+            }
+        }
+
+        private fun thumbComplete(large: Boolean) {
+            if (large) {
+                largeJob = null
+            } else {
+                smallJob = null
+            }
+        }
+
+        override fun thumbCancel() {
+            boundBook = null
+            largeJob?.cancel()
+            smallJob?.cancel()
+        }
+
+        private fun bindAdditionalViews() {
+            if (itemView.findViewById<View>(R.id.book_list_open).visibility != View.VISIBLE)
+                return
+            boundBook?.let { book ->
+                book.categories.setField(itemView, R.id.book_categories, ", ") {
+                    it.category
+                }
+                book.tags.setChips(access.scope, itemView, R.id.book_tags) {
+                    it.name
+                }
+                book.book.description.setField(itemView, R.id.book_desc)
+                book.book.volumeId.setField(itemView, R.id.book_volid)
+                book.book.ISBN.setField(itemView, R.id.book_isbn)
+                book.book.linkUrl.setField(itemView, R.id.book_list_link)
+                book.book.pageCount.toString().setField(itemView, R.id.book_list_pages)
+                // Set the rating
+                itemView.findViewById<RatingBar>(R.id.book_list_rating)?.rating =
+                    book.book.rating.toFloat()
+                // Set the dates using the date format
+                format.format(book.book.added).setField(itemView, R.id.book_list_added)
+                format.format(book.book.modified).setField(itemView, R.id.book_list_modified)
+                // Make the details invisible
+                // Set the default thumbnails and get the real ones
+                itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
+                bindThumb(book.book.id, true, R.id.book_thumb)
+            }
+        }
+
+        init {
+            // When the view flipper is click, change the view and toggle it's selection
+            itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)?.setOnClickListener(clickFlipperListener)
+            itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
+                it.delegate = chipBoxDelegate
+                val edit = it.textView as AutoCompleteTextView
+                edit.threshold = 1
+                // Add a chip when an item is selected
+                edit.onItemClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
+                    it.onCreateChipAction()
+                }
+            }
+            itemView.setOnClickListener(openCloseListener)
+        }
+    }
 
     /**
      * !inheritDoc
@@ -186,42 +420,6 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         if (getItem(position) is BookAndAuthors)
             return bookLayout
         return R.layout.books_adapter_header_item
-    }
-
-    /**
-     * Listener to open and close the book item
-     */
-    private val openCloseListener: View.OnClickListener = View.OnClickListener {
-        // When a book is clicked, toggle the visibility of
-        // the book details
-        toggleViewVisibility(it)
-    }
-
-    /**
-     * Toggle the visibility of the book details view
-     * @param arg1 The parent of the book details view
-     */
-    private fun toggleViewVisibility(arg1: View): Boolean {
-        val view = arg1.findViewById<View>(R.id.book_list_open)
-        val visible = view?.visibility != View.VISIBLE
-        changeViewVisibility(visible, arg1)
-        (arg1.tag as? Long)?.let {id -> access.toggleOpen(id) }
-        return visible
-    }
-
-    /**
-     * Listener to select a book when flipper is clicked
-     */
-    private inner class ClickFlipperListener(private val holder: ViewHolder): View.OnClickListener {
-        override fun onClick(v: View?) {
-            if (v is ViewFlipper) {
-                val pos = holder.layoutPosition
-                getItem(pos)?.apply {
-                    this as BookAndAuthors
-                    access.toggleSelection(book.id, pos)
-                }
-            }
-        }
     }
 
     /**
@@ -239,104 +437,6 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
     }
 
     /**
-     * Delegate for interacting with ChipBox
-     */
-    private inner class ChipBoxDelegate(val holder: ViewHolder): ChipBox.Delegate {
-        /**
-         * Job used to get the autocomplete Cursors
-         */
-        private var autoCompleteJob: Job? = null
-
-        /**
-         * Provide a CoroutineScope for the ChipBox
-         */
-        override val scope = access.scope
-
-        /**
-         * Create a chip
-         */
-        override suspend fun onCreateChip(
-            chipBox: ChipBox,
-            text: String,
-            scope: CoroutineScope
-        ): Chip? {
-            if (holder.layoutPosition in 0 until itemCount &&
-                (getItem(holder.layoutPosition) as? BookAndAuthors)?.let { book ->
-                    access.addTag(chipBox.context, book, text)
-                } == true
-            ) {
-                // We added the tag, create the chip
-                return super.onCreateChip(chipBox, text, scope)
-            }
-
-            // No tag, return null
-            return null
-        }
-
-        /**
-         * Remove the tag when the chip is removed
-         */
-        override suspend fun onChipRemoved(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
-            chip as Chip
-            (getItem(holder.layoutPosition) as? BookAndAuthors)?.let { book ->
-                access.removeTag(chipBox.context, book, chip.text.toString())
-            }
-        }
-
-        private fun getQuery(edit: EditText): Cursor {
-            // Extract the token at the end of the selection
-            val token = edit.text.toString().trim { it <= ' ' }
-            // return the query string
-            return ColumnDataDescriptor.buildAutoCompleteCursor(
-                BookRepository.repo, TAGS_ID_COLUMN,
-                TAGS_NAME_COLUMN, TAGS_TABLE, token
-            )
-        }
-
-        override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
-            // Cancel existing jobs
-            autoCompleteJob?.let {
-                it.cancel()
-                autoCompleteJob = null
-            }
-            // Get the value field
-            edit as AutoCompleteTextView
-            if (hasFocus) {
-                // Setting focus, setup adapter and set it in the text view
-                // This is done in a coroutine job and we use the job
-                // to flag that the job is still active. When we lose focus
-                // we cancel the job if it is still active
-                autoCompleteJob = access.scope.launch {
-                    // Get the cursor for the column, null means no auto complete
-                    val cursor = withContext(BookRepository.repo.queryScope.coroutineContext) {
-                        getQuery(edit)
-                    }
-
-                    // Get the adapter from the column description
-                    val adapter = SimpleCursorAdapter(
-                        edit.context,
-                        R.layout.books_drawer_filter_auto_complete,
-                        cursor,
-                        arrayOf("_result"),
-                        intArrayOf(R.id.auto_complete_item),
-                        0
-                    )
-                    adapter.stringConversionColumn = cursor.getColumnIndex("_result")
-                    adapter.setFilterQueryProvider { getQuery(edit) }
-
-                    // Set the adapter on the text view
-                    edit.setAdapter(adapter)
-                    // Flag that the job is done
-                    autoCompleteJob = null
-                }
-            } else {
-                // Clear the adapter
-                edit.setAdapter(null)
-            }
-        }
-    }
-
-    /**
      * !inheritDoc
      */
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -346,60 +446,16 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         // Inflate the custom layout - Note we use the viewType returned from getItemViewType
         val contactView: View = inflater.inflate(viewType, parent, false)
         // Create the holder
-        val holder = ViewHolder(contactView)
+        val holder: ViewHolder
         if (viewType != R.layout.books_adapter_header_item) {
-            // This is a book we want to display
-            contactView.setOnClickListener(openCloseListener)
-            // When the view flipper is click, change the view and toggle it's selection
-            contactView.findViewById<ViewFlipper>(R.id.book_list_flipper)?.setOnClickListener(ClickFlipperListener(holder))
+            holder = BookViewHolder(contactView)
             // When the books link is clicked go to the web site
             contactView.findViewById<TextView>(R.id.book_list_link)?.setOnClickListener(clickLinkListener)
-            contactView.findViewById<ChipBox>(R.id.book_tags)?.let {
-                it.delegate = ChipBoxDelegate(holder)
-                val edit = it.textView as AutoCompleteTextView
-                edit.threshold = 1
-                // If the view is an AutoComplete view, then add a chip when an item is selected
-                edit.onItemClickListener =
-                    AdapterView.OnItemClickListener { _, _, _, _ ->
-                        it.onCreateChipAction()
-                    }
-            }
-        }
+        } else
+            holder = ViewHolder(contactView)
 
         // Return a new holder instance
         return holder
-    }
-
-    /**
-     * Bind a thumbnail to the view to display it
-     * @param bookId The book id
-     * @param large True for the large thumbnail, false for the small one
-     * @param holder The view holder for the item
-     * @param viewId The viewId for the view the thumbnail is bound to
-     */
-    private fun bindThumb(bookId: Long, large: Boolean, holder: ViewHolder, viewId: Int) {
-        holder.itemView.findViewById<ImageView>(viewId)?.let { imageView ->
-            // Start a coroutine
-            access.scope.launch {
-                // Get the thumbnail
-                access.getThumbnail(
-                    bookId,
-                    large
-                )?.also {
-                    // Ok we got it, make sure the view holder is referring to the same book
-                    val pos = holder.layoutPosition
-                    if (pos in 0 until itemCount) {
-                        getItem(pos)?.apply {
-                            (this as? BookAndAuthors)?.let { book ->
-                                // Set the thumbnail if the ids are the same
-                                if (book.book.id == bookId)
-                                    imageView.setImageBitmap(it)
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /**
@@ -424,6 +480,8 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
             return
         }
 
+        holder as BookViewHolder
+        holder.boundBook = book
         holder.itemView.tag = book.book.id
         // Make sure view is visible
         holder.itemView.visibility = View.VISIBLE
@@ -443,31 +501,19 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
             else
                 ""
         }
-        book.categories.setField(holder.itemView, R.id.book_categories, ", ") {
-            it.category
-        }
-        book.tags.setChips(access.scope, holder.itemView, R.id.book_tags) {
-            it.name
-        }
-        book.book.description.setField(holder.itemView, R.id.book_desc)
-        book.book.volumeId.setField(holder.itemView, R.id.book_volid)
-        book.book.ISBN.setField(holder.itemView, R.id.book_isbn)
-        book.book.linkUrl.setField(holder.itemView, R.id.book_list_link)
-        book.book.pageCount.toString().setField(holder.itemView, R.id.book_list_pages)
-        // Set the rating
-        holder.itemView.findViewById<RatingBar>(R.id.book_list_rating)?.rating = book.book.rating.toFloat()
-        // Set the dates using the date format
-        format.format(book.book.added).setField(holder.itemView, R.id.book_list_added)
-        format.format(book.book.modified).setField(holder.itemView, R.id.book_list_modified)
+        holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(m_nothumb)
+        holder.bindThumb(book.book.id, false, R.id.book_list_thumb)
         // Set the icon to the thumbnail or selected icon
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
         box?.displayedChild = if (book.selected) 1 else 0
-        // Make the details invisible
-        changeViewVisibility(access.isOpen(book.book.id), holder.itemView)
-        // Set the default thumbnails and get the real ones
-        holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(m_nothumb)
-        holder.itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
-        bindThumb(book.book.id, false, holder, R.id.book_list_thumb)
-        bindThumb(book.book.id, true, holder, R.id.book_thumb)
+
+        // Make the details visible or invisible
+        holder.changeViewVisibility(access.isOpen(book.book.id),
+            holder.itemView.findViewById(R.id.book_list_open))
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.thumbCancel()
+        super.onViewRecycled(holder)
     }
 }
