@@ -1107,7 +1107,7 @@ abstract class AuthorDao {
     open suspend fun add(bookId: Long, author: AuthorEntity) {
         // Find the author
         author.lastName = author.lastName.trim { it <= ' ' }
-        author.remainingName = author.lastName.trim { it <= ' ' }
+        author.remainingName = author.remainingName.trim { it <= ' ' }
         val list: List<AuthorEntity> = findByName(author.lastName, author.remainingName)
         // Get the author id if it isn't empty, otherwise add the author
         author.id = if (list.isNotEmpty()) {
