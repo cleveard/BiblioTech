@@ -367,7 +367,7 @@ class ScanFragment : Fragment() {
             } else {
                 booksViewModel.viewModelScope.launch {
                     if (requireActivity().shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                        coroutineAlert(requireContext(), Unit) { alert ->
+                        coroutineAlert(requireContext(), { Unit }) { alert ->
                             // Present the dialog
                             alert.builder.setTitle(R.string.camera_permission_title)
                                 .setMessage(R.string.camera_permission_message)
@@ -1048,7 +1048,7 @@ class ScanFragment : Fragment() {
 
             try {
                 // Otherwise display a dialog to select the book
-                coroutineAlert<SparseArray<BookAndAuthors>>(requireContext(), SparseArray()) { alert ->
+                coroutineAlert<SparseArray<BookAndAuthors>>(requireContext(), { SparseArray() }) { alert ->
 
                     // Get the content view for the dialog
                     val content =
@@ -1124,7 +1124,7 @@ class ScanFragment : Fragment() {
 
                     // Find the recycler view and set the layout manager and adapter
                     val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
-                    access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always)
+                    access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always, 0)
                     titles.layoutManager = LinearLayoutManager(activity)
                     titles.adapter = access.adapter
 

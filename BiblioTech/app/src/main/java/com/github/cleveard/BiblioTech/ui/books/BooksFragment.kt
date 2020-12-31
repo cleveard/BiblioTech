@@ -299,7 +299,7 @@ class BooksFragment : Fragment() {
         // can safely present the dialog
         booksViewModel.viewModelScope.launch {
 
-            val yes = coroutineAlert(requireContext(), false) { alert ->
+            val yes = coroutineAlert(requireContext(), { false }) { alert ->
                 // Present the dialog
                 alert.builder.setTitle(R.string.remove_view_title)
                     .setMessage(R.string.remove_view_message)
@@ -468,7 +468,7 @@ class BooksFragment : Fragment() {
                 .also { it.text = SpannableStringBuilder(entity.desc) }
 
             // Create an alert dialog with the content view
-            return@coroutineScope coroutineAlert<ViewEntity?>(requireContext(), null) { alert ->
+            return@coroutineScope coroutineAlert<ViewEntity?>(requireContext(), { null }) { alert ->
                 alert.builder.setTitle(R.string.new_filter_title)
                     .setTitle(R.string.add_view_title)
                     .setMessage(R.string.add_view_message)
@@ -487,7 +487,7 @@ class BooksFragment : Fragment() {
                 entity.id = booksViewModel.repo.addOrUpdateView(entity) {
                     // We got a conflict, ask the user if that is OK
                     // Return true for OK and false for not ok
-                    coroutineAlert(requireContext(), false) { alert ->
+                    coroutineAlert(requireContext(), { false }) { alert ->
                         alert.builder.setTitle(R.string.view_conflict_title)
                             .setMessage(R.string.view_conflict_message)
                             .setCancelable(false)

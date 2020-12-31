@@ -58,7 +58,7 @@ private val mainContext = MainScope().coroutineContext
 /**
  * AlertDialog builder for use in coroutines
  * @param context The context the AlertDialog.Builder uses
- * @param cancel The value returned if the dialog is canceled,
+ * @param getCancelVal The value returned if the dialog is canceled,
  *               or if the result isn't set when handling a click to a button
  * @param setup A lambda the sets up the AlertDialog using the Builder. When the lambda is called
  *              this is set to the CoroutineAlert object
@@ -67,19 +67,19 @@ private val mainContext = MainScope().coroutineContext
  */
 fun <T> CoroutineScope.coroutineAlert(
     context: Context,
-    cancel: T,
+    getCancelVal: () -> T,
     setup: CoroutineScope.(alert: CoroutineAlert<T>) -> Unit
 ): CoroutineAlert<T> {
     /**
      * AlertDialog builder for use in coroutines
      * @param context The context the AlertDialog.Builder uses
-     * @param cancelVal The value returned if the dialog is canceled,
+     * @param getCancelVal The value returned if the dialog is canceled,
      *               or if the result isn't set when handling a click to a button
      * @param <R> The value type returned by show()
      */
     class CoroutineAlertImpl<R>(
         context: Context,
-        private val cancelVal: R,
+        private val getCancelVal: () -> R,
         private val scope: CoroutineScope
     ) : CoroutineAlert<R>() {
         /**
@@ -90,7 +90,7 @@ fun <T> CoroutineScope.coroutineAlert(
         /**
          * The result of the dialog
          */
-        override var result: R = cancelVal
+        override var result: R = this.getCancelVal()
 
         /**
          * The listener for the positive click
@@ -137,7 +137,7 @@ fun <T> CoroutineScope.coroutineAlert(
                         c = null
                     }.setOnCancelListener {
                         // Finish with the cancel result
-                        c?.resume(cancelVal)
+                        c?.resume(this@CoroutineAlertImpl.getCancelVal())
                         c = null
                     }
 
@@ -167,7 +167,7 @@ fun <T> CoroutineScope.coroutineAlert(
             }
 
             neg.setOnClickListener {
-                result = cancelVal
+                result = this.getCancelVal()
                 handleClick(negListener, dialog, DialogInterface.BUTTON_NEGATIVE)
             }
         }
@@ -194,5 +194,5 @@ fun <T> CoroutineScope.coroutineAlert(
         }
     }
 
-    return CoroutineAlertImpl(context, cancel, this).also { setup(it) }
+    return CoroutineAlertImpl(context, getCancelVal, this).also { setup(it) }
 }

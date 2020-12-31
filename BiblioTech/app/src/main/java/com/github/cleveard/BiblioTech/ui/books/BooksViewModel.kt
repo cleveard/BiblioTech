@@ -45,7 +45,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * The adapter for the book recycler view
      */
-    internal val adapter: BooksAdapter = BooksAdapter(this)
+    internal val adapter: BooksAdapter = BooksAdapter(
+        this,
+        R.layout.books_adapter_book_item_always,
+        R.layout.books_adapter_book_item_detail
+    )
 
     /**
      * Selection set used to mark open books

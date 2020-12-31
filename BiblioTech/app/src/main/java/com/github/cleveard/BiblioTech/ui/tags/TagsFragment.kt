@@ -311,7 +311,7 @@ class TagsFragment : Fragment() {
             val desc = content.findViewById<EditText>(R.id.edit_tag_desc)
             desc.setText(tag.desc, TextView.BufferType.EDITABLE)
 
-            return scope.coroutineAlert(layoutInflater.context, 0L) { alert ->
+            return scope.coroutineAlert(layoutInflater.context, { 0L }) { alert ->
                 // Build the tag edit dialog. Don't listen for OK or Cancel.
                 // OK is handled in an on onClick listener, so we can cancel the OK
                 // Cancel doesn't need to do anything
@@ -331,7 +331,7 @@ class TagsFragment : Fragment() {
                     // Here we suspend the coroutine, until the user replies
                     // The return value of CoroutineAlert.show() is the return
                     // value of the this lambda
-                    coroutineAlert(layoutInflater.context, false) {alert ->
+                    coroutineAlert(layoutInflater.context, { false }) {alert ->
                         // Present the dialog
                         alert.builder.setTitle(R.string.tag_conflict_title)
                             .setMessage(if (tag.id == 0L) R.string.tag_conflict_add_message else R.string.tag_conflict_edit_message)

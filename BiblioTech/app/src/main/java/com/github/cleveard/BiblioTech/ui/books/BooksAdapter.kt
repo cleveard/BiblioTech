@@ -29,8 +29,9 @@ import java.text.DateFormat
 /**
  * Paging Adapter for the Books fragment book list
  */
-internal open class BooksAdapter(private val access: ParentAccess, private val bookLayout: Int = R.layout.books_adapter_book_item) :
-    PagingDataAdapter<Any, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+internal open class BooksAdapter(
+    private val access: ParentAccess, private val bookLayout: Int, private val detailLayout: Int
+): PagingDataAdapter<Any, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     /**
      * Format to show dates
@@ -287,22 +288,11 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         private fun toggleViewVisibility(): Boolean {
             val view = itemView.findViewById<View>(R.id.book_list_open)
             val visible = view?.visibility != View.VISIBLE
-            changeViewVisibility(visible, view)
-            (itemView.tag as? Long)?.let {id -> access.toggleOpen(id) }
-            return visible
-        }
-
-        /**
-         * Change the visibility of the book details view
-         * @param visible True for visible, false for gone
-         * @param view The book details view
-         */
-        internal fun changeViewVisibility(
-            visible: Boolean,
-            view: View?
-        ) {
             view?.visibility = if (visible) View.VISIBLE else View.GONE
-            bindAdditionalViews()
+            if (visible)
+                bindAdditionalViews()
+            (itemView.tag as? Long)?.let { id -> access.toggleOpen(id) }
+            return visible
         }
 
         /**
@@ -367,10 +357,14 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
             smallJob?.cancel()
         }
 
-        private fun bindAdditionalViews() {
-            if (itemView.findViewById<View>(R.id.book_list_open).visibility != View.VISIBLE)
+        internal fun bindAdditionalViews() {
+            if (detailLayout == 0)
                 return
             boundBook?.let { book ->
+                if (itemView.findViewById<View>(R.id.book_list_open) == null) {
+                    LayoutInflater.from(itemView.context).inflate(detailLayout, itemView as ViewGroup)
+                }
+
                 book.categories.setField(itemView, R.id.book_categories, ", ") {
                     it.category
                 }
@@ -508,8 +502,8 @@ internal open class BooksAdapter(private val access: ParentAccess, private val b
         box?.displayedChild = if (book.selected) 1 else 0
 
         // Make the details visible or invisible
-        holder.changeViewVisibility(access.isOpen(book.book.id),
-            holder.itemView.findViewById(R.id.book_list_open))
+        if (access.isOpen(book.book.id))
+            holder.bindAdditionalViews()
     }
 
     override fun onViewRecycled(holder: ViewHolder) {

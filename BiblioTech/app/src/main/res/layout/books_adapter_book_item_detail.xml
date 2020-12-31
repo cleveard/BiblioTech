@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="ui.books.BooksFragment"
+    android:id="@+id/book_list_open"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_below="@id/book_list_always"
+    android:layout_marginHorizontal="10dp"
+    android:layout_marginVertical="3dp">
+
+    <RatingBar
+        android:id="@+id/book_list_rating"
+        style="@style/Widget.AppCompat.RatingBar.Small"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <TextView
+        android:id="@+id/book_list_link"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="@id/book_list_rating"
+        android:layout_marginHorizontal="5dp"
+        app:layout_constraintStart_toEndOf="@id/book_list_rating"
+        app:layout_constraintEnd_toStartOf="@id/book_list_pages"
+        android:clickable="true"
+        android:maxLines="1" />
+
+
+    <TextView
+        android:id="@+id/book_list_pages"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_list_link"
+        android:layout_marginStart="3dp"
+        app:layout_constraintEnd_toStartOf="@id/book_list_pages_label" />
+
+    <TextView
+        android:id="@+id/book_list_pages_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_list_pages"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="3dp"
+        android:text="@string/pages" />
+
+    <TextView
+        android:id="@+id/book_categories_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        app:layout_constraintTop_toBottomOf="@id/book_list_link"
+        app:layout_constraintStart_toStartOf="parent"
+        android:text="@string/categories" />
+
+    <TextView
+        android:id="@+id/book_categories"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_categories_label"
+        app:layout_constraintStart_toEndOf="@id/book_categories_label" />
+
+    <TextView
+        android:id="@+id/book_tags_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="@id/book_tags"
+        app:layout_constraintBottom_toBottomOf="@id/book_tags"
+        app:layout_constraintStart_toStartOf="parent"
+        android:text="@string/tags" />
+
+    <com.github.cleveard.BiblioTech.ui.widget.ChipBox
+        android:id="@+id/book_tags"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        android:layout_marginTop="3dp"
+        android:descendantFocusability="beforeDescendants"
+        android:focusableInTouchMode="true"
+        app:flexWrap="wrap"
+        android:layout_toEndOf="@id/book_tags_label"
+        app:layout_constraintTop_toBottomOf="@id/book_categories"
+        app:layout_constraintStart_toEndOf="@id/book_tags_label"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <AutoCompleteTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:hint="@string/tag"
+            android:imeOptions="actionNone"
+            android:dropDownWidth="160dp"
+            android:autofillHints=""
+            android:inputType="textCapWords">
+        </AutoCompleteTextView>
+
+    </com.github.cleveard.BiblioTech.ui.widget.ChipBox>
+
+    <TextView
+        android:id="@+id/book_id_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_isbn"
+        app:layout_constraintStart_toStartOf="parent"
+        android:text="@string/id" />
+
+    <TextView
+        android:id="@+id/book_volid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_isbn"
+        app:layout_constraintStart_toEndOf="@id/book_id_label"
+        android:layout_toEndOf="@id/book_id_label" />
+
+    <TextView
+        android:id="@+id/book_isbn_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_isbn"
+        android:layout_marginEnd="3dp"
+        app:layout_constraintEnd_toStartOf="@id/book_isbn"
+        android:text="@string/isbn" />
+
+    <TextView
+        android:id="@+id/book_isbn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        app:layout_constraintTop_toBottomOf="@id/book_tags"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/book_list_added_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_list_modified"
+        app:layout_constraintStart_toStartOf="parent"
+        android:text="@string/added" />
+
+    <TextView
+        android:id="@+id/book_list_added"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_list_modified"
+        app:layout_constraintStart_toEndOf="@id/book_list_added_label" />
+
+    <TextView
+        android:id="@+id/book_list_modified_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintBaseline_toBaselineOf="@id/book_list_modified"
+        android:layout_marginEnd="3dp"
+        app:layout_constraintEnd_toStartOf="@id/book_list_modified"
+        android:text="@string/modified" />
+
+    <TextView
+        android:id="@+id/book_list_modified"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        app:layout_constraintTop_toBottomOf="@id/book_isbn"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageView
+        android:id="@+id/book_thumb"
+        android:layout_width="128dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/book_list_modified"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="3dp"
+        android:adjustViewBounds="true"
+        android:scaleType="fitXY"
+        android:src="@drawable/nothumb" />
+
+    <TextView
+        android:id="@+id/book_desc"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/book_thumb"
+        android:layout_marginTop="3dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

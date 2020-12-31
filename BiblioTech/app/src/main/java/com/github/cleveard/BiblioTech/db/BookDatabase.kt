@@ -1168,7 +1168,7 @@ abstract class AuthorDao {
      * Delete books for an author
      * @param authorId The id of the authors whose books are deleted
      */
-    @Query("DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN = :authorId")
+    @Query("DELETE FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = :authorId")
     protected abstract suspend fun deleteAuthor(authorId: Long): Int
 
     /**
@@ -1351,7 +1351,7 @@ abstract class CategoryDao {
      * Delete all books for a category
      * @param categoryId The id of the category
      */
-    @Query("DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN = :categoryId")
+    @Query("DELETE FROM $CATEGORIES_TABLE WHERE $CATEGORIES_ID_COLUMN = :categoryId")
     protected abstract suspend fun deleteCategory(categoryId: Long): Int
 
     /**
