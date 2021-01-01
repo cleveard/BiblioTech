@@ -122,17 +122,19 @@ class BooksFragment : Fragment() {
     /**
      * Observer for BooksViewModel filterView changes
      */
-    private val filterViewObserver = Observer<ViewEntity> {filterView ->
+    private val filterViewObserver = Observer<ViewEntity?> {filterView: ViewEntity? ->
         activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
             // The view changed, set the title and subtitle
-            it.title = if (filterView.name.isEmpty())
-                requireContext().resources.getString(R.string.menu_books)
-            else
-                filterView.name
-            it.subtitle = filterView.desc
+            it.title = filterView?.name.let { name ->
+                if (name.isNullOrEmpty())
+                    requireContext().resources.getString(R.string.menu_books)
+                else
+                    name
+            }
+            it.subtitle = filterView?.desc?: ""
             // Put the filter into the UI
-            orderTable.setOrder(filterView.filter?.orderList)
-            filterTable.setFilter(filterView.filter?.filterList)
+            orderTable.setOrder(filterView?.filter?.orderList)
+            filterTable.setFilter(filterView?.filter?.filterList)
         }
     }
 
@@ -233,7 +235,6 @@ class BooksFragment : Fragment() {
         // Set the layout manager on the recycler view.
         recyclerView.layoutManager = booksViewModel.layoutManager
         // Setup the adapter data stream and set the adapter on the recycler view
-        booksViewModel.buildFlow()
         recyclerView.adapter = booksViewModel.adapter
 
         // When the recycler view scrolls, update the list header
@@ -292,7 +293,7 @@ class BooksFragment : Fragment() {
      */
     private fun removeFilter() {
         // Can't delete the default view
-        if (booksViewModel.filterView.value?.name?: "" == "")
+        if (booksViewModel.filterView.value?.name.isNullOrEmpty())
             return
 
         // Switch the coroutine back to the main thread so we

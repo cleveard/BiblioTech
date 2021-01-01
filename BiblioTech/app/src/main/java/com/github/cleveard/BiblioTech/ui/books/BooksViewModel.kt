@@ -69,11 +69,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Current filter view for the fragment
      */
-    private val viewObserver = Observer<ViewEntity> {
+    private val viewObserver = Observer<ViewEntity?> {
         buildFlow()
     }
-    private val _filterView: MutableLiveData<ViewEntity> = MutableLiveData(ViewEntity(0, "", ""))
-    val filterView: LiveData<ViewEntity>
+    private val _filterView: MutableLiveData<ViewEntity?> = MutableLiveData(null)
+    val filterView: LiveData<ViewEntity?>
         get() { return _filterView }
 
     /**
@@ -123,7 +123,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     override fun onCleared() {
         selection.onSelectionChanged.remove(selectChange)
-        filterView.removeObserver(viewObserver)
+        _filterView.removeObserver(viewObserver)
         super.onCleared()
     }
 
@@ -134,7 +134,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     suspend fun saveFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): Boolean {
         // Convert the description to a filter
-        val view = filterView.value!!
+        val view = filterView.value?: return false
         view.filter = if (orderFields == null && filterFields == null)
             null
         else
@@ -158,7 +158,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @return True if the view was removed
      */
     suspend fun removeFilter(): Boolean {
-        val view = filterView.value!!
+        val view = filterView.value?: return false
         if (view.id != 0L && view.name != "" && repo.removeView(view.name) == 1) {
             applyView("")
             return true
@@ -180,7 +180,10 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * Build a new flow for book stream from the filter in the view model
      * This is called when the filter is changed to update the display
      */
-    fun buildFlow() {
+    private fun buildFlow() {
+        // Get the view for the flow. Return if it is null
+        val view = filterView.value?: return
+
         // Cancel previous job if there was one
         flowJob?.let {
             it.cancel()
@@ -192,7 +195,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         val pager = Pager(
             config
         ) {
-            filterView.value?.filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
+            view.filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
         }
         // Add headers and cache
         val flow = addHeaders(applySelectionTransform(pager.flow))
@@ -404,11 +407,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
         // Add the tag to the book
         repo.addTagsToBooks(arrayOf(book.book.id), arrayOf(tag.id))
-        book.tags = ArrayList(book.tags).also {
-            var i = it.indexOfFirst { it.id > tag.id }
+        book.tags = ArrayList(book.tags).also {list ->
+            var i = list.indexOfFirst { it.id > tag.id }
             if (i < 0)
-                i = it.size
-            it.add(i, tag)
+                i = list.size
+            list.add(i, tag)
         }
         return true
     }
