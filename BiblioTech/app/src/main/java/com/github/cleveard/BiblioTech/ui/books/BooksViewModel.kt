@@ -77,6 +77,14 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         get() { return _filterView }
 
     /**
+     * The built filter to get the ids for the current filter
+     */
+    var idFilter: BookFilter.BuiltFilter? = null
+        private set(filter) {
+            field = filter
+        }
+
+    /**
      * The styles to used for the names and items in headers and separators
      */
     private var nameStyles: Array<TextAppearanceSpan>
@@ -183,6 +191,21 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private fun buildFlow() {
         // Get the view for the flow. Return if it is null
         val view = filterView.value?: return
+
+        idFilter = view.filter?.filterList?.let {
+            // If the filter list is empty, then make idFilter null
+            if (it.isEmpty())
+                null
+            else {
+                // Build the  sqlite command to get the book ids for the filter
+                val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(app.applicationContext)
+                // We only need the book id column
+                idFilterBuilder.addSelect(BOOK_ID_COLUMN)
+                // Build the filter without the order terms
+                idFilterBuilder.buildFilter(it.iterator())
+                BookFilter.BuiltFilter(idFilterBuilder.createCommand(), idFilterBuilder.argList.toArray())
+            }
+        }
 
         // Cancel previous job if there was one
         flowJob?.let {
@@ -373,7 +396,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         // Doesn't exist for the book. Do nothing
         if (index < 0)
             return false
-        repo.removeTagsFromBooks(arrayOf(book.book.id), arrayOf(book.tags[index].id))
+        repo.removeTagsFromBooks(arrayOf(book.book.id), arrayOf(book.tags[index].id), null)
         book.tags = book.tags.filter { it.name != trim }
         return true
     }
@@ -406,7 +429,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         }
 
         // Add the tag to the book
-        repo.addTagsToBooks(arrayOf(book.book.id), arrayOf(tag.id))
+        repo.addTagsToBooks(arrayOf(book.book.id), arrayOf(tag.id), null)
         book.tags = ArrayList(book.tags).also {list ->
             var i = list.indexOfFirst { it.id > tag.id }
             if (i < 0)

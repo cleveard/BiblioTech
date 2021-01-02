@@ -34,7 +34,6 @@
         <item quantity="one">Delete %d book?</item>
         <item quantity="other">Delete %d books?</item>
     </plurals>
-    <string name="delete_unknown_books">Delete books?</string>
     <string name="all">ALL</string>
     <string name="none">NONE</string>
     <string name="swap">SWAP</string>
@@ -53,11 +52,10 @@
         <item quantity="one">Delete %d tag?</item>
         <item quantity="other">Delete %d tags?</item>
     </plurals>
-    <string name="delete_tags_unknown">Delete tags?</string>
     <string name="add_title">Add New Tag</string>
     <string name="add_message">Enter the name and description for the new tag</string>
     <string name="edit_title">Edit Tag</string>
-    <string name="edit_message">Chnange the name and description for the tag</string>
+    <string name="edit_message">Change the name and description for the tag</string>
     <string name="name">Name</string>
     <string name="description">Description</string>
     <string name="selected_tags">Selected Tags</string>
@@ -68,17 +66,14 @@
         <item quantity="one">Tag %d books?</item>
         <item quantity="other">Tag %d books?</item>
     </plurals>
-    <string name="tag_books_unknown">Tag books?</string>
     <plurals name="ask_untag_books">
         <item quantity="one">Remove tags from %d books?</item>
         <item quantity="other">Remove tags from %d books?</item>
     </plurals>
-    <string name="untag_books_unknown">Remove tags from books?</string>
     <plurals name="ask_repl_tag_books">
         <item quantity="one">Replace tags for %d books?</item>
         <item quantity="other">Replace tags for %d books?</item>
     </plurals>
-    <string name="repl_tag_books_unknown">Replace tags for books?</string>
     <string name="edit">Edit</string>
     <string name="order">Order</string>
     <string name="filter">Filter</string>

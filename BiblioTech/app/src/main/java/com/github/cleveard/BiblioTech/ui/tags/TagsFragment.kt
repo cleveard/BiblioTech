@@ -82,9 +82,9 @@ class TagsFragment : Fragment() {
         setupActionMenu(content)
 
         // Observe the tag selection to update the action menu
-        tagViewModel.selection.hasSelection.observe(this, observerHasSelection)
-        booksViewModel.selection.hasSelection.observe(this, observerHasSelection)
-        tagViewModel.selection.lastSelection.observe(this, observerLastSelection)
+        tagViewModel.selection.hasSelection.observe(viewLifecycleOwner, observerHasSelection)
+        booksViewModel.selection.hasSelection.observe(viewLifecycleOwner, observerHasSelection)
+        tagViewModel.selection.lastSelection.observe(viewLifecycleOwner, observerLastSelection)
 
         return content
     }
@@ -107,7 +107,7 @@ class TagsFragment : Fragment() {
      */
     private fun setupRecyclerView(content: View) {
         // Get the selected background color
-        tagViewModel.adapter.selectColor = ResourcesCompat.getColor(context!!.resources, R.color.colorSelect, null)
+        tagViewModel.adapter.selectColor = ResourcesCompat.getColor(requireContext().resources, R.color.colorSelect, null)
 
         // Setup the pager for the tag recycler view
         val config = PagingConfig(pageSize = 20)
@@ -210,33 +210,29 @@ class TagsFragment : Fragment() {
         // Are any selected?
         if (inverted || tagIds.isNotEmpty()) {
             // Make sure we really want to delete the tags
-            val builder = android.app.AlertDialog.Builder(context)
-            builder.setMessage(
-                if (inverted)
-                    context!!.resources.getString(R.string.delete_tags_unknown)
-                else
-                    context!!.resources.getQuantityString(
-                        R.plurals.ask_delete_tags,
-                        tagIds.size,
-                        tagIds.size
+            tagViewModel.viewModelScope.launch {
+                val count = tagViewModel.repo.countTags(tagIds, inverted)
+                if (count <= 0)
+                    return@launch
+                val result = coroutineAlert(requireContext(), { false }) { alert ->
+                    alert.builder.setMessage(
+                        requireContext().resources.getQuantityString(
+                            R.plurals.ask_delete_tags,
+                            count,
+                            count
+                        )
                     )
-            )
-                // Set the action buttons
-                .setPositiveButton(
-                    R.string.ok
-                ) { _, _ ->
+                    // Set the action buttons
+                    .setPositiveButton(R.string.ok, null)
+                    .setNegativeButton(R.string.cancel, null)
+                }.show()
+
+                if (result) {
                     // OK pressed delete the tags
-                    tagViewModel.viewModelScope.launch {
-                        tagViewModel.selection.selectAll(false)
-                        tagViewModel.repo.deleteTags(tagIds, inverted)
-                    }
+                    tagViewModel.selection.selectAll(false)
+                    tagViewModel.repo.deleteTags(tagIds, inverted)
                 }
-                .setNegativeButton(
-                    R.string.cancel
-                ) { _, _ ->
-                    // Cancel pressed, do nothing
-                }
-                .show()
+            }
         }
         return true
     }
@@ -265,17 +261,16 @@ class TagsFragment : Fragment() {
         // Do this in a coroutine, so we can use the repo coroutine methods
         tagViewModel.viewModelScope.launch {
             // Get or create the TagEntity for the tag
-            val tag: TagEntity
-            if (tagId != 0L) {
+            val tag = if (tagId != 0L) {
                 // Got an id, so get the tag
-                tag = tagViewModel.repo.getTag(tagId)?: let {
+                tagViewModel.repo.getTag(tagId)?: let {
                     // Tag not found. Clear the last selected tag and return
                     tagViewModel.selection.clearLastSelection()
                     return@launch
                 }
             } else {
                 // Create a new TagEntity
-                tag = TagEntity(0, "", "")
+                TagEntity(0, "", "")
             }
 
             addOrEdit(tag, layoutInflater, tagViewModel.repo, this)

@@ -649,7 +649,6 @@ abstract class TagDao(private val db: BookDatabase) {
 
     /**
      * Get a LiveData of the list of tags ordered by name
-     * @param query The query to run
      */
     @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
     protected abstract fun doGetLive(): LiveData<List<TagEntity>>
@@ -657,7 +656,7 @@ abstract class TagDao(private val db: BookDatabase) {
     /**
      * Get a LiveData of the list of tags ordered by name
      */
-    public suspend fun getLive(): LiveData<List<TagEntity>> {
+    suspend fun getLive(): LiveData<List<TagEntity>> {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             doGetLive()
         }
@@ -703,7 +702,7 @@ abstract class TagDao(private val db: BookDatabase) {
         val list = set.toArray()
 
         // Delete the tags that we don't want to keep
-        db.getBookTagDao().deleteTagsForBooks(arrayOf(bookId), false, list, !invert)
+        db.getBookTagDao().deleteTagsForBooks(arrayOf(bookId), false, null, list, !invert)
 
         // Add the tags that we want
         val tagList = db.getTagDao().queryTagIds(list, invert)
@@ -781,7 +780,7 @@ abstract class TagDao(private val db: BookDatabase) {
 
                     // Delete all of the links we kept from above
                     if (list.isNotEmpty())
-                        db.getBookTagDao().deleteTagsForBooks(list.toArray())
+                        db.getBookTagDao().deleteTagsForBooks(list.toArray(), false, null)
                 }
             }
         }
@@ -826,11 +825,36 @@ abstract class TagDao(private val db: BookDatabase) {
     protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
 
     /**
+     * Count the number of rows for a query
+     * @param query The delete query
+     */
+    @RawQuery(observedEntities = [TagEntity::class])
+    protected abstract suspend fun queryTagCount(query: SupportSQLiteQuery): Int?
+
+    /**
      * Delete a tag using the tag id
      * @param tagId The tag id to delete
      */
     @Query("DELETE FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId")
     abstract suspend fun delete(tagId: Long): Int
+
+    /**
+     * Query the number of tags
+     * @param tagIds A list of tag ids
+     * @param invert A flag used to indicate whether tagIds contains the tag ids to be counted,
+     *               when invert is false, or all tag ids except those in tagIds are to be counted,
+     *               when invert is true
+     * @return The number of tags
+     */
+    @Transaction
+    open suspend fun queryTagCount(tagIds: Array<Any>, invert: Boolean): Int {
+        return BookDatabase.buildQueryForIds(
+            "SELECT COUNT($TAGS_ID_COLUMN) FROM $TAGS_TABLE",      // SQLite Command
+            TAGS_ID_COLUMN,                           // Column to query
+            tagIds,                                   // Ids to delete
+            invert                                    // Delete ids or not ids
+        )?.let { queryTagCount(it) }?: 0
+    }
 
     /**
      * Delete multiple tags
@@ -840,7 +864,7 @@ abstract class TagDao(private val db: BookDatabase) {
      *               when invert is true
      */
     @Transaction
-    open suspend fun delete(tagIds: Array<Any>, invert: Boolean): Int? {
+    open suspend fun delete(tagIds: Array<Any>, invert: Boolean): Int {
         db.getBookTagDao().deleteTagsForTags(tagIds, invert)
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $TAGS_TABLE",      // SQLite Command
@@ -885,6 +909,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param booksInvert A flag used to indicate whether bookIds contains the books ids whose
      *                    tags are to be deleted, when invert is false, or all book ids except
      *                    those in bookIds are to have their tags deleted, when invert is true
+     * @param filter A filter to restrict the book ids
      * @param tagIds An optional list of tag ids to be removed for the books
      * @param tagsInvert A flag used to indicate whether tagIds contains the tag ids to be deleted,
      *                   when invert is false, or all tag ids except those in tagIds are to be deleted,
@@ -893,10 +918,11 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * all tags from the books identified by booksIds and booksInvert
      */
     @Transaction
-    open suspend fun deleteTagsForBooks(bookIds: Array<Any>, booksInvert: Boolean = false,
+    open suspend fun deleteTagsForBooks(bookIds: Array<Any>, booksInvert: Boolean = false, filter: BookFilter.BuiltFilter? = null,
                                         tagIds: Array<Any>? = null, tagsInvert: Boolean = true): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
+            filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
             bookIds,
             booksInvert,
@@ -934,10 +960,12 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param invert A flag used to indicate whether bookIds contains the books ids whose
      *               tags are to be returned, when invert is false, or all book ids except
      *               those in bookIds are to have their tags returned, when invert is true
+     * @param filter A filter to restrict the book ids
      */
-    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_TAGS_TAG_ID_COLUMN FROM $BOOK_TAGS_TABLE",
+            filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { queryBookIds(it) }
@@ -1012,6 +1040,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * Add multiple tags to multiple books
      * @param bookIds A list of book ids
      * @param tagIds A list of tag ids to be removed for the books
+     * @param filter A filter to restrict the book ids
      * @param booksInvert A flag used to indicate whether bookIds contains the books ids where
      *                    tags are to be added, when invert is false, or all book ids except
      *                    those in bookIds to have their tags added, when invert is true
@@ -1020,9 +1049,9 @@ abstract class BookTagDao(private val db:BookDatabase) {
      *                   when invert is true
      */
     @Transaction
-    open suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>,
+    open suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>, filter: BookFilter.BuiltFilter?,
                                     booksInvert: Boolean = false, tagsInvert: Boolean = false) {
-        val bookList = db.getBookDao().queryBookIds(bookIds, booksInvert)
+        val bookList = db.getBookDao().queryBookIds(bookIds, booksInvert, filter)
         val tagList = db.getTagDao().queryTagIds(tagIds, tagsInvert)
         addTagsToBooks(bookList, tagList)
     }
@@ -1035,15 +1064,16 @@ abstract class BookTagDao(private val db:BookDatabase) {
      *               those in bookIds are to have their tags deleted, when invert is true
      * @param deleteTags A flag to indicate whether the tag in the Tags table should be deleted
      *                   if all of its books have been deleted
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean, deleteTags: Boolean = false) {
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean, deleteTags: Boolean = false, filter: BookFilter.BuiltFilter? = null) {
         // Do we want to delete any books
         if (deleteTags) {
             // Yes, get the ids of tags that are affected
-            val tags = queryBookIds(bookIds, invert)
+            val tags = queryBookIds(bookIds, invert, filter)
             // Delete the book tag links
-            deleteTagsForBooks(bookIds, invert)
+            deleteTagsForBooks(bookIds, invert, filter)
             tags?.let {
                 // Check for empty tags and delete them
                 for (tag in it) {
@@ -1054,7 +1084,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
             }
         } else {
             // Don't delete tags, so just delete the links
-            deleteTagsForBooks(bookIds, invert)
+            deleteTagsForBooks(bookIds, invert, filter)
         }
     }
 
@@ -1092,7 +1122,7 @@ abstract class AuthorDao {
     @Transaction
     open suspend fun add(bookId: Long, authors: List<AuthorEntity>) {
          // Delete current authors of the books
-        deleteBooks(arrayOf(bookId), false)
+        deleteBooks(arrayOf(bookId), false, null)
         // Add new authors
         for (author in authors)
             add(bookId, author)
@@ -1132,11 +1162,13 @@ abstract class AuthorDao {
      * @param invert A flag used to indicate whether bookIds contains the books ids whose
      *               authors are to be deleted, when invert is false, or all book ids except
      *               those in bookIds are to have their authors deleted, when invert is true
+     * @param filter A filter to restrict the book ids
     */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_AUTHORS_TABLE",
+            filter,
             BOOK_AUTHORS_BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { delete(it) }?: 0
@@ -1155,10 +1187,12 @@ abstract class AuthorDao {
      * @param invert A flag used to indicate whether bookIds contains the books ids whose
      *               authors are to be returned, when invert is false, or all book ids except
      *               those in bookIds are to have their authors returned, when invert is true
+     * @param filter A filter to restrict the book ids
     */
-    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_AUTHORS_AUTHOR_ID_COLUMN FROM $BOOK_AUTHORS_TABLE",
+            filter,
             BOOK_AUTHORS_BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { queryBookIds(it) }
@@ -1217,15 +1251,16 @@ abstract class AuthorDao {
      *               those in bookIds are to have their authors deleted, when invert is true
      * @param deleteAuthors A flag to indicate whether the author in the Authors table should be deleted
      *                      if all of its books have been deleted
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteAuthors: Boolean = true) {
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteAuthors: Boolean = true, filter: BookFilter.BuiltFilter? = null) {
         // Do we want to delete authors with no books?
         if (deleteAuthors) {
             // Yes, get the ids of the authors that are affects
-            val authors = queryBookIds(bookIds, invert)
+            val authors = queryBookIds(bookIds, invert, filter)
             // Delete the authors
-            deleteBooks(bookIds, invert)
+            deleteBooks(bookIds, invert, filter)
             authors?.let {
                 // Delete authors with no books
                 for (author in it) {
@@ -1236,7 +1271,7 @@ abstract class AuthorDao {
             }
         } else {
             // No, just delete the links
-            deleteBooks(bookIds, invert)
+            deleteBooks(bookIds, invert, filter)
         }
     }
 }
@@ -1273,7 +1308,7 @@ abstract class CategoryDao {
      */
     @Transaction
     open suspend fun add(bookId: Long, categories: List<CategoryEntity>) {
-        deleteBooks(arrayOf(bookId), false)
+        deleteBooks(arrayOf(bookId), false, null)
         for (cat in categories)
             add(bookId, cat)
     }
@@ -1315,11 +1350,13 @@ abstract class CategoryDao {
      * @param invert A flag used to indicate whether bookIds contains the books ids whose
      *               categories are to be deleted, when invert is false, or all book ids except
      *               those in bookIds are to have their categories deleted, when invert is true
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_CATEGORIES_TABLE",
+            filter,
             BOOK_CATEGORIES_BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { delete(it) }?: 0
@@ -1338,10 +1375,12 @@ abstract class CategoryDao {
      * @param invert A flag used to indicate whether bookIds contains the books ids whose
      *               categories are to be returned, when invert is false, or all book ids except
      *               those in bookIds are to have their categories returned, when invert is true
+     * @param filter A filter to restrict the book ids
      */
-    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+    private suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_CATEGORIES_CATEGORY_ID_COLUMN FROM $BOOK_CATEGORIES_TABLE",
+            filter,
             BOOK_CATEGORIES_BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { queryBookIds(it) }
@@ -1385,15 +1424,16 @@ abstract class CategoryDao {
      *               those in bookIds are to have their categories deleted, when invert is true
      * @param deleteCategories A flag to indicate whether the category in the Categories table should be deleted
      *                      if all of its books have been deleted
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteCategories: Boolean = true) {
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, deleteCategories: Boolean = true, filter: BookFilter.BuiltFilter? = null) {
         // Should we delete categories
         if (deleteCategories) {
             // Yes get the id of the categories affected
-            val categories = queryBookIds(bookIds, invert)
+            val categories = queryBookIds(bookIds, invert, filter)
             // Delete the book category links
-            deleteBooks(bookIds)
+            deleteBooks(bookIds, invert, filter)
             categories?.let {
                 // Delete any empty categories
                 for (category in it) {
@@ -1404,7 +1444,7 @@ abstract class CategoryDao {
             }
         } else {
             // No, just delete the book category links
-            deleteBooks(bookIds)
+            deleteBooks(bookIds, invert, filter)
         }
     }
 }
@@ -1433,11 +1473,13 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param invert A flag used to indicate whether bookIds contains the books ids
      *               to be deleted, when invert is false, or all book ids except
      *               those in bookIds are to be deleted, when invert is true
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false): Int {
+    open suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TABLE",
+            filter,
             BOOK_ID_COLUMN,
             bookIds,
             invert)?.let { delete(it) }?: 0
@@ -1459,16 +1501,41 @@ abstract class BookDao(private val db: BookDatabase) {
 
     /**
      * Query book ids
+     * @param query The SQLite query to get the book ids
+     */
+    @RawQuery(observedEntities = [BookEntity::class])
+    protected abstract suspend fun queryBookIdCount(query: SupportSQLiteQuery): Int
+
+    /**
+     * Query book ids
      * @param bookIds A list of book ids
      * @param invert A flag to return the ids in bookIds, when invert is false, or the
      *               ifs not in bookIds, when invert is true
+     * @param filter A filter to restrict the book ids
      */
-    suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false): List<Long>? {
+    suspend fun queryBookIds(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE",
+            filter,
             BOOK_ID_COLUMN,
             bookIds,
             invert)?.let {query -> queryBookIds(query)?.map { it.id } }
+    }
+
+    /**
+     * Query book id count
+     * @param bookIds A list of book ids
+     * @param invert A flag to return the ids in bookIds, when invert is false, or the
+     *               ifs not in bookIds, when invert is true
+     * @param filter A filter to restrict the book ids
+     */
+    suspend fun queryBookIdCount(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
+        return BookDatabase.buildQueryForIds(
+            "SELECT COUNT($BOOK_ID_COLUMN) FROM $BOOK_TABLE",
+            filter,
+            BOOK_ID_COLUMN,
+            bookIds,
+            invert)?.let {query -> queryBookIdCount(query) }?: 0
     }
 
     /**
@@ -1602,18 +1669,19 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param bookIds List of book ids
      * @param invert A flag to indicate whether to delete the books in bookIds, or to delete
      *               the books not in booksIds
+     * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>, invert: Boolean) {
+    open suspend fun delete(bookIds: Array<Any>, invert: Boolean, filter: BookFilter.BuiltFilter?) {
         // Delete all tags for the books - keep tags with no books
-        db.getBookTagDao().deleteBooks(bookIds, invert)
+        db.getBookTagDao().deleteBooks(bookIds, invert, false, filter)
         // Delete all authors for the books - delete authors with no books
-        db.getAuthorDao().delete(bookIds, invert, true)
+        db.getAuthorDao().delete(bookIds, invert, true, filter)
         // Delete all categories for the book - delete categories with no books
-        db.getCategoryDao().delete(bookIds, invert, true)
+        db.getCategoryDao().delete(bookIds, invert, true, filter)
 
         // Delete all thumbnails
-        queryBookIds(bookIds, invert)?.let {
+        queryBookIds(bookIds, invert, filter)?.let {
             for (book in it) {
                 thumbnails.deleteThumbFile(book, true)
                 thumbnails.deleteThumbFile(book, false)
@@ -1621,7 +1689,7 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Finally delete the books
-        deleteBooks(bookIds, invert)
+        deleteBooks(bookIds, invert, filter)
 
     }
 
@@ -1912,7 +1980,21 @@ abstract class BookDatabase : RoomDatabase() {
          *    invert boolean
          * Multiple conditions are joined by AND
          */
-        internal fun buildQueryForIds(command: String, vararg condition: Any?): SupportSQLiteQuery? {
+        internal fun buildQueryForIds(command: String, vararg condition: Any?) =
+            buildQueryForIds(command, null, *condition)
+
+        /**
+         * Build a query
+         * @param command The SQLite command
+         * @param filter A filter to restrict the book ids
+         * @param condition The conditions of the query.
+         * Each condition is 3 values in this order:
+         *    column name
+         *    value array
+         *    invert boolean
+         * Multiple conditions are joined by AND
+         */
+        internal fun buildQueryForIds(command: String, filter: BookFilter.BuiltFilter?, vararg condition: Any?): SupportSQLiteQuery? {
             val builder = StringBuilder()
             val args = ArrayList<Any>()
 
@@ -1921,25 +2003,32 @@ abstract class BookDatabase : RoomDatabase() {
             // Then the conditions
             var prefix = " WHERE "
             var select = false
+            var bookColumn: String? = null
             // Loop through the conditions in the varargs
             for (i in 0..condition.size - 3 step 3) {
-                @Suppress("UNCHECKED_CAST")
                 // Get the expression and ignore conditions that select nothing
+                val column = condition[i] as? String
+                @Suppress("UNCHECKED_CAST")
                 getExpression(
-                    condition[i] as? String,
+                    column,
                     condition[i + 1] as? Array<Any>,
                     condition[i + 2] as? Boolean,
                     args
                 )?.let {expr ->
                     // We got an expression
                     select = true
+                    bookColumn = bookColumn?: column
                     if (expr != "") {
                         // Start with WHERE and then use AND to separate expressions
-                        builder.append(prefix)
-                        builder.append(expr)
+                        builder.append("$prefix$expr")
                         prefix = " AND "
                     }
                 }
+            }
+
+            if (filter != null && bookColumn != null) {
+                builder.append("$prefix ( $bookColumn IN ( SELECT $BOOK_ID_COLUMN FROM ( ${filter.command} ) ) )")
+                args.addAll(filter.args)
             }
 
             // Return the query if there was one

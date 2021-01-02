@@ -73,6 +73,18 @@ class BookRepository private constructor() {
     }
 
     /**
+     * Count books in the book data base
+     * @param bookIds An array of book ids
+     * @param invert A flag indicating whether the ids in bookIds are counted, or the ids
+     *               not in bookIds are counted.
+     * @param filter The current filter
+     * @return The number of books that meet the filter
+     */
+    suspend fun countBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter?): Int {
+        return db.getBookDao().queryBookIdCount(bookIds, invert, filter)
+    }
+
+    /**
      * Add a book to the database or update a book already there
      * @param book The book to add or update
      * @param tagIds An array of ids of tags in the Tags table
@@ -89,9 +101,10 @@ class BookRepository private constructor() {
      * @param bookIds An array of book ids
      * @param invert A flag indicating whether the ids in bookIds are deleted, or the ids
      *               not in bookIds are deleted.
+     * @param filter The current filter
      */
-    suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false) {
-        db.getBookDao().delete(bookIds, invert)
+    suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter?) {
+        db.getBookDao().delete(bookIds, invert, filter)
     }
 
     /**
@@ -140,6 +153,16 @@ class BookRepository private constructor() {
     }
 
     /**
+     * Count tags
+     * @param tagIds An array of tag ids
+     * @param invert A flag indicating whether the ids in tagIds are counted, or the ids
+     *               not in tagIds are counted.
+     */
+    suspend fun countTags(tagIds: Array<Any>, invert: Boolean = false): Int {
+        return db.getTagDao().queryTagCount(tagIds, invert)
+    }
+
+    /**
      * Delete tag
      * @param tagIds An array of tag ids
      * @param invert A flag indicating whether the ids in tagIds are deleted, or the ids
@@ -158,9 +181,9 @@ class BookRepository private constructor() {
      * @param tagsInvert A flag indicating whether the ids in tagIds are added, or the ids
      *                   not in tagIds are added.
      */
-    suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>,
+    suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>, filter: BookFilter.BuiltFilter?,
                                booksInvert: Boolean = false, tagsInvert: Boolean = false) {
-        db.getBookTagDao().addTagsToBooks(bookIds, tagIds, booksInvert, tagsInvert)
+        db.getBookTagDao().addTagsToBooks(bookIds, tagIds, filter, booksInvert, tagsInvert)
     }
 
     /**
@@ -172,9 +195,9 @@ class BookRepository private constructor() {
      * @param tagsInvert A flag indicating whether the ids in tagIds are removed, or the ids
      *                   not in tagIds are removed.
      */
-    suspend fun removeTagsFromBooks(bookIds: Array<Any>, tagIds: Array<Any>,
+    suspend fun removeTagsFromBooks(bookIds: Array<Any>, tagIds: Array<Any>, filter: BookFilter.BuiltFilter?,
                                     booksInvert: Boolean = false, tagsInvert: Boolean = false) {
-        db.getBookTagDao().deleteTagsForBooks(bookIds, booksInvert, tagIds, tagsInvert)
+        db.getBookTagDao().deleteTagsForBooks(bookIds, booksInvert, filter, tagIds, tagsInvert)
     }
 
     /**

@@ -12,6 +12,7 @@ import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
+import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.coroutines.launch
 
 /**
@@ -37,7 +38,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      */
     @Suppress("UNUSED_PARAMETER")
     fun delete(item: MenuItem): Boolean {
-        delete(fragment.context!!, viewModel) {
+        delete(fragment.requireContext(), viewModel) {
             finish()
         }
         return true
@@ -117,11 +118,11 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
          * If no books are selected, start the delete modal action
          */
         fun doDelete(fragment: Fragment) {
-            val activity = fragment.activity!!
+            val activity = fragment.requireActivity()
             val viewModel: BooksViewModel =
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             if (viewModel.selection.hasSelection.value == true) {
-                delete(fragment.context!!, viewModel)
+                delete(fragment.requireContext(), viewModel)
             } else {
                 DeleteModalAction(fragment, viewModel).start(activity)
             }
@@ -138,32 +139,35 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
             val bookIds = viewModel.selection.selection
             val inverted = viewModel.selection.inverted
             if (inverted || bookIds.isNotEmpty()) {
-                // Make sure we really want to delete the books
-                val builder = AlertDialog.Builder(context)
-                builder.setMessage(
-                    if (inverted)
-                        context.resources.getString(R.string.delete_unknown_books)
-                    else
-                        context.resources.getQuantityString(R.plurals.ask_delete_books, bookIds.size, bookIds.size)
-                )
-                    // Set the action buttons
-                    .setPositiveButton(
-                        R.string.ok
-                    ) { _, _ ->
+                viewModel.viewModelScope.launch {
+                    val count = viewModel.repo.countBooks(bookIds, inverted, viewModel.idFilter)
+                    if (count <= 0)
+                        return@launch
+                    val result = coroutineAlert(context, { false }) {alert ->
+                        // Make sure we really want to delete the books
+                        alert.builder.setMessage(
+                            context.resources.getQuantityString(
+                                    R.plurals.ask_delete_books,
+                                    count,
+                                    count
+                                )
+                        )
+                        // Set the action buttons
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.cancel, null)
+                    }.setPosListener {alert, _, _ ->
+                        alert.result = true
+                        true
+                    }.show()
+
+                    if (result) {
                         // OK pressed delete the books
-                        viewModel.viewModelScope.launch {
-                            viewModel.selection.selectAll(false)
-                            viewModel.repo.deleteBooks(bookIds, inverted)
-                            // Finish the acton
-                            onFinished?.run()
-                        }
+                        viewModel.selection.selectAll(false)
+                        viewModel.repo.deleteBooks(bookIds, inverted, viewModel.idFilter)
+                        // Finish the acton
+                        onFinished?.run()
                     }
-                    .setNegativeButton(
-                        R.string.cancel
-                    ) { _, _ ->
-                        // Cancel pressed, do nothing
-                    }
-                    .show()
+                }
             }
             return true
         }

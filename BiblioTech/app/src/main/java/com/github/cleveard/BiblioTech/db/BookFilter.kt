@@ -1,7 +1,6 @@
 package com.github.cleveard.BiblioTech.db
 
 import android.content.Context
-import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
@@ -53,6 +52,34 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
         return true
     }
 
+    /**
+     * Class representing a build filter
+     * @param command The SQLiteCommand
+     * @param args The arguments for the command
+     */
+    data class BuiltFilter(
+        val command: String,
+        val args: Array<Any>
+    ) {
+        /** @inheritDoc */
+        override fun hashCode(): Int {
+            return BookFilter.hashArray(args) * 31 + command.hashCode()
+        }
+
+        /** @inheritDoc */
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as BuiltFilter
+
+            if (command != other.command) return false
+            if (!BookFilter.equalArray(args, other.args)) return false
+            return true
+        }
+
+    }
+
     companion object: BookFilterCompanion() {
         const val VERSION = 0
     }
@@ -65,108 +92,11 @@ open class BookFilterCompanion {
     /**
      * Build an SQLite query from a filter description
      * @param filter The filter description
+     * @param context The context used to get the locale for parsing dates
      */
     fun buildFilterQuery(filter: BookFilter, context: Context): SupportSQLiteQuery {
         // The object used to build the query
-        val builder = object: BuildQuery(context) {
-            // The select columns
-            val selectSpec: StringBuilder = StringBuilder()
-            // Joins
-            val joinSpec: StringBuilder = StringBuilder()
-            // Order columns
-            val orderSpec: StringBuilder = StringBuilder()
-            // Group by columns
-            val groupSpec: StringBuilder = StringBuilder()
-            // Where expression
-            val filterSpec: StringBuilder = StringBuilder()
-            // Holds expressions for a single field
-            val filterFieldExpression: StringBuilder = StringBuilder()
-            // Holds rollback of argList if filterFieldExpression is abandoned
-            var argRollback: Int = 0
-            // Track joins to prevent adding multiple times
-            val joins: ArrayList<String> = ArrayList()
-            // Track select columns to prevent adding multiple times
-            val selects: ArrayList<String> = ArrayList()
-            // Track order columns to prevent adding multiple times
-            val orders: ArrayList<String> = ArrayList()
-
-            /** @inheritDoc */
-            override fun addSelect(name: String) {
-                if (selects.indexOf(name) == -1) {
-                    selects.add(name)
-                    selectSpec.append("${if (selectSpec.isEmpty()) "" else ", "}$name")
-                }
-            }
-
-            /** @inheritDoc */
-            override fun addJoin(table: String, leftColumn: String, joinColumn: String) {
-                if (joins.indexOf(table) == -1) {
-                    joins.add(table)
-                    joinSpec.append("${if (joinSpec.isEmpty()) "" else " "} LEFT JOIN $table ON $leftColumn = $joinColumn")
-                }
-            }
-
-            /** @inheritDoc */
-            override fun addOrderColumn(name: String, direction: String) {
-                if (orders.indexOf(name) == -1) {
-                    orders.add(name)
-                    orderSpec.append("${if (orderSpec.isEmpty()) "" else ", "}$name $direction")
-                    groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$name")
-                }
-            }
-
-            /** @inheritDoc */
-            override fun beginFilterField() {
-                // If we call begin without calling end
-                // it will clear any expressions for the field
-                while (argList.size > argRollback)
-                    argList.removeLast()
-                filterFieldExpression.clear()
-            }
-
-            /** @inheritDoc */
-            override fun addFilterExpression(expression: String) {
-                filterFieldExpression.append(
-                    "${if (filterFieldExpression.isEmpty()) "" else " OR "} ( $expression )")
-            }
-
-            /** @inheritDoc */
-            override fun endFilterField() {
-                // Only append expressions if there are any
-                if (filterFieldExpression.isNotEmpty()) {
-                    filterSpec.append(
-                        "${if (filterSpec.isEmpty()) "" else " AND "} ( $filterFieldExpression )")
-                    filterFieldExpression.clear()
-                    argRollback = argList.size
-                }
-            }
-
-            /**
-             * Collect order by columns from iterator of columns in fields
-             * @param list List of columns in array of fields
-             */
-            fun buildOrder(list: Iterator<OrderField>) {
-                for (field in list) {
-                    field.column.desc.addOrder(this, field.order)
-                }
-                groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$BOOK_ID_COLUMN")
-            }
-
-            /**
-             * Collect the filter expressions from iterator of FilterFields
-             * @param list The list FilterFields to process
-             */
-            fun buildFilter(list: Iterator<FilterField>) {
-                for (f in list) {
-                    // Start collecting expressions
-                    beginFilterField()
-                    // Add the expression for the field
-                    f.column.desc.addExpression(this, f.predicate, f.values)
-                    // Finish up
-                    endFilterField()
-                }
-            }
-        }
+        val builder = SQLiteQueryBuilderImpl(context)
 
         // Add all book columns first
         for (column in ALL_BOOK_COLUMNS)
@@ -177,24 +107,15 @@ open class BookFilterCompanion {
         // Collect filter by columns from filterList
         builder.buildFilter(filter.filterList.iterator())
 
-        // Build the SQLite command
-        val spec = StringBuilder()
-        spec.append("SELECT ${builder.selectSpec} FROM $BOOK_TABLE")
-        // Add joins if there are any
-        if (builder.joinSpec.isNotEmpty())
-            spec.append(" ${builder.joinSpec}")
-        // Add where if we have a filter
-        if (builder.filterSpec.isNotEmpty())
-            spec.append(" WHERE ${builder.filterSpec}")
-        // Add group by if we need it
-        if (builder.groupSpec.isNotEmpty())
-            spec.append(" GROUP BY ${builder.groupSpec}")
-        // Add order by if there is one
-        if (builder.orderSpec.isNotEmpty())
-            spec.append(" ORDER BY ${builder.orderSpec}")
+        return builder.createQuery()
+    }
 
-        // Return SQLite query
-        return SimpleSQLiteQuery(spec.toString(), builder.argList.toArray())
+    /**
+     * Create a new SQLiteQueryBuilder
+     * @param context The context used to get the locale for parsing dates
+     */
+    fun newSQLiteQueryBuilder(context: Context): SQLiteQueryBuilder {
+        return SQLiteQueryBuilderImpl(context)
     }
 
     /**
@@ -286,6 +207,112 @@ open class BookFilterCompanion {
                 Json.decodeFromJsonElement(BookFilter.serializer(), json)
             }
         )
+    }
+}
+
+/**
+ * Implementation of class to build SQLite queries
+ * @param context The context for the locale. Used for interpreting dates
+ */
+private class SQLiteQueryBuilderImpl(context: Context): SQLiteQueryBuilder(context) {
+    // The select columns
+    private val selectSpec: StringBuilder = StringBuilder()
+    // Joins
+    private val joinSpec: StringBuilder = StringBuilder()
+    // Order columns
+    private val orderSpec: StringBuilder = StringBuilder()
+    // Group by columns
+    private val groupSpec: StringBuilder = StringBuilder()
+    // Where expression
+    private val filterSpec: StringBuilder = StringBuilder()
+    // Holds expressions for a single field
+    private val filterFieldExpression: StringBuilder = StringBuilder()
+    // Holds rollback of argList if filterFieldExpression is abandoned
+    private var argRollback: Int = 0
+    // Track joins to prevent adding multiple times
+    private val joins: ArrayList<String> = ArrayList()
+    // Track select columns to prevent adding multiple times
+    private val selects: ArrayList<String> = ArrayList()
+    // Track order columns to prevent adding multiple times
+    private val orders: ArrayList<String> = ArrayList()
+
+    /** @inheritDoc */
+    override fun addSelect(name: String) {
+        if (selects.indexOf(name) == -1) {
+            selects.add(name)
+            selectSpec.append("${if (selectSpec.isEmpty()) "" else ", "}$name")
+        }
+    }
+
+    /** @inheritDoc */
+    override fun addJoin(table: String, leftColumn: String, joinColumn: String) {
+        if (joins.indexOf(table) == -1) {
+            joins.add(table)
+            joinSpec.append("${if (joinSpec.isEmpty()) "" else " "} LEFT JOIN $table ON $leftColumn = $joinColumn")
+        }
+    }
+
+    /** @inheritDoc */
+    override fun addOrderColumn(name: String, direction: String) {
+        if (orders.indexOf(name) == -1) {
+            orders.add(name)
+            orderSpec.append("${if (orderSpec.isEmpty()) "" else ", "}$name $direction")
+            groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$name")
+        }
+    }
+
+    /** @inheritDoc */
+    override fun beginFilterField() {
+        // If we call begin without calling end
+        // it will clear any expressions for the field
+        while (argList.size > argRollback)
+            argList.removeLast()
+        filterFieldExpression.clear()
+    }
+
+    /** @inheritDoc */
+    override fun addFilterExpression(expression: String) {
+        filterFieldExpression.append(
+            "${if (filterFieldExpression.isEmpty()) "" else " OR "} ( $expression )")
+    }
+
+    /** @inheritDoc */
+    override fun endFilterField() {
+        // Only append expressions if there are any
+        if (filterFieldExpression.isNotEmpty()) {
+            filterSpec.append(
+                "${if (filterSpec.isEmpty()) "" else " AND "} ( $filterFieldExpression )")
+            filterFieldExpression.clear()
+            argRollback = argList.size
+        }
+    }
+
+    /** @inheritDoc */
+    override fun createCommand(): String {
+        // Build the SQLite command
+        val spec = StringBuilder()
+        spec.append("SELECT $selectSpec FROM $BOOK_TABLE")
+        // Add joins if there are any
+        if (joinSpec.isNotEmpty())
+            spec.append(" $joinSpec")
+        // Add where if we have a filter
+        if (filterSpec.isNotEmpty())
+            spec.append(" WHERE $filterSpec")
+        // Add group by if we need it
+        if (groupSpec.isEmpty())
+            spec.append(" GROUP BY $BOOK_ID_COLUMN")
+        else
+            spec.append(" GROUP BY $groupSpec, $BOOK_ID_COLUMN")
+        // Add order by if there is one
+        if (orderSpec.isNotEmpty())
+            spec.append(" ORDER BY $orderSpec")
+
+        return spec.toString()
+    }
+
+    /** @inheritDoc */
+    override fun newSQLiteBuilder(): SQLiteQueryBuilder {
+        return SQLiteQueryBuilderImpl(context)
     }
 }
 

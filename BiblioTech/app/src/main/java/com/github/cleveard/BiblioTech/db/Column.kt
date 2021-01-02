@@ -2,6 +2,8 @@ package com.github.cleveard.BiblioTech.db
 
 import android.content.Context
 import android.database.Cursor
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.BiblioTech.R
 import java.text.DateFormat
 import java.util.*
@@ -54,9 +56,7 @@ enum class Column(val desc: ColumnDataDescriptor) {
 
 /** An interface used to add components to a query */
 abstract class BuildQuery(
-    /**
-     * Context to use for localization
-     */
+    /** Context to use for localization */
     val context: Context
 ) {
     /**
@@ -104,6 +104,52 @@ abstract class BuildQuery(
      * End adding filter expressions for a filter field
      */
     abstract fun endFilterField()
+
+    /**
+     * Make an sqlite builder for a sub-query
+     */
+    abstract fun newSQLiteBuilder(): SQLiteQueryBuilder
+}
+
+/** An interface used to build an SQLite command */
+abstract class SQLiteQueryBuilder(context: Context): BuildQuery(context) {
+    /**
+     * Collect order by columns from iterator of columns in fields
+     * @param list List of columns in array of fields
+     */
+    fun buildOrder(list: Iterator<OrderField>) {
+        for (field in list) {
+            field.column.desc.addOrder(this, field.order)
+        }
+    }
+
+    /**
+     * Collect the filter expressions from iterator of FilterFields
+     * @param list The list FilterFields to process
+     */
+    fun buildFilter(list: Iterator<FilterField>) {
+        for (f in list) {
+            // Start collecting expressions
+            beginFilterField()
+            // Add the expression for the field
+            f.column.desc.addExpression(this, f.predicate, f.values)
+            // Finish up
+            endFilterField()
+        }
+    }
+
+    /**
+     * Create the SQLiteQuery
+     */
+    fun createQuery(): SupportSQLiteQuery {
+        return SimpleSQLiteQuery(createCommand(), argList.toArray())
+
+    }
+
+    /**
+     * Create the SQLite command
+     */
+    abstract fun createCommand(): String
 }
 
 /**

@@ -13,6 +13,7 @@ import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
+import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.coroutines.launch
 
 /**
@@ -46,7 +47,7 @@ class TagModalAction private constructor(
      */
     @Suppress("UNUSED_PARAMETER")
     fun addTags(item: MenuItem): Boolean {
-        addTags(fragment.context!!, booksViewModel, tagViewModel)
+        addTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
 
@@ -56,7 +57,7 @@ class TagModalAction private constructor(
      */
     @Suppress("UNUSED_PARAMETER")
     fun removeTags(item: MenuItem): Boolean {
-        removeTags(fragment.context!!, booksViewModel, tagViewModel)
+        removeTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
 
@@ -66,7 +67,7 @@ class TagModalAction private constructor(
      */
     @Suppress("UNUSED_PARAMETER")
     fun replaceTags(item: MenuItem): Boolean {
-        replaceTags(fragment.context!!, booksViewModel, tagViewModel)
+        replaceTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
 
@@ -153,14 +154,14 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doAddTags(fragment: Fragment) {
-            val activity = fragment.activity!!
+            val activity = fragment.requireActivity()
             val booksViewModel: BooksViewModel =
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true &&
                     tagViewModel.selection.hasSelection.value == true) {
-                addTags(fragment.context!!, booksViewModel, tagViewModel)
+                addTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
             }
@@ -172,14 +173,14 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doRemoveTags(fragment: Fragment) {
-            val activity = fragment.activity!!
+            val activity = fragment.requireActivity()
             val booksViewModel: BooksViewModel =
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true &&
                     tagViewModel.selection.hasSelection.value == true) {
-                removeTags(fragment.context!!, booksViewModel, tagViewModel)
+                removeTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
             }
@@ -191,13 +192,13 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doReplaceTags(fragment: Fragment) {
-            val activity = fragment.activity!!
+            val activity = fragment.requireActivity()
             val booksViewModel: BooksViewModel =
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
             if (booksViewModel.selection.hasSelection.value == true) {
-                replaceTags(fragment.context!!, booksViewModel, tagViewModel)
+                replaceTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
             }
@@ -216,8 +217,8 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_tag_books, R.string.tag_books_unknown) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksInvert, tagsInvert)
+                R.plurals.ask_tag_books) { bookIds, tagIds, booksInvert, tagsInvert ->
+                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -237,8 +238,8 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_untag_books, R.string.untag_books_unknown) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksInvert, tagsInvert)
+                R.plurals.ask_untag_books) { bookIds, tagIds, booksInvert, tagsInvert ->
+                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -258,9 +259,9 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_repl_tag_books, R.string.repl_tag_books_unknown, true) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksInvert, !tagsInvert)
-                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksInvert, tagsInvert)
+                R.plurals.ask_repl_tag_books, true) { bookIds, tagIds, booksInvert, tagsInvert ->
+                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, !tagsInvert)
+                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -272,7 +273,6 @@ class TagModalAction private constructor(
          * @param context The context used to build the alert
          * @param booksViewModel The BooksViewModel with the data
          * @param pluralMessage String id for plural message to ask
-         * @param unkMessage String id for message to ask when number of books is unknown
          * @param callback Lambda to execute once permission is granted
          */
         private fun execute(
@@ -280,7 +280,6 @@ class TagModalAction private constructor(
             booksViewModel: BooksViewModel,
             tagViewModel: TagViewModel,
             pluralMessage: Int,
-            unkMessage: Int,
             allowEmptyTags: Boolean = false,
             callback: suspend (bookIds: Array<Any>, tagIds: Array<Any>,
                        booksInvert: Boolean, tagsInvert: Boolean) -> Unit
@@ -291,30 +290,32 @@ class TagModalAction private constructor(
             val tagIds = tagViewModel.selection.selection
             val tagsInverted = tagViewModel.selection.inverted
             if ((booksInverted || bookIds.isNotEmpty()) &&
-                (allowEmptyTags || tagsInverted || tagIds.isNotEmpty())){
-                // Make sure we really want to tag the books
-                val builder = AlertDialog.Builder(context)
-                builder.setMessage(
-                    if (booksInverted)
-                        context.resources.getString(unkMessage)
-                    else
-                        context.resources.getQuantityString(pluralMessage, bookIds.size, bookIds.size)
-                )
-                // Set the action buttons
-                .setPositiveButton(
-                    R.string.ok
-                ) { _, _ ->
-                    // OK pressed delete the books
-                    booksViewModel.viewModelScope.launch {
+                (allowEmptyTags || tagsInverted || tagIds.isNotEmpty())
+            ) {
+                booksViewModel.viewModelScope.launch {
+                    val count = booksViewModel.repo.countBooks(bookIds, booksInverted, booksViewModel.idFilter)
+                    if (count <= 0)
+                        return@launch
+                    val result = coroutineAlert(context, { false }) {alert ->
+                        // Make sure we really want to tag the books
+                        alert.builder.setMessage(
+                            context.resources.getQuantityString(
+                                pluralMessage,
+                                count,
+                                count
+                            )
+                        )
+                            // Set the action buttons
+                            .setPositiveButton(R.string.ok, null)
+                            .setNegativeButton(R.string.cancel, null)
+                    }.setPosListener {alert, _, _ ->
+                        alert.result = true
+                        true
+                    }.show()
+                    // If OK pressed, then do the operation
+                    if (result)
                         callback(bookIds, tagIds, booksInverted, tagsInverted)
-                    }
                 }
-                .setNegativeButton(
-                    R.string.cancel
-                ) { _, _ ->
-                    // Cancel pressed, do nothing
-                }
-                .show()
             }
             return true
         }
