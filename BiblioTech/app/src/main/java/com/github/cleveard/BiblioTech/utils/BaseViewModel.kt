@@ -170,13 +170,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
          * Live data where the last selected id is kept
          */
         @Suppress("PropertyName")
-        protected var _lastSelection: MutableLiveData<Long> = object: MutableLiveData<Long>(null) {
-            override fun setValue(value: Long?) {
-                // Only set if the value changes
-                if (value != this.value)
-                    super.setValue(value)
-            }
-        }
+        protected var _lastSelection: MutableLiveData<Long> = MutableLiveData<Long>(null)
 
         /**
          * Lister for selection changed
@@ -184,10 +178,9 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         override val onSelectionChanged: MutableSet<() -> Unit> = HashSet()
 
         /**
-         * The last id that was last selected
+         * The last id that was last selected. Only notify when changed
          */
-        override val lastSelection: LiveData<Long>
-            get() { return _lastSelection }
+        override val lastSelection: LiveData<Long> = _lastSelection.distinctUntilChanged()
 
         /**
          * Clear the last selected id
@@ -212,24 +205,22 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
             set(f) {
                 field = f
                 scope.launch {
-                    _selectedCount.sourceValue = flags.countBitsLive(
+                    selectedCount as CascadeLiveData<Int?>
+                    selectedCount.sourceValue = flags.countBitsLive(
                         mask, mask, true, null, f
-                    )
-                    _itemCount.sourceValue = flags.countBitsLive(
+                    ).distinctUntilChanged()
+                    itemCount as CascadeLiveData<Int?>
+                    itemCount.sourceValue = flags.countBitsLive(
                         0, 0, true, null, f
-                    )
+                    ).distinctUntilChanged()
                 }
             }
 
-        private val _selectedCount: CascadeLiveData<Int?> = CascadeLiveData()
         /** @inheritDoc **/
-        override val selectedCount: LiveData<Int?>
-            get() = _selectedCount
+        override val selectedCount: LiveData<Int?> = CascadeLiveData()
 
-        private val _itemCount: CascadeLiveData<Int?> = CascadeLiveData()
         /** @inheritDoc **/
-        override val itemCount: LiveData<Int?>
-            get() = _itemCount
+        override val itemCount: LiveData<Int?> = CascadeLiveData()
 
         /** @inheritDoc **/
         override fun selectAllAsync(select: Boolean) {
