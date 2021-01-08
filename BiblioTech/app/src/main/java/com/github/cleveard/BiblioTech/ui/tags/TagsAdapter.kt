@@ -17,7 +17,7 @@ import com.github.cleveard.BiblioTech.utils.ParentAccess
  * @param access The view model for the tag fragment
  */
 internal open class TagsAdapter(private val access: ParentAccess) :
-    PagingDataAdapter<Tag, TagsAdapter.ViewHolder>(DIFF_CALLBACK) {
+    PagingDataAdapter<TagEntity, TagsAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     /**
      * Background color for selected tags. Loaded from resource. Default to CYAN
@@ -29,14 +29,16 @@ internal open class TagsAdapter(private val access: ParentAccess) :
          * Comparisons for tags
          */
         val DIFF_CALLBACK =
-            object: DiffUtil.ItemCallback<Tag>() {
+            object: DiffUtil.ItemCallback<TagEntity>() {
                 override fun areItemsTheSame(
-                    oldTag: Tag, newTag: Tag): Boolean {
+                    oldTag: TagEntity, newTag: TagEntity
+                ): Boolean {
                     // User properties may have changed if reloaded from the DB, but ID is fixed
-                    return oldTag.tag.id == newTag.tag.id
+                    return oldTag.id == newTag.id
                 }
                 override fun areContentsTheSame(
-                    oldTag: Tag, newTag: Tag): Boolean {
+                    oldTag: TagEntity, newTag: TagEntity
+                ): Boolean {
                     // NOTE: if you use equals, your object must properly override Object#equals()
                     // Incorrectly returning false here will result in too many animations.
                     return oldTag == newTag
@@ -77,19 +79,19 @@ internal open class TagsAdapter(private val access: ParentAccess) :
         val name = holder.itemView.findViewById<TextView>(R.id.tag_name)
 
         // Set the name of the tag
-        name.text = tag?.tag?.name ?: ""
-        val id = tag?.tag?.id ?: 0L
+        name.text = tag?.name ?: ""
+        val id = tag?.id ?: 0L
         // Set the id of the tag
         holder.itemView.tag = id
         // Set the background color
         holder.itemView.setBackgroundColor(
-            if (tag?.selected == true)
+            if (tag?.isSelected == true)
                 selectColor
             else
                 Color.WHITE
         )
         // Set the description.
-        val desc = tag?.tag?.desc
+        val desc = tag?.desc
         val descView = holder.itemView.findViewById<TextView>(R.id.tags_desc)
         descView.text = desc?: ""
     }

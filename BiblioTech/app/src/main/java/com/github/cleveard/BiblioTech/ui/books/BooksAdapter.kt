@@ -288,10 +288,8 @@ internal open class BooksAdapter(
         private fun toggleViewVisibility(): Boolean {
             val view = itemView.findViewById<View>(R.id.book_list_open)
             val visible = view?.visibility != View.VISIBLE
-            view?.visibility = if (visible) View.VISIBLE else View.GONE
-            if (visible)
-                bindAdditionalViews()
-            (itemView.tag as? Long)?.let { id -> access.toggleOpen(id) }
+            bindAdditionalViews(visible)
+            (itemView.tag as? Long)?.let { id -> access.toggleExpanded(id) }
             return visible
         }
 
@@ -357,14 +355,32 @@ internal open class BooksAdapter(
             smallJob?.cancel()
         }
 
-        internal fun bindAdditionalViews() {
+        /**
+         * Bind details or hide them
+         * @param visible True to bind the detail, false to hide them.
+         */
+        internal fun bindAdditionalViews(visible: Boolean) {
             if (detailLayout == 0)
                 return
+            var view = itemView.findViewById<View>(R.id.book_list_open)
             boundBook?.let { book ->
-                if (itemView.findViewById<View>(R.id.book_list_open) == null) {
-                    LayoutInflater.from(itemView.context).inflate(detailLayout, itemView as ViewGroup)
+                // If not visible, then do nothing else
+                if (!visible)
+                    return@let
+                if (view == null) {
+                    view = LayoutInflater.from(itemView.context).inflate(detailLayout, itemView as ViewGroup)
+                    itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
+                        it.delegate = chipBoxDelegate
+                        val edit = it.textView as AutoCompleteTextView
+                        edit.threshold = 1
+                        // Add a chip when an item is selected
+                        edit.onItemClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
+                            it.onCreateChipAction()
+                        }
+                    }
                 }
 
+                view.visibility = View.VISIBLE
                 book.categories.setField(itemView, R.id.book_categories, ", ") {
                     it.category
                 }
@@ -386,21 +402,15 @@ internal open class BooksAdapter(
                 // Set the default thumbnails and get the real ones
                 itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
                 bindThumb(book.book.id, true, R.id.book_thumb)
+                return
             }
+
+            view?.visibility = View.GONE
         }
 
         init {
             // When the view flipper is click, change the view and toggle it's selection
             itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)?.setOnClickListener(clickFlipperListener)
-            itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
-                it.delegate = chipBoxDelegate
-                val edit = it.textView as AutoCompleteTextView
-                edit.threshold = 1
-                // Add a chip when an item is selected
-                edit.onItemClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
-                    it.onCreateChipAction()
-                }
-            }
             itemView.setOnClickListener(openCloseListener)
         }
     }
@@ -499,11 +509,10 @@ internal open class BooksAdapter(
         holder.bindThumb(book.book.id, false, R.id.book_list_thumb)
         // Set the icon to the thumbnail or selected icon
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
-        box?.displayedChild = if (book.selected) 1 else 0
+        box?.displayedChild = if (book.book.isSelected) 1 else 0
 
         // Make the details visible or invisible
-        if (access.isOpen(book.book.id))
-            holder.bindAdditionalViews()
+        holder.bindAdditionalViews(book.book.isExpanded)
     }
 
     override fun onViewRecycled(holder: ViewHolder) {

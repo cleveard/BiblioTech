@@ -67,6 +67,16 @@ class BooksFragment : Fragment() {
     private var deleteMenuItem: MenuItem? = null
 
     /**
+     * The menu item to select all books
+     */
+    private var selectAll: MenuItem? = null
+
+    /**
+     * The menu item to select no books
+     */
+    private var selectNone: MenuItem? = null
+
+    /**
      * Drawable to use in drawerMenuItem when the edit and filter drawer is visible
      */
     private lateinit var closeDrawer: Drawable
@@ -114,7 +124,7 @@ class BooksFragment : Fragment() {
     /**
      * Observer for selection changes
      */
-    private val selectionObserver = Observer<Boolean> {
+    private val selectionObserver = Observer<Int?> {
         // Update menu buttons on selection change
         updateMenuAndButtons()
     }
@@ -166,11 +176,13 @@ class BooksFragment : Fragment() {
     ): View? {
         // Get the books and tags view models
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
-            it.selection.hasSelection.observe(viewLifecycleOwner, selectionObserver)
+            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
             it.filterView.observe(viewLifecycleOwner, filterViewObserver)
         }
         tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java).also {
-            it.selection.hasSelection.observe(viewLifecycleOwner, selectionObserver)
+            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
         }
 
         // Get the edit and filter drawer menu icons
@@ -259,6 +271,7 @@ class BooksFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
         // Setup the filter in the view model
         booksViewModel.applyView(args.filterName)
     }
@@ -346,8 +359,10 @@ class BooksFragment : Fragment() {
      */
     override fun onDestroyView() {
         // Remove selection observers
-        booksViewModel.selection.hasSelection.removeObserver(selectionObserver)
-        tagViewModel.selection.hasSelection.removeObserver(selectionObserver)
+        booksViewModel.selection.selectedCount.removeObserver(selectionObserver)
+        booksViewModel.selection.itemCount.removeObserver(selectionObserver)
+        tagViewModel.selection.selectedCount.removeObserver(selectionObserver)
+        tagViewModel.selection.itemCount.removeObserver(selectionObserver)
         // Let filter UI cleanup
         orderTable.onDestroyView()
         filterTable.onDestroyView()
@@ -363,6 +378,8 @@ class BooksFragment : Fragment() {
         // Save the edit and filter drawer menu item
         drawerMenuItem = menu.findItem(R.id.action_drawer)
         deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
+        selectAll = menu.findItem(R.id.action_select_all)
+        selectNone = menu.findItem(R.id.action_select_none)
         super.onCreateOptionsMenu(menu, inflater)
         updateMenuAndButtons()
     }
@@ -386,15 +403,15 @@ class BooksFragment : Fragment() {
             }
             R.id.action_select_none -> {
                 // Select no books menu item
-                booksViewModel.selection.selectAll(false)
+                booksViewModel.selection.selectAllAsync(false)
             }
             R.id.action_select_all -> {
                 // Select all books menu item
-                booksViewModel.selection.selectAll(true)
+                booksViewModel.selection.selectAllAsync(true)
             }
             R.id.action_select_invert -> {
                 // Invert book selection menu item
-                booksViewModel.selection.invert()
+                booksViewModel.selection.invertAsync()
             }
             R.id.action_new_filter -> {
                 newFilter()
@@ -423,13 +440,21 @@ class BooksFragment : Fragment() {
      */
     private fun updateMenuAndButtons() {
         // Get the has selected state for books
-        val booksSelected = booksViewModel.selection.hasSelection.value == true
+        val booksSelected = booksViewModel.selection.selectedCount.value?: 0
+        val booksCount = booksViewModel.selection.itemCount.value?: 0
+
+        activity?.findViewById<TextView>(R.id.book_stats)?.text =
+            getString(R.string.book_stats, booksCount, booksSelected)
 
         // Enable delete if this is not the global list
         actionButtons[R.id.action_remove_filter].isEnabled = args.filterName?.isNotEmpty() ?: false
 
         // Enable delete if any books are selected
-        deleteMenuItem?.isEnabled = booksSelected
+        deleteMenuItem?.isEnabled = booksSelected > 0
+        // Enable select none when something is selected
+        selectNone?.isEnabled = booksSelected > 0
+        // Enable select all when something is not selected
+        selectAll?.isEnabled = booksSelected < booksCount
 
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?

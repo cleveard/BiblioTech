@@ -74,6 +74,7 @@
         <item quantity="one">Replace tags for %d books?</item>
         <item quantity="other">Replace tags for %d books?</item>
     </plurals>
+    <string name="book_stats">Books: %1$d Selected: %2$d</string>
     <string name="edit">Edit</string>
     <string name="order">Order</string>
     <string name="filter">Filter</string>

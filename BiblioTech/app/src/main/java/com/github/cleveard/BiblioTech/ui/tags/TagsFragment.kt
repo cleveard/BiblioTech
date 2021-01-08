@@ -57,7 +57,7 @@ class TagsFragment : Fragment() {
     /**
      * Observers to update menu when selection changes
      */
-    private val observerHasSelection: Observer<Boolean?> = Observer<Boolean?> { updateMenu() }
+    private val observerHasSelection: Observer<Int?> = Observer<Int?> { updateMenu() }
     private val observerLastSelection: Observer<Long?> = Observer<Long?> { updateMenu() }
 
     /**
@@ -82,8 +82,10 @@ class TagsFragment : Fragment() {
         setupActionMenu(content)
 
         // Observe the tag selection to update the action menu
-        tagViewModel.selection.hasSelection.observe(viewLifecycleOwner, observerHasSelection)
-        booksViewModel.selection.hasSelection.observe(viewLifecycleOwner, observerHasSelection)
+        tagViewModel.selection.selectedCount.observe(viewLifecycleOwner, observerHasSelection)
+        tagViewModel.selection.itemCount.observe(viewLifecycleOwner, observerHasSelection)
+        booksViewModel.selection.selectedCount.observe(viewLifecycleOwner, observerHasSelection)
+        booksViewModel.selection.itemCount.observe(viewLifecycleOwner, observerHasSelection)
         tagViewModel.selection.lastSelection.observe(viewLifecycleOwner, observerLastSelection)
 
         return content
@@ -96,8 +98,10 @@ class TagsFragment : Fragment() {
         // Cancel the pager flow job
         pagerJob.cancel()
         // Remove the selection observer
-        booksViewModel.selection.hasSelection.removeObserver(observerHasSelection)
-        tagViewModel.selection.hasSelection.removeObserver(observerHasSelection)
+        booksViewModel.selection.selectedCount.removeObserver(observerHasSelection)
+        booksViewModel.selection.itemCount.removeObserver(observerHasSelection)
+        tagViewModel.selection.itemCount.removeObserver(observerHasSelection)
+        tagViewModel.selection.selectedCount.removeObserver(observerHasSelection)
         tagViewModel.selection.lastSelection.removeObserver(observerLastSelection)
         super.onDestroyView()
     }
@@ -117,7 +121,7 @@ class TagsFragment : Fragment() {
             tagViewModel.repo.getTags()
         }
         // Setup the flow for the pager
-        val flow = tagViewModel.applySelectionTransform(pager.flow)
+        val flow = pager.flow
             .cachedIn(tagViewModel.viewModelScope)
         pagerJob = tagViewModel.viewModelScope.launch {
             flow.collectLatest { data -> tagViewModel.adapter.submitData(data)
@@ -154,17 +158,17 @@ class TagsFragment : Fragment() {
             }
             R.id.action_select_none -> {
                 // Deselect all tags
-                tagViewModel.selection.selectAll(false)
+                tagViewModel.selection.selectAllAsync(false)
                 return true
             }
             R.id.action_select_all -> {
                 // Select all tags
-                tagViewModel.selection.selectAll(true)
+                tagViewModel.selection.selectAllAsync(true)
                 return true
             }
             R.id.action_select_invert -> {
                 // Invert the tags selected
-                tagViewModel.selection.invert()
+                tagViewModel.selection.invertAsync()
                 return true
             }
             else -> super.onOptionsItemSelected(item)
@@ -195,42 +199,39 @@ class TagsFragment : Fragment() {
         menuItems.put(R.id.action_add_tags, BaseViewModel.setupIcon(context, menu, R.id.action_add_tags))
         menuItems.put(R.id.action_remove_tags, BaseViewModel.setupIcon(context, menu, R.id.action_remove_tags))
         menuItems.put(R.id.action_replace_tags, BaseViewModel.setupIcon(context, menu, R.id.action_replace_tags))
-        BaseViewModel.setupIcon(context, menu, R.id.action_select_none)
-        BaseViewModel.setupIcon(context, menu, R.id.action_select_all)
-        BaseViewModel.setupIcon(context, menu, R.id.action_select_invert)
+        menuItems.put(R.id.action_select_none, BaseViewModel.setupIcon(context, menu, R.id.action_select_none))
+        menuItems.put(R.id.action_select_all, BaseViewModel.setupIcon(context, menu, R.id.action_select_all))
+        menuItems.put(R.id.action_select_invert, BaseViewModel.setupIcon(context, menu, R.id.action_select_invert))
     }
 
     /**
      * Delete the selected tags
      */
     private fun onDeleteTags(): Boolean {
-        // Get the tags selected
-        val tagIds = tagViewModel.selection.selection
-        val inverted = tagViewModel.selection.inverted
         // Are any selected?
-        if (inverted || tagIds.isNotEmpty()) {
+        val selCount = tagViewModel.selection.selectedCount.value?: 0
+        if (selCount > 0) {
             // Make sure we really want to delete the tags
             tagViewModel.viewModelScope.launch {
-                val count = tagViewModel.repo.countTags(tagIds, inverted)
-                if (count <= 0)
-                    return@launch
                 val result = coroutineAlert(requireContext(), { false }) { alert ->
                     alert.builder.setMessage(
                         requireContext().resources.getQuantityString(
                             R.plurals.ask_delete_tags,
-                            count,
-                            count
+                            selCount,
+                            selCount
                         )
                     )
                     // Set the action buttons
                     .setPositiveButton(R.string.ok, null)
                     .setNegativeButton(R.string.cancel, null)
+                }.setPosListener { alert, _, _ ->
+                    alert.result = true
+                    true
                 }.show()
 
                 if (result) {
                     // OK pressed delete the tags
-                    tagViewModel.selection.selectAll(false)
-                    tagViewModel.repo.deleteTags(tagIds, inverted)
+                    tagViewModel.repo.deleteSelectedTags()
                 }
             }
         }
@@ -270,7 +271,7 @@ class TagsFragment : Fragment() {
                 }
             } else {
                 // Create a new TagEntity
-                TagEntity(0, "", "")
+                TagEntity(0, "", "", 0)
             }
 
             addOrEdit(tag, layoutInflater, tagViewModel.repo, this)
@@ -282,17 +283,22 @@ class TagsFragment : Fragment() {
      */
     private fun updateMenu() {
         // Get the has selected state for books and tags
-        val selectedTags = tagViewModel.selection.hasSelection.value == true
+        val selectedCount = tagViewModel.selection.selectedCount.value?: 0
+        val itemCount = tagViewModel.selection.itemCount.value?: 0
         val lastSelection = tagViewModel.selection.lastSelection.value
-        val booksSelected = booksViewModel.selection.hasSelection.value == true
+        val booksSelectedCount = booksViewModel.selection.selectedCount.value?: 0
 
-        menuItems.get(R.id.action_delete)?.isEnabled = selectedTags
+        menuItems.get(R.id.action_delete)?.isEnabled = selectedCount > 0
         menuItems.get(R.id.action_edit)?.isEnabled = lastSelection != null
         // Enable add and remove tags if any books and any tags are selected
-        menuItems.get(R.id.action_add_tags)?.isEnabled = booksSelected && selectedTags
-        menuItems.get(R.id.action_remove_tags)?.isEnabled = booksSelected && selectedTags
+        menuItems.get(R.id.action_add_tags)?.isEnabled = booksSelectedCount > 0 && selectedCount > 0
+        menuItems.get(R.id.action_remove_tags)?.isEnabled = booksSelectedCount > 0 && selectedCount > 0
         // Enable replace tags if any books are selected
-        menuItems.get(R.id.action_replace_tags)?.isEnabled = booksSelected
+        menuItems.get(R.id.action_replace_tags)?.isEnabled = booksSelectedCount > 0
+        // Enable select none when something is selected
+        menuItems.get(R.id.action_select_none)?.isEnabled = selectedCount > 0
+        // Enable select all when something is not selected
+        menuItems.get(R.id.action_select_all)?.isEnabled = selectedCount < itemCount
     }
 
     companion object {

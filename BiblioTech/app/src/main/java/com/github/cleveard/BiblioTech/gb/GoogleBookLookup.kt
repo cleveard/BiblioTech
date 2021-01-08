@@ -327,7 +327,8 @@ internal class GoogleBookLookup private constructor() {
                     added = Date(0),
                     modified = Date(0),
                     smallThumb = getThumbnail(volume, kSmallThumb),
-                    largeThumb = getThumbnail(volume, kThumb)
+                    largeThumb = getThumbnail(volume, kThumb),
+                    flags = 0
                 ),
                 authors = getJsonValue<AuthorEntity, String>(volume, kAuthors) {
                     separateAuthor(it)

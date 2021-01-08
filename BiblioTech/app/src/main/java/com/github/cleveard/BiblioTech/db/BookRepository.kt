@@ -12,6 +12,41 @@ import kotlinx.coroutines.asCoroutineDispatcher
  * Application interface to the book database
  */
 class BookRepository private constructor() {
+    /**
+     * Interface to deal with flags in database
+     */
+    interface FlagsInterface {
+        /**
+         * Change bits in the flag column
+         * @param operation The operation to perform. True to set, false to clear, null to toggle
+         * @param mask The bits to change
+         * @param id The id of the row to change. Null to change all
+         * @param filter A filter to restrict the rows
+         * @return The number of rows changed
+         */
+        suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter? = null): Int?
+        /**
+         * Count bits in the flag column
+         * @param bits The bits to count
+         * @param value The value to count
+         * @param include True to count values that match, false to include values that don't match
+         * @param id The id of the row to change. Null to change all
+         * @param filter A filter to restrict the rows
+         * @return The number of rows matched
+         */
+        suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int?
+        /**
+         * Count bits in the flag column
+         * @param bits The bits to count
+         * @param value The value to count
+         * @param include True to count values that match, false to include values that don't match
+         * @param id The id of the row to change. Null to change all
+         * @param filter A filter to restrict the rows
+         * @return The number of rows changed in a LiveData
+         */
+        suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int?>
+    }
+
     companion object {
         // Singleton BookRepository
         private var mRepo: BookRepository? = null
@@ -56,6 +91,80 @@ class BookRepository private constructor() {
     val queryScope: CoroutineScope = CoroutineScope(db.queryExecutor.asCoroutineDispatcher())
 
     /**
+     * Object for dealing with the bits in the book flags
+     */
+    val bookFlags: FlagsInterface = object: FlagsInterface {
+        /** inheritDoc **/
+        override suspend fun changeBits(
+            operation: Boolean?,
+            mask: Int,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int? {
+            return db.getBookDao().changeBits(operation, mask, id, filter)
+        }
+
+        /** inheritDoc **/
+        override suspend fun countBits(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int? {
+            return db.getBookDao().countBits(bits, value, include, id, filter)
+        }
+
+        /** inheritDoc **/
+        override suspend fun countBitsLive(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): LiveData<Int?> {
+            return db.getBookDao().countBitsLive(bits, value, include, id, filter)
+        }
+    }
+
+    /**
+     * Object for dealing with the bits in the tag flags
+     */
+    val tagFlags: FlagsInterface = object: FlagsInterface {
+        /** inheritDoc **/
+        override suspend fun changeBits(
+            operation: Boolean?,
+            mask: Int,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int? {
+            return db.getTagDao().changeBits(operation, mask, id)
+        }
+
+        /** inheritDoc **/
+        override suspend fun countBits(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int? {
+            return db.getTagDao().countBits(bits, value, include, id)
+        }
+
+        /** inheritDoc **/
+        override suspend fun countBitsLive(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): LiveData<Int?> {
+            return db.getTagDao().countBitsLive(bits, value, include, id)
+        }
+    }
+
+    /**
      * Get books from the data base
      * @return A PagingSource containing the books
      */
@@ -73,54 +182,37 @@ class BookRepository private constructor() {
     }
 
     /**
-     * Count books in the book data base
-     * @param bookIds An array of book ids
-     * @param invert A flag indicating whether the ids in bookIds are counted, or the ids
-     *               not in bookIds are counted.
-     * @param filter The current filter
-     * @return The number of books that meet the filter
-     */
-    suspend fun countBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter?): Int {
-        return db.getBookDao().queryBookIdCount(bookIds, invert, filter)
-    }
-
-    /**
      * Add a book to the database or update a book already there
      * @param book The book to add or update
-     * @param tagIds An array of ids of tags in the Tags table
-     * @param invert A flag indicating whether the set of tag ids ar the ids in tagIds
-     *               of the tag ids not in tagIds
-     * The book is added and tags identified by tagIds and invert are linked to the book
+     * The book is added and selected tags
      */
-    suspend fun addOrUpdateBook(book: BookAndAuthors, tagIds: Array<Any>? = null, invert: Boolean = false) {
-        db.getBookDao().addOrUpdate(book, tagIds, invert)
+    suspend fun addOrUpdateBook(book: BookAndAuthors) {
+        db.getBookDao().addOrUpdate(book)
     }
 
     /**
      * Delete books from the book database
-     * @param bookIds An array of book ids
-     * @param invert A flag indicating whether the ids in bookIds are deleted, or the ids
-     *               not in bookIds are deleted.
      * @param filter The current filter
      */
-    suspend fun deleteBooks(bookIds: Array<Any>, invert: Boolean = false, filter: BookFilter.BuiltFilter?) {
-        db.getBookDao().delete(bookIds, invert, filter)
+    suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?) {
+        db.getBookDao().deleteSelected(filter)
     }
 
     /**
      * Get all tags
      * @return PagingSource containing the tags
      */
-    fun getTags(): PagingSource<Int, Tag> {
+    fun getTags(): PagingSource<Int, TagEntity> {
         return db.getTagDao().get()
     }
 
     /**
      * Get all tags
+     * @param selected True to get selected tags. False to get all tags.
      * @return LiveData with the list of tags
      */
-    suspend fun getTagsLive(): LiveData<List<TagEntity>> {
-        return db.getTagDao().getLive()
+    suspend fun getTagsLive(selected: Boolean = false): LiveData<List<TagEntity>> {
+        return db.getTagDao().getLive(selected)
     }
 
     /**
@@ -153,51 +245,29 @@ class BookRepository private constructor() {
     }
 
     /**
-     * Count tags
-     * @param tagIds An array of tag ids
-     * @param invert A flag indicating whether the ids in tagIds are counted, or the ids
-     *               not in tagIds are counted.
-     */
-    suspend fun countTags(tagIds: Array<Any>, invert: Boolean = false): Int {
-        return db.getTagDao().queryTagCount(tagIds, invert)
-    }
-
-    /**
      * Delete tag
-     * @param tagIds An array of tag ids
-     * @param invert A flag indicating whether the ids in tagIds are deleted, or the ids
-     *               not in tagIds are deleted.
      */
-    suspend fun deleteTags(tagIds: Array<Any>, invert: Boolean = false) {
-        db.getTagDao().delete(tagIds, invert)
+    suspend fun deleteSelectedTags() {
+        db.getTagDao().deleteSelected()
     }
 
     /**
      * Add multiple tags to multiple books
-     * @param bookIds An array of book ids
-     * @param booksInvert A flag indicating whether tags are added to the ids in bookIds,
-     *                    or tags are added to the ids not in bookIds
-     * @param tagIds An array of tag ids
-     * @param tagsInvert A flag indicating whether the ids in tagIds are added, or the ids
-     *                   not in tagIds are added.
+     * @param bookIds An array of book ids. Null means use the selected books.
+     * @param tagIds An array of tag ids. Null means use the selected tags
      */
-    suspend fun addTagsToBooks(bookIds: Array<Any>, tagIds: Array<Any>, filter: BookFilter.BuiltFilter?,
-                               booksInvert: Boolean = false, tagsInvert: Boolean = false) {
-        db.getBookTagDao().addTagsToBooks(bookIds, tagIds, filter, booksInvert, tagsInvert)
+    suspend fun addTagsToBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?) {
+        db.getBookTagDao().addTagsToBooks(bookIds, tagIds, filter)
     }
 
     /**
      * Remove multiple tags from multiple books
-     * @param bookIds An array of book ids
-     * @param booksInvert A flag indicating whether tags are removed from the ids in bookIds,
-     *                    or tags are removed from the ids not in bookIds
-     * @param tagIds An array of tag ids
-     * @param tagsInvert A flag indicating whether the ids in tagIds are removed, or the ids
-     *                   not in tagIds are removed.
+     * @param bookIds An array of book ids. Null means use the selected books.
+     * @param tagIds An array of tag ids. Null means use the selected tags
+     * @param invert True to remove the tags that match tagIds. False to remove the tags not matched by tagIds.
      */
-    suspend fun removeTagsFromBooks(bookIds: Array<Any>, tagIds: Array<Any>, filter: BookFilter.BuiltFilter?,
-                                    booksInvert: Boolean = false, tagsInvert: Boolean = false) {
-        db.getBookTagDao().deleteTagsForBooks(bookIds, booksInvert, filter, tagIds, tagsInvert)
+    suspend fun removeTagsFromBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?, invert: Boolean = false) {
+        db.getBookTagDao().deleteSelectedTagsForBooks(bookIds, filter, tagIds, invert)
     }
 
     /**

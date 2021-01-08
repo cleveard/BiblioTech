@@ -1,6 +1,5 @@
 package com.github.cleveard.BiblioTech.ui.modes
 
-import android.app.AlertDialog
 import android.content.Context
 import androidx.appcompat.view.ActionMode
 import android.view.Menu
@@ -35,7 +34,7 @@ class TagModalAction private constructor(
             Action(R.id.action_select_all, TagModalAction::selectAll),
             Action(R.id.action_select_none, TagModalAction::selectAll),
             Action(R.id.action_select_invert, TagModalAction::selectInvert))
-), Observer<Boolean> {
+), Observer<Int?> {
     // Menu items enabled and disabled based on the selection count
     private var addItem: MenuItem? = null
     private var removeItem: MenuItem? = null
@@ -77,7 +76,7 @@ class TagModalAction private constructor(
      */
     @Suppress("MemberVisibilityCanBePrivate")
     fun selectAll(item: MenuItem): Boolean {
-        booksViewModel.selection.selectAll(item.itemId == R.id.action_select_all)
+        booksViewModel.selection.selectAllAsync(item.itemId == R.id.action_select_all)
         return true
     }
 
@@ -87,7 +86,7 @@ class TagModalAction private constructor(
      */
     @Suppress("UNUSED_PARAMETER")
     fun selectInvert(item: MenuItem): Boolean {
-        booksViewModel.selection.invert()
+        booksViewModel.selection.invertAsync()
         return true
     }
 
@@ -95,7 +94,7 @@ class TagModalAction private constructor(
      * {@inheritDoc}
      * Update the menu when the selection changes
      */
-    override fun onChanged(t: Boolean?) {
+    override fun onChanged(t: Int?) {
         updateMenu()
     }
 
@@ -108,8 +107,8 @@ class TagModalAction private constructor(
         addItem = BaseViewModel.setupIcon(fragment.context, menu, R.id.action_add_tags)
         removeItem = BaseViewModel.setupIcon(fragment.context, menu, R.id.action_remove_tags)
         replaceItem = BaseViewModel.setupIcon(fragment.context, menu, R.id.action_replace_tags)
-        booksViewModel.selection.hasSelection.observe(fragment, this)
-        tagViewModel.selection.hasSelection.observe(fragment, this)
+        booksViewModel.selection.selectedCount.observe(fragment, this)
+        tagViewModel.selection.selectedCount.observe(fragment, this)
         return actionMode
     }
 
@@ -128,8 +127,8 @@ class TagModalAction private constructor(
      */
     override fun onDestroyActionMode(mode: ActionMode) {
         removeItem = null
-        booksViewModel.selection.hasSelection.removeObserver(this)
-        tagViewModel.selection.hasSelection.removeObserver(this)
+        booksViewModel.selection.selectedCount.removeObserver(this)
+        tagViewModel.selection.selectedCount.removeObserver(this)
         super.onDestroyActionMode(mode)
     }
 
@@ -137,8 +136,8 @@ class TagModalAction private constructor(
      * Update the menu based on the selection count
      */
     private fun updateMenu() {
-        val hasBookSelection = booksViewModel.selection.hasSelection.value!!
-        val hasTagSelection = tagViewModel.selection.hasSelection.value!!
+        val hasBookSelection = booksViewModel.selection.hasSelection
+        val hasTagSelection = tagViewModel.selection.hasSelection
         // Only add if something is selected
         addItem?.isEnabled = hasBookSelection && hasTagSelection
         // Only delete if something is selected
@@ -159,8 +158,8 @@ class TagModalAction private constructor(
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
-            if (booksViewModel.selection.hasSelection.value == true &&
-                    tagViewModel.selection.hasSelection.value == true) {
+            if (booksViewModel.selection.hasSelection &&
+                    tagViewModel.selection.hasSelection) {
                 addTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
@@ -178,8 +177,8 @@ class TagModalAction private constructor(
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
-            if (booksViewModel.selection.hasSelection.value == true &&
-                    tagViewModel.selection.hasSelection.value == true) {
+            if (booksViewModel.selection.hasSelection &&
+                    tagViewModel.selection.hasSelection) {
                 removeTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
@@ -197,7 +196,7 @@ class TagModalAction private constructor(
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
             val tagViewModel: TagViewModel =
                 MainActivity.getViewModel(activity, TagViewModel::class.java)
-            if (booksViewModel.selection.hasSelection.value == true) {
+            if (booksViewModel.selection.hasSelection) {
                 replaceTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
                 TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
@@ -217,8 +216,8 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_tag_books) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
+                R.plurals.ask_tag_books) {
+                booksViewModel.repo.addTagsToBooks(null, null, booksViewModel.idFilter)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -238,8 +237,8 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_untag_books) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
+                R.plurals.ask_untag_books) {
+                booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -259,9 +258,9 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_repl_tag_books, true) { bookIds, tagIds, booksInvert, tagsInvert ->
-                booksViewModel.repo.removeTagsFromBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, !tagsInvert)
-                booksViewModel.repo.addTagsToBooks(bookIds, tagIds, booksViewModel.idFilter, booksInvert, tagsInvert)
+                R.plurals.ask_repl_tag_books, true) {
+                booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter, true)
+                booksViewModel.repo.addTagsToBooks(null, null, booksViewModel.idFilter)
                 // Finish the acton
                 onFinished?.run()
             }
@@ -281,28 +280,20 @@ class TagModalAction private constructor(
             tagViewModel: TagViewModel,
             pluralMessage: Int,
             allowEmptyTags: Boolean = false,
-            callback: suspend (bookIds: Array<Any>, tagIds: Array<Any>,
-                       booksInvert: Boolean, tagsInvert: Boolean) -> Unit
+            callback: suspend () -> Unit
         ): Boolean {
             // Get the list of books and selection count
-            val bookIds = booksViewModel.selection.selection
-            val booksInverted = booksViewModel.selection.inverted
-            val tagIds = tagViewModel.selection.selection
-            val tagsInverted = tagViewModel.selection.inverted
-            if ((booksInverted || bookIds.isNotEmpty()) &&
-                (allowEmptyTags || tagsInverted || tagIds.isNotEmpty())
+            val selCount = booksViewModel.selection.selectedCount.value?: 0
+            if (selCount > 0 && (allowEmptyTags || tagViewModel.selection.hasSelection)
             ) {
                 booksViewModel.viewModelScope.launch {
-                    val count = booksViewModel.repo.countBooks(bookIds, booksInverted, booksViewModel.idFilter)
-                    if (count <= 0)
-                        return@launch
                     val result = coroutineAlert(context, { false }) {alert ->
                         // Make sure we really want to tag the books
                         alert.builder.setMessage(
                             context.resources.getQuantityString(
                                 pluralMessage,
-                                count,
-                                count
+                                selCount,
+                                selCount
                             )
                         )
                             // Set the action buttons
@@ -314,7 +305,7 @@ class TagModalAction private constructor(
                     }.show()
                     // If OK pressed, then do the operation
                     if (result)
-                        callback(bookIds, tagIds, booksInverted, tagsInverted)
+                        callback()
                 }
             }
             return true

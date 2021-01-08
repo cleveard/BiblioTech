@@ -6,13 +6,13 @@ import android.graphics.Bitmap
 import android.graphics.PorterDuff
 import android.view.Menu
 import android.view.MenuItem
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.BookAndAuthors
+import com.github.cleveard.BiblioTech.db.BookFilter
+import com.github.cleveard.BiblioTech.db.BookRepository.FlagsInterface
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Interface used by adapters to access the app
@@ -25,9 +25,9 @@ internal interface ParentAccess {
     fun toggleSelection(id: Long, position: Int)
 
     /**
-     * Toggle the open/close state of the boook
+     * Toggle the open/close state of the book
      */
-    fun toggleOpen(id: Long) {}
+    fun toggleExpanded(id: Long) {}
 
     /**
      * Return whether the id is open
@@ -74,49 +74,103 @@ internal interface ParentAccess {
  * Base view model for fragments that need a context
  */
 abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAccess {
-    /**
-     * Handler for selection based on database ids
-     * This class keeps a list of ids and a flag to indicate
-     * whether the ids are the selected ids or the unselected ids
-     */
-    class SelectionSet {
-        private var _inverted: Boolean = false
+    interface SelectionInterface {
+        /**
+         * LiveData holding the last item selected
+         */
+        val lastSelection: LiveData<Long>
+
+        /**
+         * The count of all items
+         */
+        val itemCount: LiveData<Int?>
+
+        /**
+         * LiveData holding the selected item count
+         */
+        val selectedCount: LiveData<Int?>
 
         /**
          * Lister for selection changed
          */
-        var onSelectionChanged: HashSet<() -> Unit> = HashSet()
+        val onSelectionChanged: MutableSet<() -> Unit>
 
         /**
-         * Flag to indicate whether ids are selected (false) or unselected (true)
+         * Return true if there is a selection
          */
-        val inverted: Boolean
-            get() { return _inverted }
-        private var _selection: HashSet<Long> = HashSet()
+        val hasSelection: Boolean
+            get() = (selectedCount.value?:0) > 0
 
         /**
-         * The ids
+         * Clear the last item selected
          */
-        val selection: Array<Any>
-            get() { return _selection.toArray() }
-        private val _hasSelection = object: MutableLiveData<Boolean>(false) {
-            override fun setValue(value: Boolean?) {
-                // Only set if the value changes
-                if (value != this.value)
-                    super.setValue(value)
-            }
-        }
+        fun clearLastSelection()
 
         /**
-         * Live data that gets changed when selection
-         * goes between nothing selected and something selected
-         * This is only an approximation if the ids are the unselected
-         * ids, since we don't keep track of all of the ids
+         * Select all items. May return before completion
+         * @param select True to select all, False to clear all selections
          */
-        val hasSelection: LiveData<Boolean>
-            get() { return _hasSelection }
+        fun selectAllAsync(select: Boolean)
 
-        private var _lastSelection: MutableLiveData<Long> = object: MutableLiveData<Long>(null) {
+        /**
+         * Select all items
+         * @param select True to select all, False to clear all selections
+         */
+        suspend fun selectAll(select: Boolean) = selectAllAsync(select)
+
+        /**
+         * Select an item. May return before completion
+         * @param id The id of the item to select
+         * @param select True to select. False to clear selection
+         */
+        fun selectAsync(id: Long, select: Boolean)
+
+        /**
+         * Select an item
+         * @param id The id of the item to select
+         * @param select True to select. False to clear selection
+         */
+        suspend fun select(id: Long, select: Boolean) = selectAsync(id, select)
+
+        /**
+         * Toggle an item selection. May return before completion
+         * @param id The id of the item
+         */
+        fun toggleAsync(id: Long)
+
+        /**
+         * Toggle an item selection
+         * @param id The id of the item
+         */
+        suspend fun toggle(id: Long) = toggleAsync(id)
+
+        /**
+         * Toggle all oll items' selection. May return before completion
+         */
+        fun invertAsync()
+
+        /**
+         * Toggle all oll items' selection
+         */
+        suspend fun invert() = invertAsync()
+
+        /**
+         * Is an item selected
+         * @param id The item to test
+         * @return True if the item is selected
+         */
+        suspend fun isSelected(id: Long): Boolean
+    }
+
+    /**
+     * Class to hold the last selected item
+     */
+    abstract class LastSelection: SelectionInterface {
+        /**
+         * Live data where the last selected id is kept
+         */
+        @Suppress("PropertyName")
+        protected var _lastSelection: MutableLiveData<Long> = object: MutableLiveData<Long>(null) {
             override fun setValue(value: Long?) {
                 // Only set if the value changes
                 if (value != this.value)
@@ -125,125 +179,132 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         }
 
         /**
+         * Lister for selection changed
+         */
+        override val onSelectionChanged: MutableSet<() -> Unit> = HashSet()
+
+        /**
          * The last id that was last selected
          */
-        val lastSelection: LiveData<Long>
+        override val lastSelection: LiveData<Long>
             get() { return _lastSelection }
 
         /**
          * Clear the last selected id
          */
-        fun clearLastSelection() {
+        override fun clearLastSelection() {
             _lastSelection.value = null
         }
+    }
 
-        /**
-         * Set the something vs nothing selected state if it has changed.
-         */
-        private fun hasSelectChanged() {
-            // Get current state
-            val value = _inverted || _selection.size > 0
-            // Set value
-            _hasSelection.value = value
-            // Invalidate the UI. This is here because this
-            // method is called on all selection changes
-            for (c in onSelectionChanged)
-                c()
-        }
-
-        /**
-         * Select/deselect all ids
-         * @param select True to select all ids. False to deselect all ids
-         */
-        fun selectAll(select: Boolean) {
-            // Clear the ids
-            _selection.clear()
-            // Set inverted based on whether we are selecting or deselecting
-            _inverted = select
-            // Clear the last selected value
-            _lastSelection.value = null
-            hasSelectChanged()
-        }
-
-        /**
-         * Select/deselect a single id
-         * @param id The id to select/deselect
-         * @param select True to select. False to deselect
-         */
-        fun select(id: Long, select: Boolean) {
-            if (select != _inverted) {
-                // When select is different from _inverted,
-                // We add to the ids to select/deselect
-                if (_selection.contains(id))
-                    return
-                _selection.add(id)
-            } else {
-                // If select is the same as _inverted
-                // We remove ids to select/deselect
-                if (!_selection.contains(id))
-                    return
-                _selection.remove(id)
-            }
-            // Set the last select value only if selecting
-            _lastSelection.value = if (select) id else null
-            hasSelectChanged()
-        }
-
-        /**
-         * Toggle the selection of an id
-         * @param id The id to toggle
-         */
-        fun toggle(id: Long) {
-            // To toggle selection we just need to add the id if it isn't
-            // in the set of ids, or remove it if it is. But we also want
-            // to know whether the toggle selected the id, so we can set
-            // the last selected id.
-            val select =
-                if (_selection.contains(id)) {
-                    _selection.remove(id)
-                    // If we remove an id, then that selects it
-                    // if _inverted is true
-                    _inverted
-                } else {
-                    _selection.add(id)
-                    // If we add an id, then that selects it
-                    // if _inverted is false
-                    !_inverted
+    /**
+     * Class to manage selection bits in a database
+     * @param flags The flags interface to the table
+     * @param mask The mask for the selected bit
+     * @param scope A coroutine scope for coroutine operations
+     */
+    class DataBaseSelectionSet(
+        private val flags: FlagsInterface,
+        private val mask: Int,
+        private val scope: CoroutineScope
+    ): LastSelection() {
+        var filter: BookFilter.BuiltFilter? = null
+            set(f) {
+                field = f
+                scope.launch {
+                    _selectedCount.sourceValue = flags.countBitsLive(
+                        mask, mask, true, null, f
+                    )
+                    _itemCount.sourceValue = flags.countBitsLive(
+                        0, 0, true, null, f
+                    )
                 }
-            // Set the last select value only if selecting
-            _lastSelection.value = if (select) id else null
-            hasSelectChanged()
+            }
+
+        private val _selectedCount: CascadeLiveData<Int?> = CascadeLiveData()
+        /** @inheritDoc **/
+        override val selectedCount: LiveData<Int?>
+            get() = _selectedCount
+
+        private val _itemCount: CascadeLiveData<Int?> = CascadeLiveData()
+        /** @inheritDoc **/
+        override val itemCount: LiveData<Int?>
+            get() = _itemCount
+
+        /** @inheritDoc **/
+        override fun selectAllAsync(select: Boolean) {
+            scope.launch {
+                selectAll(select)
+            }
         }
 
-        /**
-         * Invert the ids selected
-         */
-        fun invert() {
-            // Just need to clear the last selected id and invert _inverted
-            _lastSelection.value = null
-            _inverted = !_inverted
-            hasSelectChanged()
+        /** @inheritDoc **/
+        override suspend fun selectAll(select: Boolean) {
+            clearLastSelection()
+            flags.changeBits(select, mask, null, filter)
         }
 
-        /**
-         * Is the id selected
-         * @param id The id to check
-         */
-        fun isSelected(id: Long): Boolean {
-            return _selection.contains(id) != _inverted
+        /** @inheritDoc **/
+        override suspend fun select(id: Long, select: Boolean) {
+            if (select)
+                _lastSelection.value = id
+            else
+                clearLastSelection()
+            flags.changeBits(select, mask, id, filter)
+        }
+
+        /** @inheritDoc **/
+        override fun selectAsync(id: Long, select: Boolean) {
+            scope.launch {
+                select(id, select)
+            }
+        }
+
+        /** @inheritDoc **/
+        override fun toggleAsync(id: Long) {
+            scope.launch {
+                toggle(id)
+            }
+        }
+
+        /** @inheritDoc **/
+        override suspend fun toggle(id: Long) {
+            flags.changeBits(null, mask, id, filter)
+            if (isSelected(id))
+                _lastSelection.value = id
+            else
+                clearLastSelection()
+        }
+
+        /** @inheritDoc **/
+        override fun invertAsync() {
+            scope.launch {
+                invert()
+            }
+        }
+
+        /** @inheritDoc **/
+        override suspend fun invert() {
+            clearLastSelection()
+            flags.changeBits(null, mask, null, filter)
+        }
+
+        /** @inheritDoc **/
+        override suspend fun isSelected(id: Long): Boolean {
+            return (flags.countBits(mask, mask, true, id, filter)?: 0) > 0
         }
     }
 
     /**
      * This is the selection object for the view model
      */
-    val selection = SelectionSet()
+    abstract val selection: SelectionInterface
 
     /**
      * @inheritDoc
      */
     override fun toggleSelection(id: Long, position: Int) {
-        selection.toggle(id)
+        selection.toggleAsync(id)
     }
 
     /**

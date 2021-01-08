@@ -18,6 +18,15 @@
             android:background="?attr/colorPrimary"
             app:popupTheme="@style/AppTheme.PopupOverlay" />
 
+        <TextView
+            android:id="@+id/book_stats"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/colorPrimary"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:textColor="@android:color/primary_text_dark" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <include layout="@layout/main_content" />

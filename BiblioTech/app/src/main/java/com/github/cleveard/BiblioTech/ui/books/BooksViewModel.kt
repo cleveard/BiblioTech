@@ -30,17 +30,15 @@ import kotlin.collections.HashSet
  * The view model for the book list
  */
 class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(app) {
-    init {
-        // Setup the selection handler
-        applyExtra = {
-            it.selected = selection.isSelected(it.book.id)
-        }
-    }
-
     /**
      * The book database repository
      */
     val repo: BookRepository = BookRepository.repo
+
+    /**
+     * Selection set for books
+     */
+    override val selection: DataBaseSelectionSet = DataBaseSelectionSet(repo.bookFlags, BookEntity.SELECTED, viewModelScope)
 
     /**
      * The adapter for the book recycler view
@@ -54,7 +52,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Selection set used to mark open books
      */
-    val openBooks: SelectionSet = SelectionSet()
+    private val openBooks: SelectionInterface = DataBaseSelectionSet(repo.bookFlags, BookEntity.EXPANDED, viewModelScope)
 
     /**
      * The layout manager for the book recycler view
@@ -80,9 +78,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * The built filter to get the ids for the current filter
      */
     var idFilter: BookFilter.BuiltFilter? = null
-        private set(filter) {
-            field = filter
-        }
+        private set
 
     /**
      * The styles to used for the names and items in headers and separators
@@ -197,15 +193,16 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             if (it.isEmpty())
                 null
             else {
-                // Build the  sqlite command to get the book ids for the filter
+                // Build the  SQLite command to get the book ids for the filter
                 val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(app.applicationContext)
                 // We only need the book id column
                 idFilterBuilder.addSelect(BOOK_ID_COLUMN)
                 // Build the filter without the order terms
                 idFilterBuilder.buildFilter(it.iterator())
-                BookFilter.BuiltFilter(idFilterBuilder.createCommand(), idFilterBuilder.argList.toArray())
+                BookFilter.BuiltFilter("SELECT $BOOK_ID_COLUMN FROM ( ${idFilterBuilder.createCommand()} )", idFilterBuilder.argList.toArray())
             }
         }
+        selection.filter = idFilter
 
         // Cancel previous job if there was one
         flowJob?.let {
@@ -221,7 +218,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             view.filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
         }
         // Add headers and cache
-        val flow = addHeaders(applySelectionTransform(pager.flow))
+        val flow = addHeaders(pager.flow)
             .cachedIn(viewModelScope)
         // Start the flow
         flowJob = viewModelScope.launch {
@@ -375,15 +372,8 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * @inheritDoc
      */
-    override fun toggleOpen(id: Long) {
-        openBooks.toggle(id)
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun isOpen(id: Long): Boolean {
-        return openBooks.isSelected(id)
+    override fun toggleExpanded(id: Long) {
+        openBooks.toggleAsync(id)
     }
 
     /**
@@ -415,7 +405,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         var tag = repo.findTagByName(tagName)
         if (tag == null) {
             // Didn't find one, try to add one
-            tag = TagEntity(0L, tagName, "")
+            tag = TagEntity(0L, tagName, "", 0)
             tag.id = TagsFragment.addOrEdit(
                 tag,
                 LayoutInflater.from(ctx),

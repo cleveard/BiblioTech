@@ -167,7 +167,7 @@ class ScanFragment : Fragment() {
     /**
      * Observer of tag list live data
      */
-    private val tagObserver: Observer<List<TagEntity>?> = Observer {list ->
+    private val tagObserver: Observer<List<TagEntity>?> = Observer { list ->
         chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(list))
     }
 
@@ -176,13 +176,13 @@ class ScanFragment : Fragment() {
     private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.removeView(chip)
-        tagViewModel.selection.select(chip.tag.id, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, false)
     }
 
     private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.editChip(chip)
-        tagViewModel.selection.select(chip.tag.id, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, false)
     }
 
     private inner class TagChip(val tag: TagEntity, context: Context): Chip(context) {
@@ -325,6 +325,8 @@ class ScanFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.GONE
+
         // Initialize our background executor
         cameraExecutor = Executors.newSingleThreadExecutor()
 
@@ -367,7 +369,7 @@ class ScanFragment : Fragment() {
             } else {
                 booksViewModel.viewModelScope.launch {
                     if (requireActivity().shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                        coroutineAlert(requireContext(), { Unit }) { alert ->
+                        coroutineAlert(requireContext(), { }) { alert ->
                             // Present the dialog
                             alert.builder.setTitle(R.string.camera_permission_title)
                                 .setMessage(R.string.camera_permission_message)
@@ -387,7 +389,7 @@ class ScanFragment : Fragment() {
      */
     private fun selectedNames(list: List<TagEntity>?): Sequence<String>? {
         return list?.asSequence()
-            ?.filter { tagViewModel.selection.isSelected(it.id) }
+            ?.filter { it.isSelected }
             ?.map { it.name }
     }
 
@@ -405,7 +407,7 @@ class ScanFragment : Fragment() {
             }
             if (index < 0) {
                 // Didn't find one, try to add one
-                val tag = TagEntity(0L, text, "")
+                val tag = TagEntity(0L, text, "", 0)
                 tag.id = TagsFragment.addOrEdit(
                     tag,
                     LayoutInflater.from(context),
@@ -455,7 +457,7 @@ class ScanFragment : Fragment() {
             }
 
             override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
-                tagViewModel.selection.select((chip as TagChip).tag.id, true)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, true)
             }
 
             override suspend fun onChipRemoved(
@@ -463,7 +465,7 @@ class ScanFragment : Fragment() {
                 chip: View,
                 scope: CoroutineScope
             ) {
-                tagViewModel.selection.select((chip as TagChip).tag.id, false)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, false)
             }
 
             override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
@@ -643,11 +645,12 @@ class ScanFragment : Fragment() {
 
                                     // Make sure the isbn in the book record is the one we searched
                                     book.book.ISBN = isbn
+                                    // Select the book
+                                    book.book.isSelected = true
+                                    // Deselect everything else
+                                    booksViewModel.selection.selectAll(false)
                                     // Add the book to the database
-                                    booksViewModel.repo.addOrUpdateBook(
-                                        book, tagViewModel.selection.selection,
-                                        tagViewModel.selection.inverted
-                                    )
+                                    booksViewModel.repo.addOrUpdateBook(book)
                                     // Stop looking
                                     return@launch
                                 }
@@ -713,15 +716,15 @@ class ScanFragment : Fragment() {
 
                 // Select books from the ones we found
                 val array = selectBook(result.list, spec, result.itemCount, true)
+                // Deselect all
+                booksViewModel.selection.selectAll(false)
                 val repo = booksViewModel.repo
                 for (i in 0 until array.size()) {
                     val book = array.valueAt(i)
-
+                    // Select each book
+                    book.book.isSelected = true
                     // Add the book to the database
-                    repo.addOrUpdateBook(
-                        book, tagViewModel.selection.selection,
-                        tagViewModel.selection.inverted
-                    )
+                    repo.addOrUpdateBook(book)
                 }
             } catch (e: GoogleBookLookup.LookupException) {
                 // Display and error if we found one
@@ -1059,16 +1062,15 @@ class ScanFragment : Fragment() {
                         // This array is used to map positions to selected books
                         // and is the final result of the select book dialog
                         val selection = alert.result
-                        var selectedPos = -1
                         // This is the adapter
                         lateinit var adapter: BooksAdapter
 
                         // Clear the selected items - only use for !isMulti
                         fun clearSelection(selected: Boolean) {
                             for (i in 0 until selection.size())
-                                selection.valueAt(i).selected = selected
-                            selectedPos = -1
+                                selection.valueAt(i).book.isSelected = selected
                             selection.clear()
+                            adapter.notifyItemRangeChanged(0, adapter.itemCount)
                         }
                         // Toggle the selection for an id
                         override fun toggleSelection(id: Long, position: Int) {
@@ -1078,21 +1080,18 @@ class ScanFragment : Fragment() {
                                 // for multi selection, do nothing for single
                                 if (!isMulti)
                                     return      // Don't refresh the adapter
-                                selection.get(index).selected = false
+                                selection.get(index).book.isSelected = false
                                 selection.remove(index)
                             } else {
                                 // Selection doesn't contain the key, add it
                                 // clear any other selections if not multi selection
                                 if (!isMulti) {
-                                    if (selectedPos >= 0)
-                                        adapter.notifyItemChanged(selectedPos)
                                     clearSelection(false)
                                 }
                                 // Add the boo
                                 adapter.getBook(position)?.let {
-                                    it.selected = true
+                                    it.book.isSelected = true
                                     selection.put(index, it)
-                                    selectedPos = position
                                 }
                             }
                             // Refresh the adapter
@@ -1143,35 +1142,30 @@ class ScanFragment : Fragment() {
                     ) {
                         GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
                     }
-                    val flow = pager.flow.map {
-                        it.map { b ->
-                            (b as? BookAndAuthors)?.apply { selected = access.selection.indexOfKey(book.id.toInt()) >= 0 }?: b
-                        }
-                    }.cachedIn(booksViewModel.viewModelScope).combine(filterFlow) {data, b ->
-                        val clone = data.map {book ->
-                            if (book is BookAndAuthors) {
-                                book.copy()
-                            } else
-                                book
-                        }
-                        if (b) {
-                            clone.filter { book ->
-                                // filter the books using the title and author edit text contents
+                    val flow = pager.flow.cachedIn(booksViewModel.viewModelScope)
+                        .combine(filterFlow) {data, b ->
+                            val clone = data.map {book ->
                                 if (book is BookAndAuthors) {
-                                    access.selection.indexOfKey(book.book.id.toInt()) >= 0 ||
-                                        (titleFilter.filter(book) && authorFilter.filter(book))
+                                    book.copy()
                                 } else
-                                    true
+                                    book
                             }
-                        } else
-                            clone
-                    }
+                            if (b) {
+                                clone.filter { book ->
+                                    // filter the books using the title and author edit text contents
+                                    if (book is BookAndAuthors) {
+                                        access.selection.indexOfKey(book.book.id.toInt()) >= 0 ||
+                                            (titleFilter.filter(book) && authorFilter.filter(book))
+                                    } else
+                                        true
+                                }
+                            } else
+                                clone
+                        }
 
                     // Start the book stream to the recycler view
                     pagerJob = booksViewModel.viewModelScope.launch {
                         flow.collectLatest { data ->
-                            if (!isMulti && access.selectedPos >= 0)
-                                access.clearSelection(true)
                             access.adapter.submitData(data)
                         }
                     }

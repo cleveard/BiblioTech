@@ -1,6 +1,5 @@
 package com.github.cleveard.BiblioTech.ui.modes
 
-import android.app.AlertDialog
 import android.content.Context
 import androidx.appcompat.view.ActionMode
 import android.view.Menu
@@ -28,9 +27,11 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
             Action(R.id.action_select_all, DeleteModalAction::selectAll),
             Action(R.id.action_select_none, DeleteModalAction::selectAll),
             Action(R.id.action_select_invert, DeleteModalAction::selectInvert))
-), Observer<Boolean> {
+), Observer<Int?> {
     // Menu items enabled and disabled based on the selection count
     private var deleteItem: MenuItem? = null
+    private var selectAll: MenuItem? = null
+    private var selectNone: MenuItem? = null
 
     /**
      * Delete the selected books
@@ -50,7 +51,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      */
     @Suppress("MemberVisibilityCanBePrivate")
     fun selectAll(item: MenuItem): Boolean {
-        viewModel.selection.selectAll(item.itemId == R.id.action_select_all)
+        viewModel.selection.selectAllAsync(item.itemId == R.id.action_select_all)
         return true
     }
 
@@ -60,7 +61,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      */
     @Suppress("UNUSED_PARAMETER")
     fun selectInvert(item: MenuItem): Boolean {
-        viewModel.selection.invert()
+        viewModel.selection.invertAsync()
         return true
     }
 
@@ -68,7 +69,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * {@inheritDoc}
      * Update the menu when the selection changes
      */
-    override fun onChanged(t: Boolean?) {
+    override fun onChanged(t: Int?) {
         updateMenu()
     }
 
@@ -79,7 +80,10 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
     override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
         val actionMode = super.onCreateActionMode(mode, menu)
         deleteItem = BaseViewModel.setupIcon(fragment.context, menu, R.id.action_delete)
-        viewModel.selection.hasSelection.observe(fragment, this)
+        selectAll = menu.findItem(R.id.action_select_all)
+        selectNone = menu.findItem(R.id.action_select_none)
+        viewModel.selection.selectedCount.observe(fragment, this)
+        viewModel.selection.itemCount.observe(fragment, this)
         return actionMode
     }
 
@@ -98,7 +102,10 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      */
     override fun onDestroyActionMode(mode: ActionMode) {
         deleteItem = null
-        viewModel.selection.hasSelection.removeObserver(this)
+        selectAll = null
+        selectNone = null
+        viewModel.selection.selectedCount.removeObserver(this)
+        viewModel.selection.itemCount.removeObserver(this)
         super.onDestroyActionMode(mode)
     }
 
@@ -106,9 +113,12 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * Update the menu based on the selection count
      */
     private fun updateMenu() {
-        val hasSelection = viewModel.selection.hasSelection.value!!
+        val selectCount = viewModel.selection.selectedCount.value?: 0
+        val itemCount = viewModel.selection.itemCount.value?: 0
         // Only delete if something is selected
-        deleteItem?.isEnabled = hasSelection
+        deleteItem?.isEnabled = selectCount > 0
+        selectAll?.isEnabled = itemCount < selectCount
+        selectNone?.isEnabled = selectCount > 0
     }
 
     companion object {
@@ -121,7 +131,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
             val activity = fragment.requireActivity()
             val viewModel: BooksViewModel =
                 MainActivity.getViewModel(activity, BooksViewModel::class.java)
-            if (viewModel.selection.hasSelection.value == true) {
+            if (viewModel.selection.hasSelection) {
                 delete(fragment.requireContext(), viewModel)
             } else {
                 DeleteModalAction(fragment, viewModel).start(activity)
@@ -136,21 +146,17 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
          */
         private fun delete(context: Context, viewModel: BooksViewModel, onFinished: Runnable? = null): Boolean {
             // Get the list of books and selection count
-            val bookIds = viewModel.selection.selection
-            val inverted = viewModel.selection.inverted
-            if (inverted || bookIds.isNotEmpty()) {
+            val selCount = viewModel.selection.selectedCount.value?: 0
+            if (selCount > 0) {
                 viewModel.viewModelScope.launch {
-                    val count = viewModel.repo.countBooks(bookIds, inverted, viewModel.idFilter)
-                    if (count <= 0)
-                        return@launch
                     val result = coroutineAlert(context, { false }) {alert ->
                         // Make sure we really want to delete the books
                         alert.builder.setMessage(
                             context.resources.getQuantityString(
-                                    R.plurals.ask_delete_books,
-                                    count,
-                                    count
-                                )
+                                R.plurals.ask_delete_books,
+                                selCount,
+                                selCount
+                            )
                         )
                         // Set the action buttons
                         .setPositiveButton(R.string.ok, null)
@@ -162,8 +168,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
 
                     if (result) {
                         // OK pressed delete the books
-                        viewModel.selection.selectAll(false)
-                        viewModel.repo.deleteBooks(bookIds, inverted, viewModel.idFilter)
+                        viewModel.repo.deleteSelectedBooks(viewModel.idFilter)
                         // Finish the acton
                         onFinished?.run()
                     }
