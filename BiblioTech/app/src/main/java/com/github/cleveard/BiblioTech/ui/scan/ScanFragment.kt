@@ -171,6 +171,14 @@ class ScanFragment : Fragment() {
         chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(list))
     }
 
+    /**
+     * Observer for selection changes
+     */
+    private val selectionObserver = Observer<Int?> {
+        // Update book stats on selection change
+        updateBookStats()
+    }
+
     private var chipBox: ChipBox? = null
 
     private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
@@ -292,6 +300,9 @@ class ScanFragment : Fragment() {
         // Shut down our background executor
         cameraExecutor.shutdown()
 
+        booksViewModel.selection.selectedCount.removeObserver(selectionObserver)
+        booksViewModel.selection.itemCount.removeObserver(selectionObserver)
+
         // Unregister the broadcast receivers and listeners
         broadcastManager.unregisterReceiver(volumeDownReceiver)
         displayManager.unregisterDisplayListener(displayListener)
@@ -305,7 +316,10 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
-        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
+        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
+            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
+        }
         tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
         return inflater.inflate(R.layout.scan_fragment, container, false)
     }
@@ -324,8 +338,6 @@ class ScanFragment : Fragment() {
      */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.GONE
 
         // Initialize our background executor
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -359,6 +371,11 @@ class ScanFragment : Fragment() {
             .getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager.registerDisplayListener(displayListener, null)
 
+        // Clear filter from books view model
+        booksViewModel.filterView.value = null
+        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
+        updateBookStats()
+
         // Wait for the views to be properly laid out
         viewFinder.post {
             // Keep track of the display in which this view is attached
@@ -382,6 +399,14 @@ class ScanFragment : Fragment() {
                 }
             }
         }
+    }
+
+    fun updateBookStats() {
+        // Update book stats on selection change
+        val booksSelected = booksViewModel.selection.selectedCount.value?: 0
+        val booksCount = booksViewModel.selection.itemCount.value?: 0
+        activity?.findViewById<TextView>(R.id.book_stats)?.text =
+            getString(R.string.book_stats, booksCount, booksSelected)
     }
 
     /**

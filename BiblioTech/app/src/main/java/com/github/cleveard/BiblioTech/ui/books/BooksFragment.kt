@@ -20,12 +20,16 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.cachedIn
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.MainActivity
 import com.github.cleveard.BiblioTech.ManageNavigation
 import com.github.cleveard.BiblioTech.MobileNavigationDirections
 import com.github.cleveard.BiblioTech.R
+import com.github.cleveard.BiblioTech.db.BOOK_ID_COLUMN
 import com.github.cleveard.BiblioTech.db.BookFilter
 import com.github.cleveard.BiblioTech.db.ViewEntity
 import com.github.cleveard.BiblioTech.ui.filter.FilterTable
@@ -35,6 +39,7 @@ import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
 import com.github.cleveard.BiblioTech.utils.BaseViewModel
 import com.github.cleveard.BiblioTech.utils.coroutineAlert
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -133,6 +138,7 @@ class BooksFragment : Fragment() {
      * Observer for BooksViewModel filterView changes
      */
     private val filterViewObserver = Observer<ViewEntity?> {filterView: ViewEntity? ->
+        booksViewModel.buildFlow()
         activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
             // The view changed, set the title and subtitle
             it.title = filterView?.name.let { name ->
@@ -361,6 +367,7 @@ class BooksFragment : Fragment() {
         // Remove selection observers
         booksViewModel.selection.selectedCount.removeObserver(selectionObserver)
         booksViewModel.selection.itemCount.removeObserver(selectionObserver)
+        booksViewModel.filterView.removeObserver(filterViewObserver)
         tagViewModel.selection.selectedCount.removeObserver(selectionObserver)
         tagViewModel.selection.itemCount.removeObserver(selectionObserver)
         // Let filter UI cleanup

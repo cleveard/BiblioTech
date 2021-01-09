@@ -8,7 +8,6 @@ import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
 import android.util.SparseArray
 import android.view.LayoutInflater
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
@@ -67,12 +66,24 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Current filter view for the fragment
      */
-    private val viewObserver = Observer<ViewEntity?> {
-        buildFlow()
+    private val viewObserver = Observer<ViewEntity?> {view ->
+        idFilter = view?.filter?.filterList?.let {
+            // If the filter list is empty, then make idFilter null
+            if (it.isEmpty())
+                null
+            else {
+                // Build the  SQLite command to get the book ids for the filter
+                val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(app.applicationContext)
+                // We only need the book id column
+                idFilterBuilder.addSelect(BOOK_ID_COLUMN)
+                // Build the filter without the order terms
+                idFilterBuilder.buildFilter(it.iterator())
+                BookFilter.BuiltFilter("SELECT $BOOK_ID_COLUMN FROM ( ${idFilterBuilder.createCommand()} )", idFilterBuilder.argList.toArray())
+            }
+        }
+        selection.filter = idFilter
     }
-    private val _filterView: MutableLiveData<ViewEntity?> = MutableLiveData(null)
-    val filterView: LiveData<ViewEntity?>
-        get() { return _filterView }
+    val filterView: MutableLiveData<ViewEntity?> = MutableLiveData(null)
 
     /**
      * The built filter to get the ids for the current filter
@@ -112,7 +123,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
-        _filterView.observeForever(viewObserver)
+        filterView.observeForever(viewObserver)
     }
 
     /**
@@ -127,7 +138,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     override fun onCleared() {
         selection.onSelectionChanged.remove(selectChange)
-        _filterView.removeObserver(viewObserver)
+        filterView.removeObserver(viewObserver)
         super.onCleared()
     }
 
@@ -153,7 +164,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             return false
         }
 
-        _filterView.value = view
+        filterView.value = view
         return true
     }
 
@@ -176,7 +187,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     fun applyView(viewName: String?) {
         viewModelScope.launch {
-            _filterView.value = repo.findViewByName(viewName ?: "") ?: ViewEntity(0, "", "")
+            filterView.value = repo.findViewByName(viewName ?: "") ?: ViewEntity(0, "", "")
         }
     }
 
@@ -184,25 +195,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * Build a new flow for book stream from the filter in the view model
      * This is called when the filter is changed to update the display
      */
-    private fun buildFlow() {
+    fun buildFlow() {
         // Get the view for the flow. Return if it is null
         val view = filterView.value?: return
-
-        idFilter = view.filter?.filterList?.let {
-            // If the filter list is empty, then make idFilter null
-            if (it.isEmpty())
-                null
-            else {
-                // Build the  SQLite command to get the book ids for the filter
-                val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(app.applicationContext)
-                // We only need the book id column
-                idFilterBuilder.addSelect(BOOK_ID_COLUMN)
-                // Build the filter without the order terms
-                idFilterBuilder.buildFilter(it.iterator())
-                BookFilter.BuiltFilter("SELECT $BOOK_ID_COLUMN FROM ( ${idFilterBuilder.createCommand()} )", idFilterBuilder.argList.toArray())
-            }
-        }
-        selection.filter = idFilter
 
         // Cancel previous job if there was one
         flowJob?.let {
