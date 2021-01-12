@@ -31,7 +31,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.*
 import com.github.cleveard.BiblioTech.R
-import com.github.cleveard.BiblioTech.gb.GoogleBookLookup.Companion.generalLookup
 import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
@@ -66,6 +65,16 @@ private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
  * Helper type alias used for analysis use case callbacks
  */
 typealias BarcodeListener = (codes: List<String>) -> Unit
+
+/**
+ * Replace the entire contents of an editable with another
+ * @param text The new contents
+ * @return The editable
+ */
+fun Editable.setString(text: String): Editable {
+    replace(0, length, text, 0, text.length)
+    return this
+}
 
 /**
  * Bar code scan fragment
@@ -330,9 +339,9 @@ class ScanFragment : Fragment() {
      * Clear isbn and title text views
      */
     private fun clearView() {
-        container.findViewById<TextView>(R.id.scan_isbn).text = ""
-        container.findViewById<TextView>(R.id.scan_title).text = ""
-        container.findViewById<TextView>(R.id.scan_author).text = ""
+        container.findViewById<EditText>(R.id.scan_isbn).text.clear()
+        container.findViewById<EditText>(R.id.scan_title).text.clear()
+        container.findViewById<EditText>(R.id.scan_author).text.clear()
     }
 
     /**
@@ -360,8 +369,9 @@ class ScanFragment : Fragment() {
 
         container.findViewById<Button>(R.id.scan_search).setOnClickListener {
             searchForBooks(
-                container.findViewById<TextView>(R.id.scan_title).text.toString(),
-                container.findViewById<TextView>(R.id.scan_author).text.toString()
+                container.findViewById<EditText>(R.id.scan_isbn).text.toString(),
+                container.findViewById<EditText>(R.id.scan_title).text.toString(),
+                container.findViewById<EditText>(R.id.scan_author).text.toString()
             )
         }
         // Set up the intent filter that will receive events from our main activity
@@ -403,7 +413,7 @@ class ScanFragment : Fragment() {
         }
     }
 
-    fun updateBookStats() {
+    private fun updateBookStats() {
         // Update book stats on selection change
         val booksSelected = booksViewModel.selection.selectedCount.value?: 0
         val booksCount = booksViewModel.selection.itemCount.value?: 0
@@ -636,69 +646,15 @@ class ScanFragment : Fragment() {
             // during the lifecycle of this use case
             .setTargetRotation(rotation)
             .build()
-            .also {
+            .also {analyzer ->
                 // Run the analysis on the main thread and use the BarcodeScanner class
-                it.setAnalyzer(cameraExecutor, BarcodeScanner { codes ->
+                analyzer.setAnalyzer(cameraExecutor, BarcodeScanner { codes ->
                     // Start a coroutine job to run query for the book
                     booksViewModel.viewModelScope.launch {
                         // Display the bar codes in the UI
-                        container.findViewById<TextView>(R.id.scan_isbn).text = codes.joinToString(", ")
+                        container.findViewById<EditText>(R.id.scan_isbn).text.setString(codes.joinToString(" "))
 
-                        var notFound = true         // Flag if we found anything
-                        // Look through the codes we found
-                        for (isbn in codes) {
-                            try {
-                                // Lookup using isbn
-                                var result = GoogleBookLookup.lookupISBN(isbn)
-                                if (result == null || result.list.isEmpty()) {
-                                    // If we didn't find anything find books with the isbn
-                                    // somewhere in the book data
-                                    result = generalLookup(isbn, 0, 20)
-                                    // If we still didn't find anything, continue with next code
-                                    if (result == null || result.list.isEmpty())
-                                        continue
-                                }
-
-                                // Select a book from the ones we found
-                                notFound = false
-                                val array = selectBook(result.list, isbn, result.itemCount, false)
-                                if (array.size() > 0) {
-                                    val book = array.valueAt(0)
-                                    // When a book is selected, set the title
-                                    container.findViewById<TextView>(R.id.scan_title).text =
-                                        book.book.title
-                                    container.findViewById<TextView>(R.id.scan_author).text =
-                                        buildAuthors(StringBuilder(), book.authors)
-
-                                    // Make sure the isbn in the book record is the one we searched
-                                    book.book.ISBN = isbn
-                                    // Select the book
-                                    book.book.isSelected = true
-                                    // Deselect everything else
-                                    booksViewModel.selection.selectAll(false)
-                                    // Add the book to the database
-                                    booksViewModel.repo.addOrUpdateBook(book)
-                                    // Stop looking
-                                    return@launch
-                                }
-                            } catch (e: GoogleBookLookup.LookupException) {
-                                // Display and error if we found one
-                                Toast.makeText(
-                                    context,
-                                    "Error finding book: $e",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-
-                        if (notFound) {
-                            // If we got here we didn't find anything
-                            Toast.makeText(
-                                context,
-                                requireContext().resources.getString(R.string.no_books_found),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
+                        findBooks(codes.asSequence())
                     }
                 })
             }
@@ -719,18 +675,103 @@ class ScanFragment : Fragment() {
         }
     }
 
-    private fun searchForBooks(title: String, author: String) {
+    /**
+     * Find books from a sequence of ISBNs
+     * @param codes The ISBNs
+     * @return True if a book was found. False otherwise.
+     */
+    private suspend fun findBooks(codes: Sequence<String>): Boolean {
+        if (lookupISBNs(codes) { GoogleBookLookup.lookupISBN(it) })
+            return true
+        if (lookupISBNs(codes) { GoogleBookLookup.generalLookup(it, 0, 20) })
+            return true
+
+        // If we got here we didn't find anything
+        Toast.makeText(
+            context,
+            requireContext().resources.getString(R.string.no_books_found),
+            Toast.LENGTH_LONG
+        ).show()
+        return false
+    }
+
+    /**
+     * Lookup a book using isbn
+     * @param codes The ISBNs to use for the lookup
+     * @param lookup A callback to lookup each ISBN
+     * @return True if a book was found. False otherwise
+     */
+    private suspend fun lookupISBNs(codes: Sequence<String>, lookup: suspend (isbn: String) -> GoogleBookLookup.LookupResult?): Boolean {
+        // Look through the codes we found
+        for (isbn in codes) {
+            try {
+                // Lookup using isbn
+                val result = lookup(isbn)
+                if (result == null || result.list.isEmpty())
+                    continue
+
+                // Select a book from the ones we found
+                val array = selectBook(result.list, isbn, result.itemCount, false)
+                if (array.size() > 0) {
+                    val book = array.valueAt(0)
+                    // When a book is selected, set the title
+                    container.findViewById<EditText>(R.id.scan_title).text.setString(book.book.title)
+                    container.findViewById<EditText>(R.id.scan_author).text.setString(
+                        buildAuthors(StringBuilder(), book.authors))
+
+                    // Make sure the isbn in the book record is the one we searched
+                    book.book.ISBN = isbn
+                    // Select the book
+                    book.book.isSelected = true
+                    // Deselect everything else
+                    booksViewModel.selection.selectAll(false)
+                    // Add the book to the database
+                    booksViewModel.repo.addOrUpdateBook(book)
+                    // Stop looking
+                    return true
+                }
+            } catch (e: GoogleBookLookup.LookupException) {
+                // Display and error if we found one
+                Toast.makeText(
+                    context,
+                    "Error finding book: $e",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        return false
+    }
+
+    private fun searchForBooks(isbn: String, title: String, author: String) {
         // Don't search if no input
-        if (title.isEmpty() && author.isEmpty())
+        if (isbn.isEmpty() && title.isEmpty() && author.isEmpty())
             return
 
         // Start a coroutine job to run query for the book
         booksViewModel.viewModelScope.launch {
             // Look through the codes we found
             try {
+                if (isbn.isNotEmpty()) {
+                    val codes = ArrayList<String>()
+                    for (s in isbn.replace(getXDigit, "X").split(splitIsbn)) {
+                        if (s.isNotEmpty() && !addToCodes(codes, s)) {
+                            Toast.makeText(
+                                context,
+                                requireContext().resources.getString(R.string.bad_isbn, s),
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@launch
+                        }
+                    }
+
+                    if (codes.isNotEmpty() && findBooks(codes.asSequence()))
+                        return@launch
+                }
+
                 // Lookup using isbn
                 val spec = GoogleBookLookup.getTitleAuthorQuery(title, author)
-                val result = generalLookup(spec)
+                val result = GoogleBookLookup.generalLookup(spec)
                 // If we still didn't find anything, stop
                 if (result == null || result.list.isEmpty()) {
                     Toast.makeText(
@@ -869,8 +910,6 @@ class ScanFragment : Fragment() {
                 val result: Int = scanner.scanImage(barcode)
 
                 if (result != 0) {
-                    // We found something, so stop analyzing
-                    previewing = false
                     // Get the results and look for ISBN codes
                     val symbols = scanner.results
                     val codes = ArrayList<String>()
@@ -880,12 +919,16 @@ class ScanFragment : Fragment() {
                             Symbol.ISBN10,
                             Symbol.ISBN13,
                             Symbol.EAN13 ->
-                                codes.add(sym.data)
+                                addToCodes(codes, sym.data)
                         }
                     }
 
                     // Call all listeners with codes we found
-                    listeners.forEach { it(codes) }
+                    if (codes.isNotEmpty()) {
+                        // We found something, so stop analyzing
+                        previewing = false
+                        listeners.forEach { it(codes) }
+                    }
                 }
             }
             image.close()
@@ -904,6 +947,10 @@ class ScanFragment : Fragment() {
         private const val RATIO_4_3_VALUE = 4.0 / 3.0
         private const val RATIO_16_9_VALUE = 16.0 / 9.0
 
+        /** Expressions for splitting ISBNs **/
+        private val splitIsbn: Regex = Regex("[, ]+")
+        private val getXDigit: Regex = Regex("[*#]")
+
         /** Convenience method used to check if all permissions required by this app are granted */
         fun hasPermissions(context: Context) = PERMISSIONS_REQUIRED.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
@@ -920,6 +967,153 @@ class ScanFragment : Fragment() {
                 }
             }
             return builder.toString()
+        }
+
+        /**
+         * Convert ISBN 13 to an ISBN 10
+         * @param isbn The ISBN 13 to convert
+         * @return The ISBN 10, or null if the isbn13 can't be converted
+         */
+        private fun isbn13To10(isbn: CharSequence): String? {
+            // Make sure the isbn can be converted
+            if (isbn.length != 13 || !isbn.startsWith("978") || checkIsbn13(isbn) != 0)
+                return null
+            // Extract the isbn 10 without the check digit
+            val isbn10 = isbn.subSequence(3, 12).toString()
+            // Calculate the check digit
+            val c = checkIsbn10(isbn10)
+            // Append the check digit. c == 1 means the check digit should be 10, which is 'X'
+            // Otherwise append the digit
+            return isbn10 + if (c == 1)
+                'X'
+            else
+                '0' + ((11 - c) % 11)
+        }
+
+        /**
+         * Convert ISBN 10 to ISBN 13
+         * @param isbn The isbn 10 to convert
+         * @return The ISBN 13 or null if it can't be converted
+         */
+        private fun isbn10To13(isbn: CharSequence): String? {
+            // Make sure the isbn can be converted
+            if (isbn.length != 10 || checkIsbn10(isbn) != 0)
+                return null
+            // Form the isbn 13 without the check digit
+            val isbn13 = "978" + isbn.subSequence(0, 9)
+            // Check sum the isbn 13
+            val c = checkIsbn13(isbn13)
+            // Append the digit
+            return isbn13 + ('0' + ((10 - c) % 10))
+        }
+
+        /**
+         * Calculate the isbn 10 checksum
+         * @param isbn The isbn 10 number with or without the check sum
+         * @return The checksum
+         * If isbn is shorter than 10, then the check sum assumes the missing
+         * characters are all 0. If isbn is longer than 10, only the first 10
+         * characters are used.
+         */
+        private fun checkIsbn10(isbn: CharSequence): Int {
+            var sum = 0
+
+            // Loop over all of the digits but no more than 9
+            val end = isbn.length.coerceAtMost(9)
+            for (i in 0 until end) {
+                // Get the character and sum it. It must be a digit
+                val c = isbn[i]
+                sum += (10 - i) * when {
+                    c.isDigit() -> c - '0'
+                    else -> return -1
+                }
+            }
+            // The last character, if present, can be a digit or 'X'
+            if (isbn.length >= 10) {
+                val c = isbn[9]
+                sum += when {
+                    c.isDigit() -> c - '0'
+                    c == 'X' -> 10
+                    else -> return -1            // Add in the extra digits
+                }
+            }
+
+            // Return the checksum
+            return sum % 11
+        }
+
+        /**
+         * Checksum an ISBN 13
+         * @param isbn The ISBN 13
+         * @return The checksum
+         * If isbn is shorter than 13, then the check sum assumes the missing
+         * characters are all 0. If isbn is longer than 13, only the first 13
+         * characters are used.
+         */
+        private fun checkIsbn13(isbn: CharSequence): Int {
+            var e = 0
+            var o = 0
+
+            val end = isbn.length.coerceAtMost(13)
+            // Loop over the characters in the isbn. Accumulate sums for even and
+            // odd indices separately.
+            for (i in 1 until end step 2) {
+                // Sum even index
+                var c = isbn[i - 1]
+                e += when {
+                    c.isDigit() -> c - '0'
+                    else -> return -1
+                }
+                // Sum odd index
+                c = isbn[i]
+                o += when {
+                    c.isDigit() -> c - '0'
+                    else -> return -1
+                }
+            }
+            // If there are an odd number of characters, then add in the last one
+            if ((end and 1) != 0) {
+                val c = isbn[end - 1]
+                e += when {
+                    c.isDigit() -> c - '0'
+                    else -> return -1
+                }
+            }
+            return (e + 3 * o) % 10
+        }
+
+        /**
+         * Validate the isbn
+         * @param isbn The isbn to validate
+         * @return True if valid, false if invalid
+         */
+        private fun validIsbn(isbn: CharSequence): Boolean {
+            return when(isbn.length) {
+                10 -> checkIsbn10(isbn) == 0
+                13 -> checkIsbn13(isbn) == 0
+                else -> false
+            }
+        }
+
+        /**
+         * Add a symbol to the isbn codes
+         */
+        private fun addToCodes(codes: MutableList<String>, isbn: String): Boolean {
+            // Make sure it is valid
+            if (validIsbn(isbn)) {
+                // Add it to the codes found
+                codes.add(isbn)
+                // Try to convert to other format
+                when(isbn.length) {
+                    10 -> isbn10To13(isbn)
+                    else -> isbn13To10(isbn)
+                }?.let {
+                    // It converted, add it to the codes
+                    codes.add(it)
+                }
+                return true
+            }
+            return false
         }
     }
 

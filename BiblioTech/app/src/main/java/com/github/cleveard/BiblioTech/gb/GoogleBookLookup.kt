@@ -1,5 +1,6 @@
 package com.github.cleveard.BiblioTech.gb
 
+import android.net.Uri
 import com.github.cleveard.BiblioTech.db.*
 import androidx.paging.PagingSource
 import kotlinx.coroutines.Dispatchers
@@ -132,7 +133,7 @@ internal class GoogleBookLookup private constructor() {
          */
         @Throws(LookupException::class)
         suspend fun lookupISBN(isbn: String): LookupResult? {
-            return queryBooks(buildUrl(kVolumesCollection, String.format(kISBNParameter, isbn)))
+            return queryBooks(buildUrl(kVolumesCollection, Uri.encode(String.format(kISBNParameter, isbn))))
         }
 
         /**
@@ -165,7 +166,7 @@ internal class GoogleBookLookup private constructor() {
             val loadSize = pageCount.coerceAtMost(40)
             val spec = buildUrl(
                 kVolumesCollection,
-                "${query}&startIndex=${index}&maxResults=${loadSize}"
+                "${Uri.encode(query)}&startIndex=${index}&maxResults=${loadSize}"
             )
 
             return queryBooks(spec)
@@ -436,7 +437,6 @@ internal class GoogleBookLookup private constructor() {
                     bookClient?.disconnect()
                 }
             }
-       }
-
+        }
     }
 }

@@ -10,7 +10,8 @@
 
     <string name="book_thumb">Book Thumbnail</string>
     <string name="id">ID:</string>
-    <string name="isbn">ISBN:</string>
+    <string name="isbn">ISBN</string>
+    <string name="bad_isbn">%1$s: ISBN is invalid.</string>
 
     <string name="title_desc">Book Title</string>
     <string name="subtitle_desc">Book Subtitle</string>
