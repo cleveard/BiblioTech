@@ -30,7 +30,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.*
 import com.github.cleveard.BiblioTech.R
-import com.github.cleveard.BiblioTech.tesstwo.TessTwoHandler
 import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
@@ -62,10 +61,6 @@ import kotlin.math.min
 
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
-
-@Suppress("SpellCheckingInspection")
-private const val TESSASSETS = "tessdata"
-private const val LANGUAGE = "eng"
 
 /**
  * Replace the entire contents of an editable with another
@@ -133,11 +128,6 @@ class ScanFragment : Fragment() {
      * The Z-Bar image scanner
      */
     private lateinit var scanner: ImageScanner
-
-    /**
-     * Handler for the OCR package
-     */
-    private lateinit var ocrHandler: TessTwoHandler
 
     /**
      * GPU compute interface
@@ -236,7 +226,6 @@ class ScanFragment : Fragment() {
         scanner.setConfig(0, Config.X_DENSITY, 3)
         scanner.setConfig(0, Config.Y_DENSITY, 3)
 
-        ocrHandler = TessTwoHandler(requireContext(), TESSASSETS, MainActivity.cache, LANGUAGE)
         gpuCompute = GpuCompute(requireContext())
     }
 
@@ -666,8 +655,6 @@ class ScanFragment : Fragment() {
             // Set initial target rotation, we will have to call this again if rotation changes
             // during the lifecycle of this use case
             .setTargetRotation(rotation)
-            // Go for high quality
-            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .build()
 
         // Must unbind the use-cases before rebinding them
@@ -866,7 +853,7 @@ class ScanFragment : Fragment() {
 
             var attempts = 0
             val focused = withContext(Dispatchers.IO) {
-                // Loop until we get focussed, or we run out of attempts
+                // Loop until we get focused, or we run out of attempts
                 @Suppress("BlockingMethodInNonBlockingContext")
                 while (result.get()?.isFocusSuccessful != true) {
                     if (++attempts >= retries) {
@@ -924,7 +911,7 @@ class ScanFragment : Fragment() {
         // Do this on a worker thread
         return withContext(Dispatchers.IO) {
             if (image.format == ImageFormat.JPEG) {
-                // Decode Jpex into a bitmap
+                // Decode Jpeg into a bitmap
                 val array = image.planes[0].buffer.toByteArray()
                 BitmapFactory.decodeByteArray(array, 0, array.size)
             } else {
@@ -1008,40 +995,16 @@ class ScanFragment : Fragment() {
         val barCodes = ArrayList<String>()
         val scannerJob = scope.scanBarcode(image, barCodes)
 
-        // Look for OCR codes
-        val ocrCodes = ArrayList<String>()
-        val ocrJob = scope.ocrISBNs(image, ocrCodes)
-
-        // Expect the scanner to finish first
+        // Wait for the scanner job
         scannerJob.join()
 
         // The scanner is faster than OCR, so check it first
         if (lookup1(barCodes)) {
             // We found a book, return
-            ocrJob.cancel()
             return true
         }
 
-        // Try OCR
-        ocrJob.join()
-        // Remove any duplicate codes
-        for (i in ocrCodes.size - 1 downTo 0) {
-            if (barCodes.contains(ocrCodes[i]))
-                ocrCodes.removeAt(i)
-        }
-        // Check the ocr codes
-        if (lookup1(ocrCodes)) {
-            // We found a book, return
-            return true
-        }
-
-        // If there are any codes, then lookup using the general lookup
-        if (barCodes.isNotEmpty() || ocrCodes.isNotEmpty()) {
-            if (lookupISBNs((barCodes.asSequence() + ocrCodes.asSequence())) { GoogleBookLookup.generalLookup(it, 0, 20) })
-                return true
-        }
-
-        return false
+        return findBooks(barCodes.asSequence())
     }
 
     /**
@@ -1075,26 +1038,6 @@ class ScanFragment : Fragment() {
                             addToCodes(codes, sym.data)
                     }
                 }
-            }
-        }
-    }
-
-    private fun CoroutineScope.ocrISBNs(bm: Bitmap, codes: MutableList<String>): Job {
-        return launch {
-            val grey = Bitmap.createBitmap(bm.width, bm.height, bm.config)
-            gpuCompute.rgbToLum(bm, grey)
-            val text = ocrHandler.convertToText(grey)?: return@launch
-            val findISBN = Regex("ISBN[^ ]* +(([0-9DU?H]+[^0-9X\\s]+)+[0-9XDU?H])", RegexOption.IGNORE_CASE)
-            var result = findISBN.find(text)
-            while (result != null) {
-                val isbn = result.groupValues[1]
-                    .replace('D', '0', true)
-                    .replace('U', '0', true)
-                    .replace('?', '7')
-                    .replace('H', '4', true)
-                    .replace(Regex("[^0-9X]+"), "")
-                addToCodes(codes, isbn)
-                result = result.next()
             }
         }
     }
