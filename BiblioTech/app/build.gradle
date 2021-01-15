@@ -95,4 +95,6 @@ dependencies {
     implementation "androidx.camera:camera-extensions:1.0.0-alpha20"
 
     implementation "com.google.android:flexbox:$flexbox_version"
+
+    implementation 'com.rmtheis:tess-two:9.1.0'
 }

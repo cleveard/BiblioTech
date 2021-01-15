@@ -6,7 +6,7 @@ import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
-import android.graphics.Bitmap
+import android.graphics.*
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.text.Editable
@@ -17,20 +17,20 @@ import android.util.SparseArray
 import android.view.*
 import android.widget.*
 import androidx.camera.core.*
+import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.Observer
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.BiblioTech.*
 import com.github.cleveard.BiblioTech.R
+import com.github.cleveard.BiblioTech.tesstwo.TessTwoHandler
 import com.github.cleveard.BiblioTech.ui.books.BooksAdapter
 import com.github.cleveard.BiblioTech.ui.books.BooksViewModel
 import com.github.cleveard.BiblioTech.ui.tags.TagViewModel
@@ -39,6 +39,7 @@ import com.github.cleveard.BiblioTech.ui.widget.ChipBox
 import com.github.cleveard.BiblioTech.utils.*
 import com.github.cleveard.BiblioTech.utils.ParentAccess
 import com.google.android.material.chip.Chip
+import com.google.common.util.concurrent.ListenableFuture
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
@@ -52,8 +53,9 @@ import java.nio.ByteBuffer
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -61,10 +63,9 @@ import kotlin.math.min
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
-/**
- * Helper type alias used for analysis use case callbacks
- */
-typealias BarcodeListener = (codes: List<String>) -> Unit
+@Suppress("SpellCheckingInspection")
+private const val TESSASSETS = "tessdata"
+private const val LANGUAGE = "eng"
 
 /**
  * Replace the entire contents of an editable with another
@@ -76,10 +77,18 @@ fun Editable.setString(text: String): Editable {
     return this
 }
 
+class ScanViewModel: ViewModel()
+
 /**
  * Bar code scan fragment
  */
 class ScanFragment : Fragment() {
+    /**
+     * Scan view model
+     * Only used for its viewModelScope
+     */
+    private lateinit var scanViewModel: ScanViewModel
+
     /**
      * The books view model
      */
@@ -126,6 +135,16 @@ class ScanFragment : Fragment() {
     private lateinit var scanner: ImageScanner
 
     /**
+     * Handler for the OCR package
+     */
+    private lateinit var ocrHandler: TessTwoHandler
+
+    /**
+     * GPU compute interface
+     */
+    private lateinit var gpuCompute: GpuCompute
+
+    /**
      * Display id of the camera preview view
      */
     private var displayId = -1
@@ -145,39 +164,30 @@ class ScanFragment : Fragment() {
      */
     private var preview: Preview? = null
 
-    /**
-     * Image capture stream
-     */
-    // TODO: Is this needed?
+    /** Image capture stream */
     private var imageCapture: ImageCapture? = null
 
-    /**
-     * Image analyzer - used to analyze images captured from the camera
-     */
-    private var imageAnalyzer: ImageAnalysis? = null
+    /** Job capturing and interpreting image */
+    private var captureJob: Job? = null
 
     /** Blocking camera operations are performed using this executor */
     private lateinit var cameraExecutor: ExecutorService
 
-    /**
-     * Flag that turns bar code scanning on and off.
-     * Set this to true to start scanning for a barcode
-     * Set to false when you are done.
-     */
-    private var previewing = false
+    /** Listener used to detect when the camera is focused **/
+    private var focusing: Boolean = false
 
     /**
      * Selection changed listener
      */
     private val selectChange: () -> Unit = {
-        chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(tags?.value))
+        chipBox?.setChips(scanViewModel.viewModelScope, selectedNames(tags?.value))
     }
 
     /**
      * Observer of tag list live data
      */
     private val tagObserver: Observer<List<TagEntity>?> = Observer { list ->
-        chipBox?.setChips(tagViewModel.viewModelScope, selectedNames(list))
+        chipBox?.setChips(scanViewModel.viewModelScope, selectedNames(list))
     }
 
     /**
@@ -225,6 +235,9 @@ class ScanFragment : Fragment() {
         scanner = ImageScanner()
         scanner.setConfig(0, Config.X_DENSITY, 3)
         scanner.setConfig(0, Config.Y_DENSITY, 3)
+
+        ocrHandler = TessTwoHandler(requireContext(), TESSASSETS, MainActivity.cache, LANGUAGE)
+        gpuCompute = GpuCompute(requireContext())
     }
 
     /**
@@ -254,12 +267,29 @@ class ScanFragment : Fragment() {
                 // When the volume down button is pressed, scan the bar code
                 KeyEvent.KEYCODE_VOLUME_DOWN,
                 KeyEvent.KEYCODE_VOLUME_UP -> {
-                    // Clear the isbn and title fields
-                    clearView()
-                    // Focus the camera
-                    focus()
-                    // Turn on bar code scanning in the analyzer
-                    previewing = true
+                    captureJob = captureJob?: scanViewModel.viewModelScope.launch {
+                        try {
+                            if (focus()) {
+                                // Capture an image
+                                val image = capture()?: return@launch
+                                // Convert it to a bitmap and crop to the viewFinder
+                                val bitmap = extractAndRotate(image.use { convert(it) },
+                                    viewFinder.width, viewFinder.height,
+                                    image.imageInfo.rotationDegrees)
+                                // Process the image
+                                if (!processImage(bitmap, this)) {
+                                    // If we got here we didn't find anything
+                                    Toast.makeText(
+                                        context,
+                                        requireContext().resources.getString(R.string.no_books_found),
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        } finally {
+                            captureJob = null
+                        }
+                    }
                 }
             }
         }
@@ -281,8 +311,7 @@ class ScanFragment : Fragment() {
         override fun onDisplayChanged(displayId: Int) = view?.let { view ->
             if (displayId == this@ScanFragment.displayId) {
                 Log.d(TAG, "Rotation changed: ${view.display.rotation}")
-                imageCapture?.targetRotation = view.display.rotation
-                imageAnalyzer?.targetRotation = view.display.rotation
+                this@ScanFragment.imageCapture?.targetRotation = view.display.rotation
             }
         } ?: Unit
     }
@@ -327,6 +356,7 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
+        scanViewModel = ViewModelProvider(this).get(ScanViewModel::class.java)
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
@@ -393,10 +423,11 @@ class ScanFragment : Fragment() {
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
 
+            Log.d(TAG, "ViewFinder: ${viewFinder.width}x${viewFinder.height}")
             if (hasPermissions(requireContext())) {
                 setUpCamera()
             } else {
-                booksViewModel.viewModelScope.launch {
+                scanViewModel.viewModelScope.launch {
                     if (requireActivity().shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
                         coroutineAlert(requireContext(), { }) { alert ->
                             // Present the dialog
@@ -483,7 +514,7 @@ class ScanFragment : Fragment() {
         var autoCompleteJob: Job? = null
         box.delegate = object: ChipBox.Delegate {
             override val scope: CoroutineScope
-                get() = tagViewModel.viewModelScope
+                get() = scanViewModel.viewModelScope
 
             override suspend fun onCreateChip(
                 chipBox: ChipBox,
@@ -513,7 +544,7 @@ class ScanFragment : Fragment() {
                     // This is done in a coroutine job and we use the job
                     // to flag that the job is still active. When we lose focus
                     // we cancel the job if it is still active
-                    autoCompleteJob = booksViewModel.viewModelScope.launch {
+                    autoCompleteJob = scanViewModel.viewModelScope.launch {
                         // Get the cursor for the column, null means no auto complete
                         val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
                             getQuery()
@@ -558,7 +589,7 @@ class ScanFragment : Fragment() {
                 }
         }
 
-        tagViewModel.viewModelScope.launch {
+        scanViewModel.viewModelScope.launch {
             tags = tagViewModel.repo.getTagsLive().also {
                 it.observeForever(tagObserver)
             }
@@ -628,36 +659,16 @@ class ScanFragment : Fragment() {
             .build()
 
         // Set up the capture use case to allow users to take photos
-        imageCapture = ImageCapture.Builder()
+        this.imageCapture = ImageCapture.Builder()
             // We request aspect ratio but no resolution to match preview config but letting
             // CameraX optimize for whatever specific resolution best fits requested capture mode
-            .setTargetAspectRatio(screenAspectRatio)
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             // Set initial target rotation, we will have to call this again if rotation changes
             // during the lifecycle of this use case
             .setTargetRotation(rotation)
+            // Go for high quality
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .build()
-
-        // Setup image analysis pipeline that computes average pixel luminance in real time
-        imageAnalyzer = ImageAnalysis.Builder()
-            // We request aspect ratio but no resolution to match preview config but letting
-            // CameraX optimize for whatever specific resolution best fits requested capture mode
-            .setTargetAspectRatio(screenAspectRatio)
-            // Set initial target rotation, we will have to call this again if rotation changes
-            // during the lifecycle of this use case
-            .setTargetRotation(rotation)
-            .build()
-            .also {analyzer ->
-                // Run the analysis on the main thread and use the BarcodeScanner class
-                analyzer.setAnalyzer(cameraExecutor, BarcodeScanner { codes ->
-                    // Start a coroutine job to run query for the book
-                    booksViewModel.viewModelScope.launch {
-                        // Display the bar codes in the UI
-                        container.findViewById<EditText>(R.id.scan_isbn).text.setString(codes.joinToString(" "))
-
-                        findBooks(codes.asSequence())
-                    }
-                })
-            }
 
         // Must unbind the use-cases before rebinding them
         cameraProvider.unbindAll()
@@ -665,7 +676,7 @@ class ScanFragment : Fragment() {
         try {
             // Apply declared configs to CameraX using the same lifecycle owner
             camera = cameraProvider.bindToLifecycle(
-                this, cameraSelector, preview, imageCapture, imageAnalyzer
+                this, cameraSelector, preview, imageCapture
             )
 
             // Attach the viewfinder's surface provider to preview use case
@@ -749,7 +760,7 @@ class ScanFragment : Fragment() {
             return
 
         // Start a coroutine job to run query for the book
-        booksViewModel.viewModelScope.launch {
+        scanViewModel.viewModelScope.launch {
             // Look through the codes we found
             try {
                 if (isbn.isNotEmpty()) {
@@ -827,7 +838,10 @@ class ScanFragment : Fragment() {
     /**
      * Start auto focus for the camera
      */
-    private fun focus(): Boolean {
+    private suspend fun focus(retries: Int = 3): Boolean {
+        if (focusing)
+            return false
+
         // Position where we want to focus
         val x = viewFinder.x + viewFinder.width / 2f
         val y = viewFinder.y + viewFinder.height / 2f
@@ -839,100 +853,260 @@ class ScanFragment : Fragment() {
         val afPoint = pointFactory.createPoint(x, y, afPointWidth)
         val aePoint = pointFactory.createPoint(x, y, aePointWidth)
 
-        try {
-            // Start the auto focus
-            camera?.cameraControl?.startFocusAndMetering(
+        fun doFocus(): ListenableFuture<FocusMeteringResult>? {
+            return camera?.cameraControl?.startFocusAndMetering(
                 FocusMeteringAction.Builder(afPoint, FocusMeteringAction.FLAG_AF)
-                                           .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
-                                           .build()
-            )
+                    .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
+                    .build())
+        }
+        return try {
+            focusing = true
+            // Start the auto focus
+            var result = doFocus()?: return false
+
+            var attempts = 0
+            val focused = withContext(Dispatchers.IO) {
+                // Loop until we get focussed, or we run out of attempts
+                @Suppress("BlockingMethodInNonBlockingContext")
+                while (result.get()?.isFocusSuccessful != true) {
+                    if (++attempts >= retries) {
+                        return@withContext false
+                    }
+                    result = doFocus()?: return@withContext false
+                }
+                true
+            }
+            focused
         } catch (e: CameraInfoUnavailableException) {
             Log.d(TAG, "cannot access camera", e)
+            false
+        } finally {
+            focusing = false
         }
-
-        return true
     }
 
     /**
-     * Custom analysis code to scan for bar codes
+     * Capture an image from the camera
+     * @return The capture image, or null if the capture failed
      */
-    private inner class BarcodeScanner(listener: BarcodeListener? = null) : ImageAnalysis.Analyzer {
-        private val listeners = ArrayList<BarcodeListener>().apply { listener?.let { add(it) } }
-        private var lastAnalyzedTimestamp = 0L
+    private suspend fun capture(): ImageProxy? {
+        return imageCapture?.let {cap ->
+            suspendCoroutine { cont ->
+                try {
+                    cap.takePicture(
+                        Dispatchers.IO.asExecutor(),
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(image: ImageProxy) {
+                                super.onCaptureSuccess(image)
+                                cont.resume(image)
+                            }
 
-        /**
-         * Helper extension function used to extract a byte array from an image plane buffer
-         */
-        private fun ByteBuffer.toByteArray(): ByteArray {
-            rewind()    // Rewind the buffer to zero
-            val data = ByteArray(remaining())
-            get(data)   // Copy the buffer into a byte array
-            return data // Return the byte array
+                            override fun onError(exception: ImageCaptureException) {
+                                super.onError(exception)
+                                Log.d(TAG, "Start capture failed $exception")
+                                cont.resume(null)
+                            }
+                        })
+                } catch (e: Exception) {
+                    Log.d(TAG, "Start capture failed $e")
+                    cont.resume(null)
+                }
+            }
+        }
+    }
+
+    /**
+     * Convert and image into a bitmap
+     * @param image The image to convert
+     * @return The converted bitmap
+     */
+    private suspend fun convert(image: ImageProxy): Bitmap {
+        // Do this on a worker thread
+        return withContext(Dispatchers.IO) {
+            if (image.format == ImageFormat.JPEG) {
+                // Decode Jpex into a bitmap
+                val array = image.planes[0].buffer.toByteArray()
+                BitmapFactory.decodeByteArray(array, 0, array.size)
+            } else {
+                // Otherwise assume yuv and convert to rgb bitmap
+                Bitmap.createBitmap(
+                    image.width, image.height,
+                    Bitmap.Config.ARGB_8888
+                ).also {
+                    gpuCompute.yuvToRgb(image, it)
+                }
+            }
+        }
+    }
+
+    /**
+     * Extract a subset of the image and rotate to proper orientation
+     * @param bm The source bitmap
+     * @param width The width of the view finder
+     * @param height The height of the view finder
+     * @param rotation The rotation
+     * @return The new bitmap
+     */
+    private fun extractAndRotate(bm: Bitmap, width: Int, height: Int, rotation: Int): Bitmap {
+        // Make a matrix for the rotation
+        val tm = Matrix()
+        tm.postRotate(rotation.toFloat())
+        // Set the extents of the extracted image. The orientation of the
+        // view finder depends on the rotation
+        val vfW: Int
+        val vfH: Int
+        if (rotation == 90 || rotation == 270) {
+            vfW = height
+            vfH = width
+        } else {
+            vfW = width
+            vfH = height
         }
 
-        /**
-         * Analyzes an image to produce a result.
-         *
-         * <p>The caller is responsible for ensuring this analysis method can be executed quickly
-         * enough to prevent stalls in the image acquisition pipeline. Otherwise, newly available
-         * images will not be acquired and analyzed.
-         *
-         * <p>The image passed to this method becomes invalid after this method returns. The caller
-         * should not store external references to this image, as these references will become
-         * invalid.
-         *
-         * @param image image being analyzed VERY IMPORTANT: do not close the image, it will be
-         * automatically closed after this method returns
-         * @return the image analysis result
-         */
-        override fun analyze(image: ImageProxy) {
-            // If there are no listeners attached, we don't need to perform analysis
-            if (listeners.isEmpty() || !previewing) {
-                image.close()
-                return
+        // Set the extents based on the aspect ratio of the view finder
+        val x: Int
+        val y: Int
+        val w: Int
+        val h: Int
+        if (bm.width * vfH > bm.height * vfW) {
+            y = 0
+            h = bm.height
+            w = (h * vfW + vfH - 1) / vfH   // Round up
+            x = (bm.width - w) / 2
+        } else {
+            x = 0
+            w = bm.width
+            h = (w * vfH + vfW - 1) / vfW   // Round up
+            y = (bm.height - h) / 2
+        }
+
+        // Create the bitmap
+        return Bitmap.createBitmap(bm, x, y, w, h, tm, true)
+    }
+
+    /**
+     * Process an image and extract the ISBNs
+     * @param image The image in a bitmap
+     * @param scope The coroutine scope for background jobs
+     */
+    private suspend fun processImage(image: Bitmap, scope: CoroutineScope): Boolean {
+        suspend fun lookup1(codes: List<String>): Boolean {
+            // The scanner is faster than OCR, so check it first
+            if (codes.isNotEmpty()) {
+                // Display the bar codes in the UI
+                container.findViewById<EditText>(R.id.scan_isbn).text.setString(codes.joinToString(" "))
+
+                if (lookupISBNs(codes.asSequence()) { GoogleBookLookup.lookupISBN(it) }) {
+                    // We found a book, cancel the ocr job and return
+                    return true
+                }
+            }
+            return false
+        }
+
+        // Look for bar codes
+        val barCodes = ArrayList<String>()
+        val scannerJob = scope.scanBarcode(image, barCodes)
+
+        // Look for OCR codes
+        val ocrCodes = ArrayList<String>()
+        val ocrJob = scope.ocrISBNs(image, ocrCodes)
+
+        // Expect the scanner to finish first
+        scannerJob.join()
+
+        // The scanner is faster than OCR, so check it first
+        if (lookup1(barCodes)) {
+            // We found a book, return
+            ocrJob.cancel()
+            return true
+        }
+
+        // Try OCR
+        ocrJob.join()
+        // Remove any duplicate codes
+        for (i in ocrCodes.size - 1 downTo 0) {
+            if (barCodes.contains(ocrCodes[i]))
+                ocrCodes.removeAt(i)
+        }
+        // Check the ocr codes
+        if (lookup1(ocrCodes)) {
+            // We found a book, return
+            return true
+        }
+
+        // If there are any codes, then lookup using the general lookup
+        if (barCodes.isNotEmpty() || ocrCodes.isNotEmpty()) {
+            if (lookupISBNs((barCodes.asSequence() + ocrCodes.asSequence())) { GoogleBookLookup.generalLookup(it, 0, 20) })
+                return true
+        }
+
+        return false
+    }
+
+    /**
+     * Scan an image for a barcode
+     */
+    private fun CoroutineScope.scanBarcode(bm: Bitmap, codes: MutableList<String>): Job {
+        return launch(Dispatchers.IO) {
+            // Put the image in the format Z-bar wants
+            val barcode = Image(bm.width, bm.height, "GREY")
+            val array = ByteArray(bm.width * bm.height)
+            gpuCompute.rgbToLum(bm, array)
+            barcode.data = array
+
+            // Scan the image for bar code. Returns 0 if nothing was found
+            val result = try {
+                scanner.scanImage(barcode)
+            } catch (e: Exception) {
+                Log.d(TAG, "ZBar failed $e")
+                0
             }
 
-            // Keep track of frames analyzed
-            val currentTime = System.currentTimeMillis()
-
-            // scan barcode no more often than every .25 seconds
-            if (currentTime - lastAnalyzedTimestamp >= TimeUnit.MILLISECONDS.toMillis(250)) {
-                lastAnalyzedTimestamp = currentTime
-
-                // Put the image in the format Z-bar wants
-                val barcode = Image(image.width, image.height, "GREY")
-                // Since format in ImageAnalysis is YUV, image.planes[0] contains the luminance
-                //  plane. Use that as a gray level image
-                val data = image.planes[0].buffer.toByteArray()
-                barcode.data = data
-
-                // Scan the image for bar code. Returns 0 if nothing was found
-                val result: Int = scanner.scanImage(barcode)
-
-                if (result != 0) {
-                    // Get the results and look for ISBN codes
-                    val symbols = scanner.results
-                    val codes = ArrayList<String>()
-                    for (sym in symbols) {
-                        // When we find an ISBN, add it to the codes
-                        when (sym.type) {
-                            Symbol.ISBN10,
-                            Symbol.ISBN13,
-                            Symbol.EAN13 ->
-                                addToCodes(codes, sym.data)
-                        }
-                    }
-
-                    // Call all listeners with codes we found
-                    if (codes.isNotEmpty()) {
-                        // We found something, so stop analyzing
-                        previewing = false
-                        listeners.forEach { it(codes) }
+            if (result != 0) {
+                // Get the results and look for ISBN codes
+                val symbols = scanner.results
+                for (sym in symbols) {
+                    // When we find an ISBN, add it to the codes
+                    when (sym.type) {
+                        Symbol.ISBN10,
+                        Symbol.ISBN13,
+                        Symbol.EAN13 ->
+                            addToCodes(codes, sym.data)
                     }
                 }
             }
-            image.close()
         }
+    }
+
+    private fun CoroutineScope.ocrISBNs(bm: Bitmap, codes: MutableList<String>): Job {
+        return launch {
+            val grey = Bitmap.createBitmap(bm.width, bm.height, bm.config)
+            gpuCompute.rgbToLum(bm, grey)
+            val text = ocrHandler.convertToText(grey)?: return@launch
+            val findISBN = Regex("ISBN[^ ]* +(([0-9DU?H]+[^0-9X\\s]+)+[0-9XDU?H])", RegexOption.IGNORE_CASE)
+            var result = findISBN.find(text)
+            while (result != null) {
+                val isbn = result.groupValues[1]
+                    .replace('D', '0', true)
+                    .replace('U', '0', true)
+                    .replace('?', '7')
+                    .replace('H', '4', true)
+                    .replace(Regex("[^0-9X]+"), "")
+                addToCodes(codes, isbn)
+                result = result.next()
+            }
+        }
+    }
+
+    /**
+     * Helper extension function used to extract a byte array from an image plane buffer
+     */
+    private fun ByteBuffer.toByteArray(): ByteArray {
+        rewind()    // Rewind the buffer to zero
+        val data = ByteArray(remaining())
+        get(data)   // Copy the buffer into a byte array
+        return data // Return the byte array
     }
 
     companion object {
@@ -1392,7 +1566,7 @@ class ScanFragment : Fragment() {
                     ) {
                         GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
                     }
-                    val flow = pager.flow.cachedIn(booksViewModel.viewModelScope)
+                    val flow = pager.flow.cachedIn(scanViewModel.viewModelScope)
                         .combine(filterFlow) {data, b ->
                             val clone = data.map {book ->
                                 if (book is BookAndAuthors) {
@@ -1414,7 +1588,7 @@ class ScanFragment : Fragment() {
                         }
 
                     // Start the book stream to the recycler view
-                    pagerJob = booksViewModel.viewModelScope.launch {
+                    pagerJob = scanViewModel.viewModelScope.launch {
                         flow.collectLatest { data ->
                             access.adapter.submitData(data)
                         }
