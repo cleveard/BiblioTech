@@ -242,7 +242,7 @@ data class AuthorEntity(
             // look for a space, assume remaining last if found
             lastIndex = name.lastIndexOf(' ')
             if (lastIndex > 0) {
-                lastName = name.substring(lastIndex)
+                lastName = name.substring(lastIndex).trim { it <= ' ' }
                 remainingName = name.substring(0, lastIndex).trim { it <= ' ' }
             }
         }
