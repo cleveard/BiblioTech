@@ -387,11 +387,15 @@ class ScanFragment : Fragment() {
         clearView()
 
         container.findViewById<Button>(R.id.scan_search).setOnClickListener {
-            searchForBooks(
-                container.findViewById<EditText>(R.id.scan_isbn).text.toString(),
-                container.findViewById<EditText>(R.id.scan_title).text.toString(),
-                container.findViewById<EditText>(R.id.scan_author).text.toString()
-            )
+            val titleView = container.findViewById<EditText>(R.id.scan_title)
+            val authorView = container.findViewById<EditText>(R.id.scan_author)
+            val isbn: String
+            // Don't search by ISBN if the author or title have focus
+            if (titleView.hasFocus() || authorView.hasFocus())
+                isbn = ""
+            else
+                isbn = container.findViewById<EditText>(R.id.scan_isbn).text.toString()
+            searchForBooks(isbn, titleView.text.toString(), authorView.text.toString())
         }
         // Set up the intent filter that will receive events from our main activity
         val filter = IntentFilter().apply { addAction(KEY_EVENT_ACTION) }
@@ -763,11 +767,13 @@ class ScanFragment : Fragment() {
                         }
                     }
 
-                    if (codes.isNotEmpty() && findBooks(codes.asSequence()))
-                        return@launch
+                    // Find the books
+                    if (codes.isNotEmpty())
+                        findBooks(codes.asSequence())
+                    return@launch
                 }
 
-                // Lookup using isbn
+                // Lookup using title and/or author
                 val spec = GoogleBookLookup.getTitleAuthorQuery(title, author)
                 val result = GoogleBookLookup.generalLookup(spec)
                 // If we still didn't find anything, stop
