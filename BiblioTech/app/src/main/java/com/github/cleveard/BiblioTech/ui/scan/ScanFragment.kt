@@ -266,14 +266,7 @@ class ScanFragment : Fragment() {
                                     viewFinder.width, viewFinder.height,
                                     image.imageInfo.rotationDegrees)
                                 // Process the image
-                                if (!processImage(bitmap, this)) {
-                                    // If we got here we didn't find anything
-                                    Toast.makeText(
-                                        context,
-                                        requireContext().resources.getString(R.string.no_books_found),
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                }
+                                processImage(bitmap, this)
                             }
                         } finally {
                             captureJob = null
@@ -682,19 +675,24 @@ class ScanFragment : Fragment() {
      * @param codes The ISBNs
      * @return True if a book was found. False otherwise.
      */
-    private suspend fun findBooks(codes: Sequence<String>): Boolean {
-        if (lookupISBNs(codes) { GoogleBookLookup.lookupISBN(it) })
-            return true
-        if (lookupISBNs(codes) { GoogleBookLookup.generalLookup(it, 0, 20) })
-            return true
-
-        // If we got here we didn't find anything
-        Toast.makeText(
-            context,
-            requireContext().resources.getString(R.string.no_books_found),
-            Toast.LENGTH_LONG
-        ).show()
-        return false
+    private suspend fun findBooks(codes: Sequence<String>) {
+        if (codes.firstOrNull() == null) {
+            // If we got here we didn't scan anything
+            Toast.makeText(
+                context,
+                requireContext().resources.getString(R.string.noisbns),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        if (!lookupISBNs(codes) { GoogleBookLookup.lookupISBN(it) } &&
+            !lookupISBNs(codes) { GoogleBookLookup.generalLookup(it, 0, 20) }) {
+            // If we got here we didn't find anything
+            Toast.makeText(
+                context,
+                requireContext().resources.getString(R.string.no_books_found),
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     /**
@@ -768,8 +766,7 @@ class ScanFragment : Fragment() {
                     }
 
                     // Find the books
-                    if (codes.isNotEmpty())
-                        findBooks(codes.asSequence())
+                    findBooks(codes.asSequence())
                     return@launch
                 }
 
@@ -982,42 +979,23 @@ class ScanFragment : Fragment() {
      * @param image The image in a bitmap
      * @param scope The coroutine scope for background jobs
      */
-    private suspend fun processImage(image: Bitmap, scope: CoroutineScope): Boolean {
-        suspend fun lookup1(codes: List<String>): Boolean {
-            // The scanner is faster than OCR, so check it first
-            if (codes.isNotEmpty()) {
-                // Display the bar codes in the UI
-                container.findViewById<EditText>(R.id.scan_isbn).text.setString(codes.joinToString(" "))
-
-                if (lookupISBNs(codes.asSequence()) { GoogleBookLookup.lookupISBN(it) }) {
-                    // We found a book, cancel the ocr job and return
-                    return true
-                }
-            }
-            return false
-        }
-
+    private suspend fun processImage(image: Bitmap, scope: CoroutineScope) {
         // Look for bar codes
         val barCodes = ArrayList<String>()
-        val scannerJob = scope.scanBarcode(image, barCodes)
+        // Scan the bar codes
+        scanBarcode(image, barCodes)
 
-        // Wait for the scanner job
-        scannerJob.join()
-
-        // The scanner is faster than OCR, so check it first
-        if (lookup1(barCodes)) {
-            // We found a book, return
-            return true
-        }
-
-        return findBooks(barCodes.asSequence())
+        // Display the bar codes in the UI
+        container.findViewById<EditText>(R.id.scan_isbn).text.setString(barCodes.joinToString(" "))
+        // Find the books
+        findBooks(barCodes.asSequence())
     }
 
     /**
      * Scan an image for a barcode
      */
-    private fun CoroutineScope.scanBarcode(bm: Bitmap, codes: MutableList<String>): Job {
-        return launch(Dispatchers.IO) {
+    private suspend fun scanBarcode(bm: Bitmap, codes: MutableList<String>) {
+        withContext(Dispatchers.IO) {
             // Put the image in the format Z-bar wants
             val barcode = Image(bm.width, bm.height, "GREY")
             val array = ByteArray(bm.width * bm.height)
