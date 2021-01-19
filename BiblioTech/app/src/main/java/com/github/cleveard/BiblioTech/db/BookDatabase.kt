@@ -955,9 +955,8 @@ abstract class TagDao(private val db: BookDatabase) {
     companion object {
         /** Sub-query that returns the selected tag ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
-            "SELECT $TAGS_ID_COLUMN FROM ( " +
-                "SELECT $TAGS_ID_COLUMN, $TAGS_FLAGS FROM $TAGS_TABLE WHERE ( " +
-                "( $TAGS_FLAGS & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 ) )"
+            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( " +
+            "( $TAGS_FLAGS & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
         }
     }
 }
@@ -1910,9 +1909,8 @@ abstract class BookDao(private val db: BookDatabase) {
     companion object {
         /** Sub-query that returns the selected book ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
-            "SELECT $BOOK_ID_COLUMN FROM ( " +
-                "SELECT $BOOK_ID_COLUMN, $BOOK_FLAGS FROM $BOOK_TABLE WHERE ( " +
-                "( $BOOK_FLAGS & ${BookEntity.SELECTED} ) ${if (it) "==" else "!="} 0 ) )"
+            "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( " +
+            "( $BOOK_FLAGS & ${BookEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
         }
     }
 }

@@ -78,7 +78,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 idFilterBuilder.addSelect(BOOK_ID_COLUMN)
                 // Build the filter without the order terms
                 idFilterBuilder.buildFilter(it.iterator())
-                BookFilter.BuiltFilter("SELECT $BOOK_ID_COLUMN FROM ( ${idFilterBuilder.createCommand()} )", idFilterBuilder.argList.toArray())
+                BookFilter.BuiltFilter(idFilterBuilder.createCommand(), idFilterBuilder.argList.toArray())
             }
         }
         selection.filter = idFilter
