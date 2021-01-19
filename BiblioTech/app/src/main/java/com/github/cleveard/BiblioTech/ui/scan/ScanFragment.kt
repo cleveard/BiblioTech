@@ -266,7 +266,7 @@ class ScanFragment : Fragment() {
                                     viewFinder.width, viewFinder.height,
                                     image.imageInfo.rotationDegrees)
                                 // Process the image
-                                processImage(bitmap, this)
+                                processImage(bitmap)
                             }
                         } finally {
                             captureJob = null
@@ -977,9 +977,8 @@ class ScanFragment : Fragment() {
     /**
      * Process an image and extract the ISBNs
      * @param image The image in a bitmap
-     * @param scope The coroutine scope for background jobs
      */
-    private suspend fun processImage(image: Bitmap, scope: CoroutineScope) {
+    private suspend fun processImage(image: Bitmap) {
         // Look for bar codes
         val barCodes = ArrayList<String>()
         // Scan the bar codes
