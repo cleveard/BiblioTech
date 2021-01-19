@@ -221,8 +221,6 @@ private class SQLiteQueryBuilderImpl(context: Context): SQLiteQueryBuilder(conte
     private val joinSpec: StringBuilder = StringBuilder()
     // Order columns
     private val orderSpec: StringBuilder = StringBuilder()
-    // Group by columns
-    private val groupSpec: StringBuilder = StringBuilder()
     // Where expression
     private val filterSpec: StringBuilder = StringBuilder()
     // Holds expressions for a single field
@@ -257,7 +255,6 @@ private class SQLiteQueryBuilderImpl(context: Context): SQLiteQueryBuilder(conte
         if (orders.indexOf(name) == -1) {
             orders.add(name)
             orderSpec.append("${if (orderSpec.isEmpty()) "" else ", "}$name $direction")
-            groupSpec.append("${if (groupSpec.isEmpty()) "" else ", "}$name")
         }
     }
 
@@ -277,6 +274,14 @@ private class SQLiteQueryBuilderImpl(context: Context): SQLiteQueryBuilder(conte
     }
 
     /** @inheritDoc */
+    override fun wrapFilterExpression(pre: String, post: String) {
+        if (filterFieldExpression.isNotEmpty()) {
+            filterFieldExpression.insert(0, pre)
+            filterFieldExpression.append(post)
+        }
+    }
+
+    /** @inheritDoc */
     override fun endFilterField() {
         // Only append expressions if there are any
         if (filterFieldExpression.isNotEmpty()) {
@@ -288,21 +293,16 @@ private class SQLiteQueryBuilderImpl(context: Context): SQLiteQueryBuilder(conte
     }
 
     /** @inheritDoc */
-    override fun createCommand(): String {
+    override fun createCommand(table: String): String {
         // Build the SQLite command
         val spec = StringBuilder()
-        spec.append("SELECT $selectSpec FROM $BOOK_TABLE")
+        spec.append("SELECT $selectSpec FROM $table")
         // Add joins if there are any
         if (joinSpec.isNotEmpty())
             spec.append(" $joinSpec")
         // Add where if we have a filter
         if (filterSpec.isNotEmpty())
             spec.append(" WHERE $filterSpec")
-        // Add group by if we need it
-        if (groupSpec.isEmpty())
-            spec.append(" GROUP BY $BOOK_ID_COLUMN")
-        else
-            spec.append(" GROUP BY $groupSpec, $BOOK_ID_COLUMN")
         // Add order by if there is one
         if (orderSpec.isNotEmpty())
             spec.append(" ORDER BY $orderSpec")

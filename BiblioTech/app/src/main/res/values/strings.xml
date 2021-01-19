@@ -119,7 +119,9 @@
     <string name="filter_by">Filter</string>
     <string name="predicate">By</string>
     <string name="one_of">is</string>
+    <string name="not_one_of">isn\'t</string>
     <string name="has">has</string>
+    <string name="not_has">hasn\'t</string>
     <string name="gt">&gt;</string>
     <string name="ge">&gt;=</string>
     <string name="lt">&lt;</string>

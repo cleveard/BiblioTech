@@ -17,8 +17,10 @@ open class PredicateDataDescription(
     /** The SQLite operator for the predicate */
     private val operator: String,
     /** True if the predicate needs an escape clause */
-    escape: Boolean)
-{
+    escape: Boolean,
+    /** True if the expression should be negated */
+    val negate: Boolean = false
+) {
     /**
      * Convert the escape character to the escape clause for SQLite
      */
@@ -237,9 +239,18 @@ open class PredicateDataDescription(
 }
 
 /**
- * Predicate for column is one of a set of values
+ * Data description for ONE_OF and NOT_ONE_OF
  */
-private val oneOf = object: PredicateDataDescription(R.string.one_of, "LIKE", true) {
+private class OneOfDataDescription(
+    /** Resource Id of the predicate name */
+    nameResourceId: Int,
+    /** The SQLite operator for the predicate */
+    operator: String,
+    /** True if the predicate needs an escape clause */
+    escape: Boolean,
+    /** True if the expression should be negated */
+    negate: Boolean
+) : PredicateDataDescription(nameResourceId, operator, escape, negate) {
     /** @inheritDoc */
     override fun convertDate(
         buildQuery: BuildQuery,
@@ -258,9 +269,28 @@ private val oneOf = object: PredicateDataDescription(R.string.one_of, "LIKE", tr
 }
 
 /**
- * Predicate for column contains one of a set of values
+ * Predicate for column is one of a set of values
  */
-private val glob = object: PredicateDataDescription(R.string.has, "LIKE", true) {
+private val oneOf = OneOfDataDescription(R.string.one_of, "LIKE", true, false)
+
+/**
+ * Predicate for column is not one of a set of values
+ */
+private val notOneOf = OneOfDataDescription(R.string.not_one_of, "LIKE", true, true)
+
+/**
+ * Data description for GLOB and NOT_GLOB
+ */
+private class GlobDataDescription(
+    /** Resource Id of the predicate name */
+    nameResourceId: Int,
+    /** The SQLite operator for the predicate */
+    operator: String,
+    /** True if the predicate needs an escape clause */
+    escape: Boolean,
+    /** True if the expression should be negated */
+    negate: Boolean
+) : PredicateDataDescription(nameResourceId, operator, escape, negate) {
     override fun convertInt(buildQuery: BuildQuery, v: String): Boolean {
         // Always treat value as string with wildcards
         return convert(buildQuery, v) { "%${escapeLikeWildCards(it)}%" }
@@ -298,6 +328,16 @@ private val glob = object: PredicateDataDescription(R.string.has, "LIKE", true) 
         buildQuery.addFilterExpression(expr.toString())
     }
 }
+
+/**
+ * Predicate for column contains one of a set of values
+ */
+private val glob = GlobDataDescription(R.string.has, "LIKE", true, false)
+
+/**
+ * Predicate for column doexn't contain one of a set of values
+ */
+private val notGlob = GlobDataDescription(R.string.not_has, "LIKE", true, true)
 
 /**
  * Predicate for column is greater than one of a set of values
@@ -359,5 +399,9 @@ enum class Predicate(val desc: PredicateDataDescription) {
     /** Less than */
     LT(lt),
     /** Less than or equal */
-    LE(le)
+    LE(le),
+    /** Match not one of several values */
+    NOT_ONE_OF(notOneOf),
+    /** Not a partial match one of several values */
+    NOT_GLOB(notGlob)
 }

@@ -101,12 +101,19 @@ abstract class BuildQuery(
     abstract fun addFilterExpression(expression: String)
 
     /**
+     * Wrap the current filter expression
+     * @param pre String to insert before the expression
+     * @param post String to insert after the expression
+     */
+    abstract fun wrapFilterExpression(pre: String, post: String)
+
+    /**
      * End adding filter expressions for a filter field
      */
     abstract fun endFilterField()
 
     /**
-     * Make an sqlite builder for a sub-query
+     * Make an SQLite builder for a sub-query
      */
     abstract fun newSQLiteBuilder(): SQLiteQueryBuilder
 }
@@ -141,21 +148,22 @@ abstract class SQLiteQueryBuilder(context: Context): BuildQuery(context) {
     /**
      * Create the SQLiteQuery
      */
-    fun createQuery(): SupportSQLiteQuery {
-        return SimpleSQLiteQuery(createCommand(), argList.toArray())
+    fun createQuery(table: String = BOOK_TABLE): SupportSQLiteQuery {
+        return SimpleSQLiteQuery(createCommand(table), argList.toArray())
 
     }
 
     /**
      * Create the SQLite command
      */
-    abstract fun createCommand(): String
+    abstract fun createCommand(table: String = BOOK_TABLE): String
 }
 
 /**
  * Abstract class used to describe the data in filter columns
  * @param columnNames The database column names used by the filter columns
  * @param nameResourceId The resource id for the localized name of the filter column
+ * @param predicates The predicates allowed with the column
  */
 abstract class ColumnDataDescriptor(
     val columnNames: Array<String>,
@@ -182,29 +190,22 @@ abstract class ColumnDataDescriptor(
     }
 
     /**
-     * Add columns to select
-     * @param buildQuery The query we are building
-     */
-    open fun addSelection(buildQuery: BuildQuery) {
-        // Default to adding columns in order
-        for (f in columnNames)
-            buildQuery.addSelect(f)
-    }
-
-    /**
      * Add an expression using the column
+     * @param buildQuery The query we are building
+     * @param predicate The predicate we want to use
+     * @param values The values we want to use
+     * @return True if an expression was created. False otherwise
      * Default to do nothing, so we can add filters piecemeal
      */
     fun addExpression(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
         // Only process the field if the predicate is allowed
         // for the column and there are filter values
-        if (predicates.indexOf(predicate) >= 0) {
+        return predicates.indexOf(predicate) >= 0 &&
             doAddExpression(buildQuery, predicate, values)
-        }
     }
 
     /**
@@ -212,6 +213,7 @@ abstract class ColumnDataDescriptor(
      * @param buildQuery The query we are building
      * @param predicate The predicate we want to use
      * @param values The values we want to use
+     * @return True if an expression was created. False otherwise
      * This is called by addExpression after checking that there are values
      * and that the predicate is valid for this column
      */
@@ -219,16 +221,35 @@ abstract class ColumnDataDescriptor(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
+        val hasValues = processValues(buildQuery, predicate, values)
+        if (hasValues && predicate.desc.negate)
+            buildQuery.wrapFilterExpression("NOT ( ", " )")
+        return hasValues
+    }
+
+    /**
+     * Process the values for the current expression
+     * @param buildQuery The query we are building
+     * @param predicate The predicate we want to use
+     * @param values The values we want to use
+     * @return True if any values were processed, false otherwise
+     */
+    protected open fun processValues(
+        buildQuery: BuildQuery,
+        predicate: Predicate,
+        values: Array<String>
+    ): Boolean {
+        var hasValues = false
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
             if (convert(buildQuery, predicate, v)) {
-                addSelection(buildQuery)
-                addJoin(buildQuery)
+                hasValues = true
                 predicate.desc.buildExpression(buildQuery, columnNames)
             }
         }
+        return hasValues
     }
 
     /**
@@ -333,11 +354,73 @@ abstract class ColumnDataDescriptor(
     }
 }
 
+/**
+ * Abstract class used to describe the data in filter columns that require sub-queries
+ * @param columnNames The database column names used by the filter columns
+ * @param nameResourceId The resource id for the localized name of the filter column
+ * @param predicates The predicates allowed with the column
+ * @param selectColumn The column from the selected table used in the sub-query
+ * @param queryTable The table the filter values are in
+ * @param joinTable The table that connects the select table and the filter values
+ */
+abstract class SubQueryColumnDataDescriptor(
+    columnNames: Array<String>,
+    nameResourceId: Int,
+   predicates: Array<Predicate>,
+    private val selectColumn: String,
+    private val queryTable: QueryTable,
+    private val joinTable: JoinTable,
+) : ColumnDataDescriptor(columnNames, nameResourceId, predicates) {
+    /**
+     * Description of the table the filter values are in
+     * @param name The name of the table
+     * @param idColumn The idColumn of the table
+     */
+    data class QueryTable(val name: String, val idColumn: String)
+
+    /**
+     * Description of the table that connects the filter values and the main table
+     * @param name The name of the table
+     * @param selectColumn The name of the column that connects to the main table
+     * @param queryColumn The name of the column that connects to the filter values
+     */
+    data class JoinTable(val name: String, val selectColumn: String, val queryColumn: String)
+
+    /** @inheritDoc */
+    override fun doAddExpression(
+        buildQuery: BuildQuery,
+        predicate: Predicate,
+        values: Array<String>
+    ): Boolean {
+        // Get the sub query builder
+        val subQuery = buildQuery.newSQLiteBuilder()
+        // Select the id column
+        subQuery.addSelect(queryTable.idColumn)
+        // Start the expression
+        subQuery.beginFilterField()
+        // Process the values
+        val hasExpr = processValues(subQuery, predicate, values)
+        subQuery.endFilterField()
+
+        if (hasExpr) {
+            val subExpr = subQuery.createCommand(queryTable.name)
+            val expr =
+                "${if (predicate.desc.negate) "NOT " else ""}EXISTS ( SELECT NULL FROM ${joinTable.name} WHERE $selectColumn = ${joinTable.selectColumn} AND ${joinTable.queryColumn} IN ( $subExpr ) )"
+            buildQuery.addFilterExpression(expr)
+            buildQuery.argList.addAll(subQuery.argList)
+        }
+        return hasExpr
+    }
+}
+
 /** Author - Last, First */
-private val lastFirst = object: ColumnDataDescriptor(
+private val lastFirst = object: SubQueryColumnDataDescriptor(
     arrayOf(LAST_NAME_COLUMN, REMAINING_COLUMN),
     R.string.author,
-    emptyArray()        // Both author columns filter the same. Only use one
+    emptyArray(),        // Both author columns filter the same. Only use one
+    BOOK_ID_COLUMN,
+    QueryTable(AUTHORS_TABLE, AUTHORS_ID_COLUMN),
+    JoinTable(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -357,10 +440,13 @@ private val lastFirst = object: ColumnDataDescriptor(
 }
 
 /** Author - First Last */
-private val firstLast = object: ColumnDataDescriptor(
+private val firstLast = object: SubQueryColumnDataDescriptor(
     arrayOf(REMAINING_COLUMN, LAST_NAME_COLUMN),
     R.string.author,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
+    BOOK_ID_COLUMN,
+    QueryTable(AUTHORS_TABLE, AUTHORS_ID_COLUMN),
+    JoinTable(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -379,23 +465,21 @@ private val firstLast = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun doAddExpression(
+    override fun processValues(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
+        var hasValues = false
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
             if (convert(buildQuery, predicate, v)) {
-                addJoin(buildQuery)
-                buildQuery.addSelect("$REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN AS _author")
-                predicate.desc.buildExpression(buildQuery, arrayOf("_author"))
+                hasValues = true
+                predicate.desc.buildExpression(buildQuery, arrayOf("( $REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN )"))
             }
         }
-
-        // We need to add a join for this filter
-        addJoin(buildQuery)
+        return hasValues
     }
 
     /** @inheritDoc */
@@ -414,7 +498,7 @@ private val firstLast = object: ColumnDataDescriptor(
 private val anyColumn = object: ColumnDataDescriptor(
     arrayOf(),
     R.string.any,
-    arrayOf(Predicate.GLOB)
+    arrayOf(Predicate.GLOB, Predicate.NOT_GLOB)
 ) {
     // Set of columns to exclude from the Any column
     private val excludeFilterColumn = arrayOf<Column>()
@@ -428,10 +512,6 @@ private val anyColumn = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun addSelection(buildQuery: BuildQuery) {
-    }
-
-    /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
         return false
     }
@@ -442,16 +522,18 @@ private val anyColumn = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun doAddExpression(
+    override fun processValues(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
+        var hasValues = false
         // Add an expression for every other column unless excluded
         for (c in Column.values()) {
             if (c.desc != this && excludeFilterColumn.indexOf(c) == -1)
-                c.desc.addExpression(buildQuery, predicate, values)
+                hasValues = c.desc.addExpression(buildQuery, predicate, values) || hasValues
         }
+        return hasValues
     }
 }
 
@@ -459,7 +541,7 @@ private val anyColumn = object: ColumnDataDescriptor(
 private val title = object: ColumnDataDescriptor(
     arrayOf(TITLE_COLUMN),
     R.string.title,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -487,7 +569,7 @@ private val title = object: ColumnDataDescriptor(
 private val subtitle = object: ColumnDataDescriptor(
     arrayOf(SUBTITLE_COLUMN),
     R.string.subtitle,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -507,7 +589,7 @@ private val subtitle = object: ColumnDataDescriptor(
 private val description = object: ColumnDataDescriptor(
     arrayOf(DESCRIPTION_COLUMN),
     R.string.description,
-    arrayOf(Predicate.GLOB)
+    arrayOf(Predicate.GLOB, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -521,10 +603,13 @@ private val description = object: ColumnDataDescriptor(
 }
 
 /** Tags */
-private val tags = object: ColumnDataDescriptor(
+private val tags = object: SubQueryColumnDataDescriptor(
     arrayOf(TAGS_NAME_COLUMN),
     R.string.tag,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
+    BOOK_ID_COLUMN,
+    QueryTable(TAGS_TABLE, TAGS_ID_COLUMN),
+    JoinTable(BOOK_TAGS_TABLE, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -555,10 +640,13 @@ private val tags = object: ColumnDataDescriptor(
 }
 
 /** Categories */
-private val categories = object: ColumnDataDescriptor(
+private val categories = object: SubQueryColumnDataDescriptor(
     arrayOf(CATEGORY_COLUMN),
     R.string.category,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
+    BOOK_ID_COLUMN,
+    QueryTable(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN),
+    JoinTable(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -592,7 +680,7 @@ private val categories = object: ColumnDataDescriptor(
 private val source = object: ColumnDataDescriptor(
     arrayOf(SOURCE_ID_COLUMN),
     R.string.source,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -620,7 +708,7 @@ private val source = object: ColumnDataDescriptor(
 private val sourceId = object: ColumnDataDescriptor(
     arrayOf(VOLUME_ID_COLUMN),
     R.string.volume,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -637,7 +725,7 @@ private val sourceId = object: ColumnDataDescriptor(
 private val isbn = object: ColumnDataDescriptor(
     arrayOf(ISBN_COLUMN),
     R.string.isbn,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -654,7 +742,7 @@ private val isbn = object: ColumnDataDescriptor(
 private val pageCount = object: ColumnDataDescriptor(
     arrayOf(PAGE_COUNT_COLUMN),
     R.string.pages,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -681,7 +769,7 @@ private val pageCount = object: ColumnDataDescriptor(
 private val bookCount = object: ColumnDataDescriptor(
     arrayOf(BOOK_COUNT_COLUMN),
     R.string.books,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB)
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE, Predicate.GLOB, Predicate.NOT_GLOB)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -708,7 +796,7 @@ private val bookCount = object: ColumnDataDescriptor(
 private val rating = object: ColumnDataDescriptor(
     arrayOf(RATING_COLUMN),
     R.string.rating,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -735,7 +823,7 @@ private val rating = object: ColumnDataDescriptor(
 private val dateAdded = object: ColumnDataDescriptor(
     arrayOf(DATE_ADDED_COLUMN),
     R.string.date_added,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
 ) {
     /**
      * @inheritDoc
@@ -760,20 +848,21 @@ private val dateAdded = object: ColumnDataDescriptor(
     /**
      * @inheritDoc
      */
-    override fun doAddExpression(
+    override fun processValues(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
+        var hasValues = false
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
             if (predicate.desc.convertDate(buildQuery, v)) {
-                addSelection(buildQuery)
-                addJoin(buildQuery)
+                hasValues = true
                 predicate.desc.buildExpressionDate(buildQuery, columnNames)
             }
         }
+        return hasValues
     }
 }
 
@@ -781,7 +870,7 @@ private val dateAdded = object: ColumnDataDescriptor(
 private val dateModified = object: ColumnDataDescriptor(
     arrayOf(DATE_MODIFIED_COLUMN),
     R.string.date_changed,
-    arrayOf(Predicate.ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.GT, Predicate.GE, Predicate.LT, Predicate.LE)
 ) {
     /**
      * @inheritDoc
@@ -806,19 +895,20 @@ private val dateModified = object: ColumnDataDescriptor(
     /**
      * @inheritDoc
      */
-    override fun doAddExpression(
+    override fun processValues(
         buildQuery: BuildQuery,
         predicate: Predicate,
         values: Array<String>
-    ) {
+    ): Boolean {
+        var hasValues = false
         // Loop through the values and add the expression for each one
         for (v in values) {
             // If we can convert the value add the expression
             if (predicate.desc.convertDate(buildQuery, v)) {
-                addSelection(buildQuery)
-                addJoin(buildQuery)
+                hasValues = true
                 predicate.desc.buildExpressionDate(buildQuery, columnNames)
             }
         }
+        return hasValues
     }
 }
