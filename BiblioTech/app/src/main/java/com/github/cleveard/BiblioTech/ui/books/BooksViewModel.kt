@@ -18,6 +18,7 @@ import com.github.cleveard.BiblioTech.R
 import com.github.cleveard.BiblioTech.db.*
 import com.github.cleveard.BiblioTech.ui.tags.TagsFragment
 import com.github.cleveard.BiblioTech.utils.GenericViewModel
+import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -42,11 +43,26 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * The adapter for the book recycler view
      */
-    internal val adapter: BooksAdapter = BooksAdapter(
-        this,
+    internal val adapter: BooksAdapter = object: BooksAdapter(
+        this@BooksViewModel,
         R.layout.books_adapter_book_item_always,
         R.layout.books_adapter_book_item_detail
-    )
+    ), RecyclerViewFastScroller.OnPopupTextUpdate {
+        override fun onChange(position: Int): CharSequence {
+            for (pos in position until itemCount) {
+                val book = peek(pos) as? BookAndAuthors
+                if (book != null) {
+                    return filterView.value?.filter?.orderList?.let {order ->
+                        if (order.isEmpty())
+                            null
+                        else
+                            order[0].column.desc.getValue(book, context)
+                    }?: position.toString()
+                }
+            }
+            return ""
+        }
+    }
 
     /**
      * Selection set used to mark open books
