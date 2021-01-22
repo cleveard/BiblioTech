@@ -20,7 +20,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="1dp"
-        android:text=":"
+        android:text="@string/colon"
         app:layout_constraintBaseline_toBaselineOf="@id/tag_name"
         app:layout_constraintStart_toEndOf="@id/tag_name" />
 

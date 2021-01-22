@@ -13,7 +13,8 @@
         android:selectAllOnFocus="true"
         android:singleLine="true"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:importantForAutofill="no" />
 
     <EditText
         android:id="@+id/edit_tag_desc"
@@ -26,5 +27,6 @@
         android:selectAllOnFocus="true"
         android:singleLine="false"
         app:layout_constraintStart_toStartOf="@id/edit_tag_name"
-        app:layout_constraintTop_toBottomOf="@id/edit_tag_name" />
+        app:layout_constraintTop_toBottomOf="@id/edit_tag_name"
+        android:importantForAutofill="no" />
 </androidx.constraintlayout.widget.ConstraintLayout>

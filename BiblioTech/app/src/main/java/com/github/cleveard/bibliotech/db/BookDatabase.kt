@@ -515,6 +515,7 @@ data class BookAndAuthors(
     }
 
     companion object {
+        @Suppress("unused")
         @JvmField
         val CREATOR = object : Parcelable.Creator<BookAndAuthors> {
             override fun createFromParcel(src: Parcel): BookAndAuthors {
@@ -1601,20 +1602,6 @@ abstract class BookDao(private val db: BookDatabase) {
             selectedIdSubQuery,
             bookIds,
             false)?.let {query -> queryBookIds(query)?.map { it.id } }
-    }
-
-    /**
-     * Query book id count
-     * @param filter A filter to restrict the book ids
-     */
-    suspend fun querySelectedBookIdCount(filter: BookFilter.BuiltFilter? = null): Int {
-        return BookDatabase.buildQueryForIds(
-            "SELECT COUNT($BOOK_ID_COLUMN) FROM $BOOK_TABLE",
-            filter,
-            BOOK_ID_COLUMN,
-            selectedIdSubQuery,
-            null,
-            false)?.let {query -> queryBookIdCount(query) }?: 0
     }
 
     /**

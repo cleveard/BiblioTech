@@ -57,7 +57,7 @@ internal open class BooksAdapter(
             // Is this already done
             if (m_nothumb == null) {
                 // Get the thumbnail
-                m_nothumb = ResourcesCompat.getDrawable(context.resources, R.drawable.nothumb, null)
+                m_nothumb = ResourcesCompat.getDrawable(context.resources, R.drawable.no_thumb, null)
             }
             return m_nothumb
         }
@@ -388,7 +388,7 @@ internal open class BooksAdapter(
                     it.name
                 }
                 book.book.description.setField(itemView, R.id.book_desc)
-                book.book.volumeId.setField(itemView, R.id.book_volid)
+                book.book.volumeId.setField(itemView, R.id.book_vol_id)
                 book.book.ISBN.setField(itemView, R.id.book_isbn)
                 book.book.linkUrl.setField(itemView, R.id.book_list_link)
                 book.book.pageCount.toString().setField(itemView, R.id.book_list_pages)

@@ -11,6 +11,7 @@ import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.db.Order
 import com.github.cleveard.bibliotech.db.OrderField
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.switchmaterial.SwitchMaterial
 
 /**
  * UI handler for filters
@@ -100,7 +101,7 @@ class OrderTable(private val fragment: Fragment) {
                 else
                     Order.Ascending,
                 // Get the use header flag
-                row.findViewById<Switch>(R.id.action_use_header).isChecked
+                row.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked
             )
         }
 
@@ -208,7 +209,7 @@ class OrderTable(private val fragment: Fragment) {
         // Set the column
         rowView.findViewById<Spinner>(R.id.action_order_by).setSelection(columnMap.indexOf(field.column.name))
         // Set use headers
-        rowView.findViewById<Switch>(R.id.action_use_header).isChecked = field.headers
+        rowView.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked = field.headers
     }
 
     fun setOrder(order: Array<OrderField>?) {

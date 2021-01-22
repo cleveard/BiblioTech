@@ -108,7 +108,7 @@
         android:text="@string/id" />
 
     <TextView
-        android:id="@+id/book_volid"
+        android:id="@+id/book_vol_id"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="3dp"
@@ -176,7 +176,8 @@
         android:layout_marginTop="3dp"
         android:adjustViewBounds="true"
         android:scaleType="fitXY"
-        android:src="@drawable/nothumb" />
+        android:src="@drawable/no_thumb"
+        android:contentDescription="@string/book_thumb" />
 
     <TextView
         android:id="@+id/book_desc"

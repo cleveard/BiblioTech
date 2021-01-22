@@ -9,7 +9,7 @@ class CascadeLiveData<T>: MediatorLiveData<T>() {
     /**
      * The source live data
      */
-    var sourceValue: LiveData<T> = MutableLiveData<T>(null)
+    var sourceValue: LiveData<T> = MutableLiveData(null)
         set(l) {
             removeSource(field)
             field = l

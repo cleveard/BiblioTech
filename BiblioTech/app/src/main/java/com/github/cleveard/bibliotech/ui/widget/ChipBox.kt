@@ -167,13 +167,6 @@ open class ChipBox: FlexboxLayout {
         }
 
     /**
-     * Container for the edit text
-     */
-    private var _editContainer: View? = null
-    val editContainer: View?
-        get() = _editContainer
-
-    /**
      * The Main Action assigned to the edit text
      */
     private var mainAction: Int = 0

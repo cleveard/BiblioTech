@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
+import androidx.navigation.fragment.NavHostFragment
 import java.io.File
 import com.github.cleveard.bibliotech.db.*
 import kotlinx.coroutines.MainScope
@@ -122,7 +123,9 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         // Setup the navigation drawer
         val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
         navView = findViewById(R.id.nav_view)
-        navController = findNavController(R.id.nav_host_fragment)
+        val navHostFragment =
+            supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        navController = navHostFragment.navController
         // Listen to destination changes
         navController.addOnDestinationChangedListener { _, destination, arguments ->
             lastNavId = destination.id

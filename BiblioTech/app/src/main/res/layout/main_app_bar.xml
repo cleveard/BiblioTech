@@ -37,7 +37,7 @@
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
         app:behavior_peekHeight="16sp" >
 
-        <fragment
+        <androidx.fragment.app.FragmentContainerView
             android:id="@+id/fragment"
             android:name="com.github.cleveard.bibliotech.ui.tags.TagsFragment"
             android:layout_width="match_parent"

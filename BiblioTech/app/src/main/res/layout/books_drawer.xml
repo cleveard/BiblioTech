@@ -42,7 +42,8 @@
             app:iconGravity="textStart"
             app:layout_constraintBaseline_toBaselineOf="@id/action_save_filter"
             app:layout_constraintEnd_toStartOf="@id/action_new_filter"
-            app:strokeColor="@color/colorPrimaryDark" />
+            app:strokeColor="@color/colorPrimaryDark"
+            tools:ignore="RtlSymmetry" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/action_new_filter"
@@ -62,7 +63,8 @@
             app:iconGravity="textStart"
             app:layout_constraintBaseline_toBaselineOf="@id/action_save_filter"
             app:layout_constraintEnd_toStartOf="@id/action_save_filter"
-            app:strokeColor="@color/colorPrimaryDark" />
+            app:strokeColor="@color/colorPrimaryDark"
+            tools:ignore="RtlSymmetry" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/action_save_filter"
@@ -83,7 +85,8 @@
             app:iconGravity="textStart"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:strokeColor="@color/colorPrimaryDark" />
+            app:strokeColor="@color/colorPrimaryDark"
+            tools:ignore="RtlSymmetry" />
 
         <View
             android:id="@+id/end_filter"

@@ -2,6 +2,7 @@
 <TableRow
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
@@ -20,7 +21,8 @@
         app:cornerRadius="4dp"
         app:icon="@drawable/ic_baseline_remove_24"
         app:iconGravity="textStart"
-        app:strokeColor="@color/colorPrimaryDark" />
+        app:strokeColor="@color/colorPrimaryDark"
+        tools:ignore="RtlSymmetry" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/action_sort_dir"
@@ -39,7 +41,8 @@
         app:icon="@drawable/ic_sort_direction_24"
         app:iconGravity="textStart"
         app:iconTint="@color/colorPrimary"
-        app:strokeColor="@color/colorPrimaryDark" />
+        app:strokeColor="@color/colorPrimaryDark"
+        tools:ignore="RtlSymmetry" />
 
     <Spinner
         android:id="@+id/action_order_by"
@@ -48,7 +51,7 @@
         android:layout_gravity="center"
         android:entries="@array/order_by" />
 
-    <Switch
+    <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/action_use_header"
         android:layout_gravity="center"
         android:layout_width="wrap_content"
