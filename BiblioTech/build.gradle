@@ -7,7 +7,7 @@ buildscript {
         nav_version = "2.3.2"
         room_version = "2.3.0-alpha04"
         camerax_version = "1.0.0-rc01"
-        paging_version = "3.0.0-alpha11"
+        paging_version = "3.0.0-alpha12"
         flexbox_version = "2.0.1"
     }
 
@@ -18,7 +18,7 @@ buildscript {
         
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.1.1'
+        classpath 'com.android.tools.build:gradle:4.1.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlin_version"
         classpath "androidx.navigation:navigation-safe-args-gradle-plugin:$nav_version"

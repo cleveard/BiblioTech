@@ -18,7 +18,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <com.github.cleveard.BiblioTech.ui.widget.ChipBox
+        <com.github.cleveard.bibliotech.ui.widget.ChipBox
             android:id="@+id/selected_tags"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -40,7 +40,7 @@
                 android:inputType="textCapWords">
             </AutoCompleteTextView>
 
-        </com.github.cleveard.BiblioTech.ui.widget.ChipBox>
+        </com.github.cleveard.bibliotech.ui.widget.ChipBox>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/scan_search"

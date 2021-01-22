@@ -39,7 +39,7 @@
 
         <fragment
             android:id="@+id/fragment"
-            android:name="com.github.cleveard.BiblioTech.ui.tags.TagsFragment"
+            android:name="com.github.cleveard.bibliotech.ui.tags.TagsFragment"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:layout_constraintStart_toStartOf="parent"
