@@ -18,6 +18,48 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/scan_permissions"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:background="@color/background"
+            android:visibility="visible"
+            app:layout_constraintBottom_toBottomOf="@id/view_finder"
+            app:layout_constraintEnd_toEndOf="@+id/view_finder"
+            app:layout_constraintStart_toStartOf="@+id/view_finder"
+            app:layout_constraintTop_toTopOf="@id/view_finder">
+
+            <TextView
+                android:id="@+id/scan_rationale"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="32dp"
+                android:layout_marginEnd="32dp"
+                android:paddingEnd="8dp"
+                android:paddingStart="8dp"
+                android:text="@string/camera_permission_message"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scan_ask_permission"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/request_camera_permissions"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="16dp"
+                app:cornerRadius="4dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/scan_rationale"
+                app:strokeColor="@color/colorPrimaryDark"
+                app:strokeWidth="2dp" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
         <com.github.cleveard.bibliotech.ui.widget.ChipBox
             android:id="@+id/selected_tags"
             android:layout_width="0dp"

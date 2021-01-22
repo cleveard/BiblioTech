@@ -37,6 +37,7 @@ import com.github.cleveard.bibliotech.ui.tags.TagsFragment
 import com.github.cleveard.bibliotech.ui.widget.ChipBox
 import com.github.cleveard.bibliotech.utils.*
 import com.github.cleveard.bibliotech.utils.ParentAccess
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.common.util.concurrent.ListenableFuture
 import com.yanzhenjie.zbar.Config
@@ -240,7 +241,9 @@ class ScanFragment : Fragment() {
                 // Take the user to the success fragment when permission is granted
                 Toast.makeText(context, "Permission request granted", Toast.LENGTH_LONG).show()
                 setUpCamera()
+                view?.findViewById<View>(R.id.scan_permissions)?.visibility = View.GONE
             } else {
+                view?.findViewById<View>(R.id.scan_permissions)?.visibility = View.VISIBLE
                 Toast.makeText(context, "Permission request denied", Toast.LENGTH_LONG).show()
             }
         }
@@ -404,6 +407,11 @@ class ScanFragment : Fragment() {
         activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
         updateBookStats()
 
+        container.findViewById<MaterialButton>(R.id.scan_ask_permission).setOnClickListener {
+            // Request camera-related permissions
+            requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
+        }
+
         // Wait for the views to be properly laid out
         viewFinder.post {
             // Keep track of the display in which this view is attached
@@ -412,20 +420,9 @@ class ScanFragment : Fragment() {
             Log.d(TAG, "ViewFinder: ${viewFinder.width}x${viewFinder.height}")
             if (hasPermissions(requireContext())) {
                 setUpCamera()
+                view.findViewById<View>(R.id.scan_permissions).visibility = View.GONE
             } else {
-                scanViewModel.viewModelScope.launch {
-                    if (requireActivity().shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
-                        coroutineAlert(requireContext(), { }) { alert ->
-                            // Present the dialog
-                            alert.builder.setTitle(R.string.camera_permission_title)
-                                .setMessage(R.string.camera_permission_message)
-                                .setCancelable(false)
-                                .setPositiveButton(R.string.ok, null)
-                        }.show()
-                        // Request camera-related permissions
-                        requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
-                    }
-                }
+                view.findViewById<View>(R.id.scan_permissions).visibility = View.VISIBLE
             }
         }
     }
