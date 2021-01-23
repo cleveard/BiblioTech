@@ -237,7 +237,7 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_untag_books) {
+                R.plurals.ask_un_tag_books) {
                 booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter)
                 // Finish the acton
                 onFinished?.run()
@@ -258,7 +258,7 @@ class TagModalAction private constructor(
             onFinished: Runnable? = null
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
-                R.plurals.ask_repl_tag_books, true) {
+                R.plurals.ask_replace_tag_books, true) {
                 booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter, true)
                 booksViewModel.repo.addTagsToBooks(null, null, booksViewModel.idFilter)
                 // Finish the acton

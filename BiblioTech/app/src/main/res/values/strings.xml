@@ -12,7 +12,7 @@
     <string name="id">ID:</string>
     <string name="isbn">ISBN</string>
     <string name="bad_isbn">%1$s: ISBN is invalid.</string>
-    <string name="no_ISBNs">ISBN barcode wasn\'t scanned</string>
+    <string name="no_ISBNs">ISBN barcode was not scanned</string>
 
     <string name="title_desc">Book Title</string>
     <string name="subtitle_desc">Book Subtitle</string>
@@ -68,16 +68,15 @@
         <item quantity="one">Tag %d books?</item>
         <item quantity="other">Tag %d books?</item>
     </plurals>
-    <plurals name="ask_untag_books">
+    <plurals name="ask_un_tag_books">
         <item quantity="one">Remove tags from %d books?</item>
         <item quantity="other">Remove tags from %d books?</item>
     </plurals>
-    <plurals name="ask_repl_tag_books">
+    <plurals name="ask_replace_tag_books">
         <item quantity="one">Replace tags for %d books?</item>
         <item quantity="other">Replace tags for %d books?</item>
     </plurals>
     <string name="book_stats" tools:ignore="PluralsCandidate">Books: %1$d Selected: %2$d</string>
-    <string name="edit">Edit</string>
     <string name="order">Order</string>
     <string name="filter">Filter</string>
     <string name="criteria">Criteria</string>
@@ -105,7 +104,6 @@
     </string-array>
     <string name="order_by">Order</string>
     <string name="header">Header</string>
-    <string name="apply_filter">Apply Filter</string>
     <string name="author">Author</string>
     <string name="any">Any</string>
     <string name="subtitle">Subtitle</string>
