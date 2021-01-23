@@ -16,6 +16,8 @@ import android.util.Log
 import android.util.SparseArray
 import android.view.*
 import android.widget.*
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -60,7 +62,6 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
 /**
@@ -212,32 +213,9 @@ class ScanFragment : Fragment() {
         }
     }
 
-    /**
-     * @inheritDoc
-     */
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        // Mark this as a retain fragment, so the lifecycle does not get restarted on config change
-        retainInstance = true
-        mainExecutor = ContextCompat.getMainExecutor(requireContext())
-
-        // Instance barcode scanner
-        scanner = ImageScanner()
-        scanner.setConfig(0, Config.X_DENSITY, 3)
-        scanner.setConfig(0, Config.Y_DENSITY, 3)
-
-        gpuCompute = GpuCompute(requireContext())
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun onRequestPermissionsResult(
-        requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSIONS_REQUEST_CODE) {
-            if (PackageManager.PERMISSION_GRANTED == grantResults.firstOrNull()) {
+    private val permissionLauncher: ActivityResultLauncher<Array<String>> =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            if (it.getOrDefault(Manifest.permission.CAMERA, false)) {
                 // Take the user to the success fragment when permission is granted
                 Toast.makeText(context, "Permission request granted", Toast.LENGTH_LONG).show()
                 setUpCamera()
@@ -247,6 +225,21 @@ class ScanFragment : Fragment() {
                 Toast.makeText(context, "Permission request denied", Toast.LENGTH_LONG).show()
             }
         }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        mainExecutor = ContextCompat.getMainExecutor(requireContext())
+
+        // Instance barcode scanner
+        scanner = ImageScanner()
+        scanner.setConfig(0, Config.X_DENSITY, 3)
+        scanner.setConfig(0, Config.Y_DENSITY, 3)
+
+        gpuCompute = GpuCompute(requireContext())
     }
 
     /**
@@ -397,7 +390,7 @@ class ScanFragment : Fragment() {
 
         container.findViewById<MaterialButton>(R.id.scan_ask_permission).setOnClickListener {
             // Request camera-related permissions
-            requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
+            permissionLauncher.launch(PERMISSIONS_REQUIRED)
         }
 
         // Wait for the views to be properly laid out

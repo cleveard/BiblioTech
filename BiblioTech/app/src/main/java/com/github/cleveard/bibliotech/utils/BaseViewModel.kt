@@ -301,7 +301,8 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
     /**
      * @inheritDoc
      */
-    override val context: Context = app.applicationContext
+    override val context: Context
+        get() = getApplication<Application>().applicationContext
 
     /**
      * @inheritDoc
