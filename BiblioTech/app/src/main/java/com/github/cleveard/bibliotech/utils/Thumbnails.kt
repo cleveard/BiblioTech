@@ -28,7 +28,7 @@ class Thumbnails(dir: String = "db") {
 
         // Internal function to add a directory
         fun addDir(d: String) {
-            if (!d.isEmpty()) {
+            if (d.isNotEmpty()) {
                 path = File(path, d)
                 // If it is already a directory, it is OK
                 if (!path.isDirectory) {
@@ -147,7 +147,7 @@ class Thumbnails(dir: String = "db") {
         } catch (e: Exception) {
             null
         } finally {
-            // If coroutine is cancled throw exception
+            // If coroutine is canceled throw exception
             coroutineContext.ensureActive()
         }
     }
@@ -172,7 +172,7 @@ class Thumbnails(dir: String = "db") {
      * @param urlString The URL to the thumbnail
      * @param file The file where the thumbnail is cached
      */
-    suspend fun getThumbUrl(urlString: String?, file: File): URL? {
+    private suspend fun getThumbUrl(urlString: String?, file: File): URL? {
         // Return null if there isn't a thumbnail url
         urlString?: return null
         @Suppress("BlockingMethodInNonBlockingContext")
@@ -195,7 +195,7 @@ class Thumbnails(dir: String = "db") {
      * @param from The source file
      * @param to The destination file
      */
-    suspend fun moveFile(from: File, to: File): Boolean {
+    private suspend fun moveFile(from: File, to: File): Boolean {
         // If the file, which we created before was deleted, then
         // the book was updated, and we need to try getting the thumbnail again
         if (!to.exists())

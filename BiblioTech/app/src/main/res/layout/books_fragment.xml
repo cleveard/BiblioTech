@@ -33,7 +33,7 @@
 
             <com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
                 android:layout_width="match_parent"
-                android:id="@+id/fastscroller"
+                android:id="@+id/fast_scroller"
                 android:layout_height="0dp"
                 app:handleVisibilityDuration="500"
                 android:paddingEnd="6dp"

@@ -80,12 +80,35 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     private var flowJob: Job? = null
 
     /**
+     * Filter last used to build the database flow
+     */
+    private var flowFilter: BookFilter? = null
+
+    /**
      * Current filter view for the fragment
      */
-    private val viewObserver = Observer<ViewEntity?> {view ->
-        idFilter = view?.filter?.filterList?.let {
-            // If the filter list is empty, then make idFilter null
-            if (it.isEmpty())
+    private val viewObserver = object: Observer<ViewEntity?> {
+        var lastFilter: Array<FilterField>? = null
+        private fun isSame(filter: Array<FilterField>, last: Array<FilterField>?): Boolean {
+            if (filter === last) return true
+            if (last == null) return false
+
+            if (filter.size != last.size) return false
+            for (i in filter.indices) {
+                if (!filter[i].isSameQuery(last[i])) return false
+            }
+            return true
+        }
+
+        override fun onChanged(view: ViewEntity?) {
+            // If filter is empty use null
+            val filter = view?.filter?.filterList?: emptyArray()
+            // Don't do anything unless the filter changes
+            if (isSame(filter, lastFilter))
+                return
+            lastFilter = filter     // Remember last filter
+
+            idFilter = if (filter.isEmpty())
                 null
             else {
                 // Build the  SQLite command to get the book ids for the filter
@@ -93,11 +116,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 // We only need the book id column
                 idFilterBuilder.addSelect(BOOK_ID_COLUMN)
                 // Build the filter without the order terms
-                idFilterBuilder.buildFilter(it.iterator())
+                idFilterBuilder.buildFilter(filter.iterator())
                 BookFilter.BuiltFilter(idFilterBuilder.createCommand(), idFilterBuilder.argList.toArray())
             }
+            selection.filter = idFilter
         }
-        selection.filter = idFilter
     }
     val filterView: MutableLiveData<ViewEntity?> = MutableLiveData(null)
 
@@ -214,6 +237,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     fun buildFlow() {
         // Get the view for the flow. Return if it is null
         val view = filterView.value?: return
+
+        // Only rebuild the flow when the query is different
+        if (flowJob != null && (view.filter?.isSameQuery(flowFilter)?: (flowFilter == null)))
+            return
+        flowFilter = view.filter
 
         // Cancel previous job if there was one
         flowJob?.let {

@@ -34,11 +34,9 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
     }
 
     /** @inheritDoc */
-    fun isSameQuery(other: Any?) : Boolean {
+    fun isSameQuery(other: BookFilter?) : Boolean {
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as BookFilter
+        if (other == null) return false
 
         if (orderList.size != other.orderList.size) return false
         for (f in orderList.indices) {
@@ -332,12 +330,9 @@ data class OrderField(
      * Determine whether this field is the same SQLite query as another one
      * @param other The other field
      */
-    fun isSameQuery(other: Any?) : Boolean {
+    fun isSameQuery(other: OrderField) : Boolean {
         // Make sure other is an OrderField
         if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as OrderField
 
         // The query is the same if the column and order are the same.
         // Separators don't matter
@@ -365,8 +360,11 @@ class FilterField(
      * Indicate whether two fields are the same query
      * @param other The other field
      */
-    fun isSameQuery(other: Any?) : Boolean {
-        return this == other
+    fun isSameQuery(other: FilterField) : Boolean {
+        // Make sure contents are equal
+        if (column != other.column) return false
+        if (predicate != other.predicate) return false
+        return BookFilter.equalArray(values, other.values)
     }
 
     /** @inheritDoc */
@@ -376,12 +374,7 @@ class FilterField(
         // If the classes are different, objects are different
         if (this.javaClass != other?.javaClass) return false
 
-        other as FilterField
-
-        // Make sure contents are equal
-        if (column != other.column) return false
-        if (predicate != other.predicate) return false
-        return BookFilter.equalArray(values, other.values)
+        return isSameQuery(other as FilterField)
     }
 
     /** @inheritDoc */

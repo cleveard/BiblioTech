@@ -14,6 +14,7 @@ import kotlin.reflect.KFunction
  * @param id The id of the menu to use for the modal action
  * @param actions Array of actions to perform when menu items are selected.
  */
+@Suppress("MemberVisibilityCanBePrivate")
 open class ModalAction(protected val title: String, protected val subTitle: String, protected val id: Int, actions: Array<Action>?) : ActionMode.Callback {
     /**
      * Action Item

@@ -271,12 +271,12 @@ private class OneOfDataDescription(
 /**
  * Predicate for column is one of a set of values
  */
-private val oneOf = OneOfDataDescription(R.string.one_of, "LIKE", true, false)
+private val oneOf = OneOfDataDescription(R.string.one_of, "LIKE", escape = true, negate = false)
 
 /**
  * Predicate for column is not one of a set of values
  */
-private val notOneOf = OneOfDataDescription(R.string.not_one_of, "LIKE", true, true)
+private val notOneOf = OneOfDataDescription(R.string.not_one_of, "LIKE", escape = true, negate = true)
 
 /**
  * Data description for GLOB and NOT_GLOB
@@ -332,12 +332,12 @@ private class GlobDataDescription(
 /**
  * Predicate for column contains one of a set of values
  */
-private val glob = GlobDataDescription(R.string.has, "LIKE", true, false)
+private val glob = GlobDataDescription(R.string.has, "LIKE", escape = true, negate = false)
 
 /**
- * Predicate for column doexn't contain one of a set of values
+ * Predicate for column doesn't contain one of a set of values
  */
-private val notGlob = GlobDataDescription(R.string.not_has, "LIKE", true, true)
+private val notGlob = GlobDataDescription(R.string.not_has, "LIKE", escape = true, negate = true)
 
 /**
  * Predicate for column is greater than one of a set of values

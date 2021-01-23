@@ -304,18 +304,6 @@ class ScanFragment : Fragment() {
     /**
      * @inheritDoc
      */
-    override fun onResume() {
-        super.onResume()
-        // Make sure that all permissions are still present, since user could have removed them
-        //  while the app was on paused state
-        if (!hasPermissions(requireContext())) {
-            // TODO: Request permissions
-        }
-    }
-
-    /**
-     * @inheritDoc
-     */
     override fun onDestroyView() {
         super.onDestroyView()
         tags?.removeObserver(tagObserver)
@@ -387,10 +375,10 @@ class ScanFragment : Fragment() {
             val authorView = container.findViewById<EditText>(R.id.scan_author)
             val isbn: String
             // Don't search by ISBN if the author or title have focus
-            if (titleView.hasFocus() || authorView.hasFocus())
-                isbn = ""
+            isbn = if (titleView.hasFocus() || authorView.hasFocus())
+                ""
             else
-                isbn = container.findViewById<EditText>(R.id.scan_isbn).text.toString()
+                container.findViewById<EditText>(R.id.scan_isbn).text.toString()
             searchForBooks(isbn, titleView.text.toString(), authorView.text.toString())
         }
         // Set up the intent filter that will receive events from our main activity
@@ -677,7 +665,7 @@ class ScanFragment : Fragment() {
             // If we got here we didn't scan anything
             Toast.makeText(
                 context,
-                requireContext().resources.getString(R.string.noisbns),
+                requireContext().resources.getString(R.string.no_ISBNs),
                 Toast.LENGTH_LONG
             ).show()
         }

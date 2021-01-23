@@ -23,7 +23,7 @@ class GpuCompute(context: Context) {
     private lateinit var scriptRgbToLum: ScriptIntrinsicColorMatrix
     /** Lock for YuvToRgb */
     private val lockYuvToRgb = ReentrantLock()
-    /** Script for YuvtoRgb */
+    /** Script for YuvToRgb */
     private lateinit var scriptYuvToRgb: ScriptIntrinsicYuvToRGB
 
     /**
@@ -40,6 +40,7 @@ class GpuCompute(context: Context) {
      * @param input RGB Bitmap
      * @param output Bitmap for Lum values
      */
+    @Suppress("unused")
     fun rgbToLum(input: Bitmap, output: Bitmap) {
         RgbToLum().compute(input, output)
     }
@@ -48,6 +49,7 @@ class GpuCompute(context: Context) {
      * Convert RGB to Grey in a stream
      * @return Stream processor
      */
+    @Suppress("unused")
     fun rgbToLumStream(): RgbToLumStream {
         return RgbToLum()
     }
@@ -65,6 +67,7 @@ class GpuCompute(context: Context) {
      * Convert YUV to RGB in a stream
      * @return Stream processor
      */
+    @Suppress("unused")
     fun yuvToRgbStream(): YuvToRgbStream {
         return YuvToRgb()
     }

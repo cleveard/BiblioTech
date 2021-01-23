@@ -10,9 +10,9 @@ import kotlin.coroutines.suspendCoroutine
 
 /**
  * Type alias for the onClickCallbacks
- * @param alert The CoroutineAlert for the callback
- * @param dialog The dialog that got the click
- * @param which The control that got the click
+ * Parameter: alert The CoroutineAlert for the callback
+ * Parameter: dialog The dialog that got the click
+ * Parameter: which The control that got the click
  * @return True to dismiss the dialog. False to keep it open.
  * When the lambda is called this is set to the CoroutineAlert object
  */

@@ -85,6 +85,7 @@ internal class GoogleBookLookup private constructor() {
     }
 
     companion object {
+        @Suppress("SpellCheckingInspection")
         private const val kKey = "&key=AIzaSyDeQMfnPyhQ23-ndhb9xs9IY_EaSiTxgms"
         private const val kURL = "https://www.googleapis.com/books/v1"
         private const val kVolumesCollection = "volumes"
@@ -378,6 +379,7 @@ internal class GoogleBookLookup private constructor() {
          * @param parameters The query parameters
          * @return The URL
          */
+        @Suppress("SameParameterValue")
         private fun buildUrl(collection: String, parameters: String): String {
             return String.format(
                 "%s/%s?q=%s%s",

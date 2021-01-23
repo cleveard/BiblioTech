@@ -132,7 +132,7 @@ class BooksFragment : Fragment() {
     /**
      * Observer for BooksViewModel filterView changes
      */
-    private val filterViewObserver = Observer<ViewEntity?> {filterView: ViewEntity? ->
+    private val filterViewObserver = Observer<ViewEntity?> {filterView ->
         booksViewModel.buildFlow()
         activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
             // The view changed, set the title and subtitle

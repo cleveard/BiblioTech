@@ -47,7 +47,7 @@ internal open class BooksAdapter(
         /**
          * The image to use when a thumbnail isn't available
          */
-        private var m_nothumb: Drawable? = null
+        private var noThumb: Drawable? = null
 
         /**
          * Get the thumbnail to use before we get the right one
@@ -55,11 +55,11 @@ internal open class BooksAdapter(
          */
         private fun getNoThumb(context: Context): Drawable? {
             // Is this already done
-            if (m_nothumb == null) {
+            if (noThumb == null) {
                 // Get the thumbnail
-                m_nothumb = ResourcesCompat.getDrawable(context.resources, R.drawable.no_thumb, null)
+                noThumb = ResourcesCompat.getDrawable(context.resources, R.drawable.no_thumb, null)
             }
-            return m_nothumb
+            return noThumb
         }
 
         /**
@@ -505,7 +505,7 @@ internal open class BooksAdapter(
             else
                 ""
         }
-        holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(m_nothumb)
+        holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(noThumb)
         holder.bindThumb(book.book.id, false, R.id.book_list_thumb)
         // Set the icon to the thumbnail or selected icon
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)

@@ -17,7 +17,7 @@ android {
             keyPassword 'q-bLHU*u9I1Tu*'
         }
     }
-    compileSdkVersion 29
+    compileSdkVersion 30
     buildToolsVersion "29.0.2"
     defaultConfig {
         applicationId "com.github.cleveard.BiblioTech"
