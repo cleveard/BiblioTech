@@ -495,15 +495,7 @@ internal open class BooksAdapter(
         book.book.subTitle.setField(holder.itemView, R.id.book_list_subtitle)
         book.authors.setField(holder.itemView, R.id.book_list_authors, ", ") {
             // Usually we use "first name last name", but if either is missing, just use the other
-            if (it.lastName != "") {
-                if (it.remainingName != "")
-                    "${it.remainingName} ${it.lastName}"
-                else
-                    it.lastName
-            } else if (it.remainingName != "")
-                it.remainingName
-            else
-                ""
+            it.name
         }
         holder.itemView.findViewById<ImageView>(R.id.book_list_thumb)?.setImageDrawable(noThumb)
         holder.bindThumb(book.book.id, false, R.id.book_list_thumb)

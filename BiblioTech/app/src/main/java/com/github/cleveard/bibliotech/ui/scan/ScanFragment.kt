@@ -1036,13 +1036,7 @@ class ScanFragment : Fragment() {
 
         private fun buildAuthors(builder: StringBuilder, list: List<AuthorEntity>): String {
             for ((i, a) in list.withIndex()) {
-                if (i > 0)
-                    builder.append(", ")
-                when {
-                    a.remainingName.isEmpty() -> builder.append(a.lastName)
-                    a.lastName.isEmpty() -> builder.append(a.remainingName)
-                    else -> builder.append(a.remainingName + " " + a.lastName)
-                }
+                builder.append("${if (i > 0) ", " else ""}${a.name}")
             }
             return builder.toString()
         }
@@ -1367,7 +1361,7 @@ class ScanFragment : Fragment() {
                     return if (filterTerms.isNotEmpty()) {
                         for (s in filterTerms) {
                             for (a in book.authors) {
-                                if ((a.remainingName + " " + a.lastName).contains(s, true))
+                                if (a.name.contains(s, true))
                                     return true
                             }
                         }
