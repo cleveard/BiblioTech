@@ -10,7 +10,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CascadeLiveDataTest {
     // Test the CascadeLiveData for a single type with multiple values
-    fun <T> testType(vararg vals: T?) {
+    private fun <T> testType(vararg values: T?) {
         // Create the live data
         val live = CascadeLiveData<T>()
         // Should have a mutable live data as the source
@@ -31,7 +31,7 @@ class CascadeLiveDataTest {
             // We didn't call the observe method
             assertThat(observedCount).isEqualTo(count)
             // Set all of the values and make sure observe was called
-            for (v in vals) {
+            for (v in values) {
                 sub1.value = v
                 assertThat(observed).isEqualTo(v)
                 assertThat(observedCount).isEqualTo(++count)
@@ -47,7 +47,7 @@ class CascadeLiveDataTest {
             }
             // Didn't call observe
             assertThat(observedCount).isEqualTo(0)
-            // Test for one livedata source
+            // Test for one live data source
             testOne()
             // Should still work if it is changed
             testOne()

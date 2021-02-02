@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.db
 
 import android.os.Bundle
-import android.os.Parcel
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
@@ -77,7 +76,7 @@ class BookDatabaseClassesTest {
      * @param p Property to change
      * @param v Value to set
      */
-    fun <T, R> changeAndCheck(v1: T, v2: T, p: KMutableProperty0<R>, v: R) {
+    private fun <T, R> changeAndCheck(v1: T, v2: T, p: KMutableProperty0<R>, v: R) {
         val save = p.get()
         p.set(v)
         assertThat(p.get()).isEqualTo(v)
@@ -120,18 +119,25 @@ class BookDatabaseClassesTest {
         // Assert that changing any field will cause a mis-compare
         changeAndCheck(book1, book2, book1::id, 1L)
         changeAndCheck(book1, book2, book1::volumeId, "volumeIdx")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::sourceId, "sourceIddd")
         changeAndCheck(book1, book2, book1::ISBN, "ISB")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::title, "tite")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::subTitle, "subTxitle")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::description, "descrciption")
         changeAndCheck(book1, book2, book1::pageCount, 1443)
         changeAndCheck(book1, book2, book1::bookCount, 52)
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::linkUrl, "lcinkUrl")
         changeAndCheck(book1, book2, book1::rating, 3.141)
         changeAndCheck(book1, book2, book1::added, Date(155))
         changeAndCheck(book1, book2, book1::modified, Date(223))
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::smallThumb, "smallTchumb")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::largeThumb, "largeThhumb")
         changeAndCheck(book1, book2, book1::flags, 1)
         changeAndCheck(book1, book2, book1::isSelected, true)
@@ -167,6 +173,7 @@ class BookDatabaseClassesTest {
         // Assert that changing any field will cause a mis-compare
         changeAndCheck(author1, author2, author1::id, 1L)
         changeAndCheck(author1, author2, author1::lastName, "volumeIdx")
+        @Suppress("SpellCheckingInspection")
         changeAndCheck(author1, author2, author1::remainingName, "sourceIddd")
     }
 
