@@ -9,9 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.*
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
+import org.junit.*
 import org.junit.runner.RunWith
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -30,7 +28,7 @@ class TagDaoTest {
         BookDatabase.close()
     }
 
-    @Test fun testAddUpdateDelete()
+    @Test(timeout = 1000L) fun testAddUpdateDelete()
     {
         runBlocking {
             // Add a couple of tags
@@ -100,25 +98,21 @@ class TagDaoTest {
         return withContext(MainScope().coroutineContext) {
             var observer: Observer<T>? = null
             try {
-                withTimeout(1000) {
-                    suspendCoroutine {
-                        observer = Observer<T> { value ->
-                            if (value != null)
-                                it.resume((value))
-                        }.also { obs ->
-                            live.observeForever(obs)
-                        }
+                suspendCoroutine {
+                    observer = Observer<T> { value ->
+                        if (value != null)
+                            it.resume((value))
+                    }.also { obs ->
+                        live.observeForever(obs)
                     }
                 }
-            } catch (e: TimeoutCancellationException) {
-                null
             } finally {
                 observer?.let { live.removeObserver(it) }
             }
         }
     }
 
-    @Test fun testQueries() {
+    @Test(timeout = 1000L) fun testQueries() {
         runBlocking {
             // Add a couple of tags
             val tags = listOf(
@@ -169,7 +163,7 @@ class TagDaoTest {
         }
     }
 
-    @Test fun testBitChanges() {
+    @Test(timeout = 1000L) fun testBitChanges() {
         runBlocking {
             // Add a couple of tags
             val tags = listOf(

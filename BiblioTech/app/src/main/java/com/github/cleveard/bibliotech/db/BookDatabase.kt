@@ -225,7 +225,7 @@ data class AuthorEntity(
 
     var name: String
         get() { return "$remainingName $lastName".trim { it <= ' ' } }
-        set(in_name: String) {
+        set(in_name) {
             // Trim whitespace from start and end
             val name = in_name.trim { it <= ' ' }
             // Look for a , assume last, remaining if found
@@ -811,13 +811,6 @@ abstract class TagDao(private val db: BookDatabase) {
     }
 
     /**
-     * Run a delete query to delete tags
-     * @param query The delete query
-     */
-    @RawQuery(observedEntities = [TagEntity::class])
-    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
-
-    /**
      * Count the number of rows for a query
      * @param query The delete query
      */
@@ -852,13 +845,14 @@ abstract class TagDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun deleteSelected(): Int {
         db.getBookTagDao().deleteTagsForTags(null)
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(
+            BookDatabase.buildQueryForIds(
             "DELETE FROM $TAGS_TABLE",      // SQLite Command
-            TAGS_ID_COLUMN,                           // Column to query
-            selectedIdSubQuery,                       // Selected tag ids sub-query
-            null,                                     // Ids to delete
-            false                                     // Delete ids or not ids
-        )?.let { delete(it) }?: 0
+                TAGS_ID_COLUMN,                           // Column to query
+                selectedIdSubQuery,                       // Selected tag ids sub-query
+                null,                                     // Ids to delete
+                false                                     // Delete ids or not ids
+            ))
     }
 
     /**
@@ -926,20 +920,13 @@ abstract class TagDao(private val db: BookDatabase) {
     }
 
     /**
-     * Query to update the tag table
-     * @return The number of rows changed
-     */
-    @Transaction
-    @RawQuery(observedEntities = [TagEntity::class])
-    protected abstract suspend fun update(query: SupportSQLiteQuery): Int?
-
-    /**
      * Change bits in the flags column
      * @param operation The operation to perform. True to set, false to clear, null to toggle
      * @param mask The bits to change
      * @param id The id of the tag to change. Null to change all
      * @return The number of rows changed
      */
+    @Transaction
     open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int? {
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
         // Only select the rows where the change will make a difference
@@ -2034,25 +2021,19 @@ abstract class BookDatabase : RoomDatabase() {
         writableDb = helper.writableDatabase
     }
 
-    suspend fun execUpdateDelete(query: SupportSQLiteQuery): Int {
-        return withContext(transactionExecutor.asCoroutineDispatcher()) {
-            // Compile the query and bind its arguments
-            val statement = writableDb.compileStatement(query.sql)
-            query.bindTo(statement)
-            // Start a transaction
-            writableDb.beginTransactionNonExclusive()
-            try {
-                // Run the query
-                val result = statement.executeUpdateDelete()
-                // If we get here it is successful
-                writableDb.setTransactionSuccessful()
-                // The return value
-                result
-            } finally {
-                // End the transaction whether successful or not.
-                writableDb.endTransaction()
-            }
-        }
+    /**
+     * Execute an UPDATE or DELETE SQL Query
+     * @param query The query to run
+     * Must be called within a transaction
+     */
+    fun execUpdateDelete(query: SupportSQLiteQuery?): Int {
+        if (query == null)
+            return 0
+        // Compile the query and bind its arguments
+        val statement = writableDb.compileStatement(query.sql)
+        query.bindTo(statement)
+        // Run the query
+        return statement.executeUpdateDelete()
     }
 
     /**
