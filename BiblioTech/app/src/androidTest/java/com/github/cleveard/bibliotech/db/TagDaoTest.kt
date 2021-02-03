@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
 import androidx.paging.PagingSource
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
@@ -23,11 +22,12 @@ class TagDaoTest {
 
     @Before fun startUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, BookDatabase::class.java).build()
+        BookDatabase.initialize(context, true)
+        db = BookDatabase.db
     }
 
     @After fun tearDown() {
-        db.close()
+        BookDatabase.close()
     }
 
     @Test fun testAddUpdateDelete()
@@ -174,8 +174,8 @@ class TagDaoTest {
             // Add a couple of tags
             val tags = listOf(
                 TagEntity(0L, "tag1", "desc1", 0b0111),
-                TagEntity(0L, "tag2", "desc2", 0b0001),
-                TagEntity(0L, "tag3", "desc3", 0b1011),
+                TagEntity(0L, "tag2", "desc2", 0b1001),
+                TagEntity(0L, "tag3", "desc3", 0b1110),
             )
 
             // Check Add
@@ -194,19 +194,25 @@ class TagDaoTest {
                 assertThat(getLive(tagDao.countBitsLive(bits, value, false, id))).isEqualTo(expFalse)
             }
             checkCount(0b11, 0b01, null, 1, 2)
-            checkCount(0b11, 0b11, null, 2, 1)
+            checkCount(0b11, 0b11, null, 1, 2)
             checkCount(0b11, 0b11, tags[0].id, 1, 0)
             checkCount(0b11, 0b01, tags[0].id, 0, 1)
 
             // TODO: Get count working - resolve writable queries
             var count = tagDao.changeBits(false, 0b11, tags[0].id)
-            //assertThat(count).isEqualTo(1)
+            assertThat(count).isEqualTo(1)
             assertThat(tagDao.get(tags[0].id)?.flags).isEqualTo(0b0100)
             count = tagDao.changeBits(true, 0b1001, tags[0].id)
-            //assertThat(count).isEqualTo(1)
+            assertThat(count).isEqualTo(1)
             assertThat(tagDao.get(tags[0].id)?.flags).isEqualTo(0b1101)
             count = tagDao.changeBits(null, 0b1010, tags[0].id)
-            //assertThat(count).isEqualTo(1)
+            assertThat(count).isEqualTo(1)
+            assertThat(tagDao.get(tags[0].id)?.flags).isEqualTo(0b0111)
+            count = tagDao.changeBits(true, 0b0111, tags[0].id)
+            assertThat(count).isEqualTo(0)
+            assertThat(tagDao.get(tags[0].id)?.flags).isEqualTo(0b0111)
+            count = tagDao.changeBits(false, 0b1000, tags[0].id)
+            assertThat(count).isEqualTo(0)
             assertThat(tagDao.get(tags[0].id)?.flags).isEqualTo(0b0111)
 
             suspend fun checkChange(vararg values: Int) {
@@ -214,15 +220,15 @@ class TagDaoTest {
                     assertThat(tagDao.get(tags[i].id)?.flags).isEqualTo(values[i])
                 }
             }
-            count = tagDao.changeBits(false, 0b11, null)
-            //assertThat(count).isEqualTo(tags.size)
-            checkChange(0b0100, 0b0000, 0b1000)
+            count = tagDao.changeBits(false, 0b0010, null)
+            assertThat(count).isEqualTo(2)
+            checkChange(0b0101, 0b1001, 0b1100)
             count = tagDao.changeBits(true, 0b1001, null)
-            //assertThat(count).isEqualTo(tags.size)
-            checkChange(0b1101, 0b1001, 0b1001)
+            assertThat(count).isEqualTo(2)
+            checkChange(0b1101, 0b1001, 0b1101)
             count = tagDao.changeBits(null, 0b1010, null)
-            //assertThat(count).isEqualTo(tags.size)
-            checkChange(0b0111, 0b0011, 0b0011)
+            assertThat(count).isEqualTo(tags.size)
+            checkChange(0b0111, 0b0011, 0b0111)
         }
     }
 }

@@ -948,7 +948,7 @@ abstract class TagDao(private val db: BookDatabase) {
         else if (operation == false)
             condition.selectByFlagBits(mask, 0, false, TAGS_FLAGS)
         val bits = BookDatabase.changeBits(operation, TAGS_FLAGS, mask)
-        return update(SimpleSQLiteQuery("UPDATE $TAGS_TABLE $bits$condition"))
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $TAGS_TABLE $bits$condition"))
     }
 
     companion object {
@@ -2025,6 +2025,46 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getCategoryDao(): CategoryDao
     abstract fun getViewDao(): ViewDao
 
+    /** Writable database used for update and delete queries */
+    private lateinit var writableDb: SupportSQLiteDatabase
+
+    /** Initialize the writable database */
+    private fun initWritableQueries() {
+        val helper = openHelper
+        writableDb = helper.writableDatabase
+    }
+
+    suspend fun execUpdateDelete(query: SupportSQLiteQuery): Int {
+        return withContext(transactionExecutor.asCoroutineDispatcher()) {
+            // Compile the query and bind its arguments
+            val statement = writableDb.compileStatement(query.sql)
+            query.bindTo(statement)
+            // Start a transaction
+            writableDb.beginTransactionNonExclusive()
+            try {
+                // Run the query
+                val result = statement.executeUpdateDelete()
+                // If we get here it is successful
+                writableDb.setTransactionSuccessful()
+                // The return value
+                result
+            } finally {
+                // End the transaction whether successful or not.
+                writableDb.endTransaction()
+            }
+        }
+    }
+
+    /**
+     *  @inheritDoc
+     *  Closes the writable database if it has been set
+     */
+    override fun close() {
+        if (::writableDb.isInitialized)
+            writableDb.close()
+        super.close()
+    }
+
     companion object {
         /**
          * The name of the books database
@@ -2041,10 +2081,11 @@ abstract class BookDatabase : RoomDatabase() {
         /**
          * Initialize the data base
          * @param context Application context
+         * @param inMemory True to create an in-memory database
          */
-        fun initialize(context: Context) {
+        fun initialize(context: Context, inMemory: Boolean = false) {
             if (mDb == null) {
-                mDb = create(context)
+                mDb = create(context, inMemory)
             }
         }
 
@@ -2059,26 +2100,36 @@ abstract class BookDatabase : RoomDatabase() {
         /**
          * Create the data base
          * @param context Application context
+         * @param inMemory True to create an in-memory database
          */
-        private fun create(context: Context): BookDatabase {
-            val builder = Room.databaseBuilder(
-                context, BookDatabase::class.java, DATABASE_FILENAME
-            )
+        private fun create(context: Context, inMemory: Boolean): BookDatabase {
+            val builder: Builder<BookDatabase>
+            if (inMemory) {
+                builder = Room.inMemoryDatabaseBuilder(context, BookDatabase::class.java)
+            } else {
+                builder = Room.databaseBuilder(
+                    context, BookDatabase::class.java, DATABASE_FILENAME
+                )
 
-            // If we have a prepopulate database use it.
-            // This should only be used with a fresh debug install
-            val assets = context.resources.assets
-            try {
-                val asset = "database/$DATABASE_FILENAME"
-                val stream = assets.open(asset)
-                stream.close()
-                builder.createFromAsset(asset)
-            } catch (ex: IOException) {
-                // No prepopulate asset, create empty database
+                // If we have a prepopulate database use it.
+                // This should only be used with a fresh debug install
+                val assets = context.resources.assets
+                try {
+                    val asset = "database/$DATABASE_FILENAME"
+                    val stream = assets.open(asset)
+                    stream.close()
+                    builder.createFromAsset(asset)
+                } catch (ex: IOException) {
+                    // No prepopulate asset, create empty database
+                }
+
+                builder.addMigrations(*migrations)
             }
 
-            builder.addMigrations(*migrations)
-            return builder.build()
+            // Build the database
+            val db = builder.build()
+            db.initWritableQueries()
+            return db
         }
 
         /**
