@@ -1185,7 +1185,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
  * The Author data access object
  */
 @Dao
-abstract class AuthorDao {
+abstract class AuthorDao(private val db: BookDatabase) {
     /**
      * Get the list of authors
      */
@@ -1234,26 +1234,19 @@ abstract class AuthorDao {
     }
 
     /**
-     * Delete authors for a book
-     * @param query The SQLite delete command that will delete the author links
-     */
-    @RawQuery(observedEntities = [BookAndAuthorEntity::class])
-    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
-
-    /**
      * Delete all authors from books
      * @param bookIds A list of book ids. Null means use the selected books
      * @param filter A filter to restrict the book ids
     */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return BookDatabase.buildQueryForIds(
+    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_AUTHORS_TABLE",
             filter,
             BOOK_AUTHORS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
-            false)?.let { delete(it) }?: 0
+            false))
     }
 
     /**
@@ -1286,13 +1279,6 @@ abstract class AuthorDao {
     protected abstract suspend fun deleteAuthor(authorId: Long): Int
 
     /**
-     * Delete an author
-     * @param author The author entity to be deleted
-     */
-    @Delete
-    protected abstract suspend fun delete(author: AuthorEntity)
-
-    /**
      * Find an author by name
      * @param last The author last name
      * @param remaining The rest of the author name
@@ -1314,7 +1300,7 @@ abstract class AuthorDao {
      * @param author The author to be added
      */
     @Insert
-    abstract suspend fun add(author: AuthorEntity) : Long
+    protected abstract suspend fun add(author: AuthorEntity) : Long
 
     /**
      * Add a book and author relationship
@@ -1329,15 +1315,17 @@ abstract class AuthorDao {
      * @param deleteAuthors A flag to indicate whether the author in the Authors table should be deleted
      *                      if all of its books have been deleted
      * @param filter A filter to restrict the book ids
+     * @return The number of book-author links deleted
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>?, deleteAuthors: Boolean = true, filter: BookFilter.BuiltFilter? = null) {
+    open suspend fun delete(bookIds: Array<Any>?, deleteAuthors: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
         // Do we want to delete authors with no books?
+        val count: Int
         if (deleteAuthors) {
             // Yes, get the ids of the authors that are affects
             val authors = queryBookIds(bookIds, filter)
             // Delete the authors
-            deleteBooks(bookIds, filter)
+            count = deleteBooks(bookIds, filter)
             authors?.let {
                 // Delete authors with no books
                 for (author in it) {
@@ -1348,8 +1336,10 @@ abstract class AuthorDao {
             }
         } else {
             // No, just delete the links
-            deleteBooks(bookIds, filter)
+            count = deleteBooks(bookIds, filter)
         }
+
+        return count
     }
 }
 

@@ -20,34 +20,34 @@ import kotlin.coroutines.coroutineContext
 
 class Thumbnails(dir: String = "db") {
 
-    private val thumbDir: File
+    private val thumbDir: File?
 
     init {
         // Make sure the directory exists. Create it if it doesn't
-        var path = MainActivity.cache
-
-        // Internal function to add a directory
-        fun addDir(d: String) {
-            if (d.isNotEmpty()) {
-                path = File(path, d)
-                // If it is already a directory, it is OK
-                if (!path.isDirectory) {
-                    // If it already exists, then remove it
-                    if (path.exists())
-                        path.delete()
-                    // Add the directory
-                    path.mkdir()
+        thumbDir = MainActivity.cache?.let {
+            var path = it
+            // Internal function to add a directory
+            fun addDir(d: String) {
+                if (d.isNotEmpty()) {
+                    path = File(path, d)
+                    // If it is already a directory, it is OK
+                    if (!path.isDirectory) {
+                        // If it already exists, then remove it
+                        if (path.exists())
+                            path.delete()
+                        // Add the directory
+                        path.mkdir()
+                    }
                 }
             }
+
+            // Add thumbnails directory
+            addDir("thumbnails")
+            // Add directories from the constructor argument
+            for (d in dir.split('/'))
+                addDir(d)
+            path
         }
-
-        // Add thumbnails directory
-        addDir("thumbnails")
-        // Add directories from the constructor argument
-        for (d in dir.split('/'))
-            addDir(d)
-
-        thumbDir = path
     }
 
     /**
@@ -55,8 +55,10 @@ class Thumbnails(dir: String = "db") {
      * @param bookId The book id
      * @param large True to get the large thumbnail file. False for the small thumbnail file.
      */
-    private fun getThumbFile(bookId: Long, large: Boolean): File {
-        return File(thumbDir, "BiblioTech.Thumb.$bookId${if (large) kThumb else kSmallThumb}")
+    private fun getThumbFile(bookId: Long, large: Boolean): File? {
+        return thumbDir?.let {
+            File(it, "BiblioTech.Thumb.$bookId${if (large) kThumb else kSmallThumb}")
+        }
     }
 
     /**
@@ -66,7 +68,7 @@ class Thumbnails(dir: String = "db") {
      */
     suspend fun deleteThumbFile(bookId: Long, large: Boolean) {
         try {
-            withContext(Dispatchers.IO) { getThumbFile(bookId, large).delete() }
+            withContext(Dispatchers.IO) { getThumbFile(bookId, large)?.delete() }
         } catch (e: Exception) {}
     }
 
@@ -74,32 +76,34 @@ class Thumbnails(dir: String = "db") {
      * Delete all thumbnails in this directory
      */
     suspend fun deleteAllThumbFiles() {
-        /**
-         * Recursively delete thumbnails
-         */
-        fun recurse(dir: File) {
-            // List the files. Returns null, if dir is not a directory
-            dir.listFiles()?.let { list ->
-                // Recurse for all of the files in dir
-                for (file in list) {
-                    try {
-                        recurse(file)
-                    } catch (e: IOException) {
+        thumbDir?.let {
+            /**
+             * Recursively delete thumbnails
+             */
+            fun recurse(dir: File) {
+                // List the files. Returns null, if dir is not a directory
+                dir.listFiles()?.let { list ->
+                    // Recurse for all of the files in dir
+                    for (file in list) {
+                        try {
+                            recurse(file)
+                        } catch (e: IOException) {
+                        }
                     }
+                }
+
+                try {
+                    // Delete the file, if it isn't the top level cache directory
+                    if (dir != MainActivity.cache)
+                        dir.delete()
+                } catch (e: IOException) {
                 }
             }
 
-            try {
-                // Delete the file, if it isn't the top level cache directory
-                if (dir != MainActivity.cache)
-                    dir.delete()
-            } catch (e: IOException) {
+            withContext(Dispatchers.IO) {
+                // Delete the thumbnails on an IO thread
+                recurse(it)
             }
-        }
-
-        withContext(Dispatchers.IO) {
-            // Delete the thumbnails on an IO thread
-            recurse(thumbDir)
         }
     }
 
@@ -112,7 +116,7 @@ class Thumbnails(dir: String = "db") {
         return try {
             run {
                 // Get the file path
-                val file = getThumbFile(bookId, large)
+                val file = getThumbFile(bookId, large)?: return@run null
                 // Load the bitmap return null, if the load succeeds return the bitmap
                 val result = loadBitmap(file)
                 if (result != null)

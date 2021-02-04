@@ -102,23 +102,14 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
         override fun onChanged(view: ViewEntity?) {
             // If filter is empty use null
-            val filter = view?.filter?.filterList?: emptyArray()
+            val filter = view?.filter
+            val filterList = filter?.filterList?: emptyArray()
             // Don't do anything unless the filter changes
-            if (isSame(filter, lastFilter))
+            if (isSame(filterList, lastFilter))
                 return
-            lastFilter = filter     // Remember last filter
+            lastFilter = filterList     // Remember last filter
 
-            idFilter = if (filter.isEmpty())
-                null
-            else {
-                // Build the  SQLite command to get the book ids for the filter
-                val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(app.applicationContext)
-                // We only need the book id column
-                idFilterBuilder.addSelect(BOOK_ID_COLUMN)
-                // Build the filter without the order terms
-                idFilterBuilder.buildFilter(filter.iterator())
-                BookFilter.BuiltFilter(idFilterBuilder.createCommand(), idFilterBuilder.argList.toArray())
-            }
+            idFilter = filter.buildFilter(app.applicationContext, arrayOf(BOOK_ID_COLUMN), true)
             selection.filter = idFilter
         }
     }

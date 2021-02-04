@@ -84,6 +84,32 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
 }
 
 /**
+ * Convert a Book filter to SQL and an arguments array
+ * @param context The context to use for Date interpretation
+ * @param select The columns to select for the filter
+ * @param excludeOrder True to exclude the order terms
+ */
+fun BookFilter?.buildFilter(context: Context, select: Array<String>, excludeOrder: Boolean = false): BookFilter.BuiltFilter? {
+    // If we aren't selecting anything or this is null, then return null
+    if (select.isEmpty() || this == null || filterList.isEmpty())
+        return null
+    // Build the  SQLite command to get the book ids for the filter
+    val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(context)
+    // We only need the book id column
+    for (s in select)
+        idFilterBuilder.addSelect(s)
+    // Include the order terms
+    if (!excludeOrder)
+        idFilterBuilder.buildOrder(orderList.iterator())
+    // Build the filter
+    idFilterBuilder.buildFilter(filterList.iterator())
+    return BookFilter.BuiltFilter(
+        idFilterBuilder.createCommand(),
+        idFilterBuilder.argList.toArray()
+    )
+}
+
+/**
  * Class with companion methods for BookFilter
  */
 open class BookFilterCompanion {

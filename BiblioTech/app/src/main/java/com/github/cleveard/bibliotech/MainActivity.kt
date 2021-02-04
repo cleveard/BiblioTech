@@ -45,13 +45,13 @@ interface ManageNavigation {
 class MainActivity : AppCompatActivity(), ManageNavigation {
     companion object {
         // The File to the app cache directory. Used to save thumbnails
-        private lateinit var mCache: File
+        private var mCache: File? = null
 
         /**
          * File to the application cache directory.
          * Use to save thumbnails
          */
-        val cache: File
+        val cache: File?
             get() = mCache
 
         // Factory used to create AndroidViewModel view models
