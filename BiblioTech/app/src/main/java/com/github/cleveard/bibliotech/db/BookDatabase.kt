@@ -1410,7 +1410,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
         return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_CATEGORIES_TABLE",
             filter,
