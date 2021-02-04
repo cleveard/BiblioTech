@@ -2,6 +2,7 @@ package com.github.cleveard.bibliotech.db
 
 import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.cleveard.bibliotech.makeBook
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -10,7 +11,7 @@ import kotlin.reflect.KMutableProperty0
 
 @RunWith(AndroidJUnit4::class)
 class BookDatabaseClassesTest {
-    @Test fun testDateConverter() {
+    @Test(timeout = 1000L) fun testDateConverter() {
         // Make a converter
         val cvt = DateConverters()
         // Nulls should convert to nulls
@@ -22,7 +23,7 @@ class BookDatabaseClassesTest {
         assertThat(nowDate).isEqualTo(cvt.fromTimestamp(nowLong))
     }
 
-    @Test fun testFilterConverter() {
+    @Test(timeout = 1000L) fun testFilterConverter() {
         // Make a converter
         val cvt = FilterConverters()
         // Nulls should convert to nulls
@@ -88,28 +89,7 @@ class BookDatabaseClassesTest {
         assertThat(v1.hashCode()).isEqualTo(v2.hashCode())
     }
 
-    private fun makeBook(): BookEntity {
-        return BookEntity(
-            id = 0L,
-            volumeId = "volumeId",
-            sourceId = "sourceId",
-            ISBN = "ISBN",
-            title = "title",
-            subTitle = "subTitle",
-            description = "description",
-            pageCount = 144,
-            bookCount = 5,
-            linkUrl = "linkUrl",
-            rating = 3.14,
-            added = Date(15),
-            modified = Date(22),
-            smallThumb = "smallThumb",
-            largeThumb = "largeThumb",
-            flags = 0,
-        )
-    }
-
-    @Test fun bookEntityTest() {
+    @Test(timeout = 1000L) fun bookEntityTest() {
         val book1 = makeBook()
         val book2 = makeBook()
 
@@ -144,7 +124,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(book1, book2, book1::isExpanded, true)
     }
 
-    @Test fun authorEntityTest() {
+    @Test(timeout = 1000L) fun authorEntityTest() {
         val author1 = AuthorEntity(
             id = 0L,
             lastName = "volumeId",
@@ -177,7 +157,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(author1, author2, author1::remainingName, "sourceIddd")
     }
 
-    @Test fun bookAuthorEntityTest() {
+    @Test(timeout = 1000L) fun bookAuthorEntityTest() {
         fun makeBookAuthor(): BookAndAuthorEntity {
             return BookAndAuthorEntity(
                 id = 0L,
@@ -205,7 +185,7 @@ class BookDatabaseClassesTest {
         )
     }
 
-    @Test fun categoryEntityTest() {
+    @Test(timeout = 1000L) fun categoryEntityTest() {
         val category1 = makeCategory()
         val category2 = makeCategory()
 
@@ -217,7 +197,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(category1, category2, category1::category, "somethingElse")
     }
 
-    @Test fun bookCategoryEntityTest() {
+    @Test(timeout = 1000L) fun bookCategoryEntityTest() {
         fun makeBookCategory(): BookAndCategoryEntity {
             return BookAndCategoryEntity(
                 id = 0L,
@@ -247,7 +227,7 @@ class BookDatabaseClassesTest {
         )
     }
 
-    @Test fun tagEntityTest() {
+    @Test(timeout = 1000L) fun tagEntityTest() {
         val tag1 = makeTag()
         val tag2 = makeTag()
 
@@ -262,7 +242,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(tag1, tag2, tag1::isSelected, true)
     }
 
-    @Test fun bookTagEntityTest() {
+    @Test(timeout = 1000L) fun bookTagEntityTest() {
         fun makeBookTag(): BookAndTagEntity {
             return BookAndTagEntity(
                 id = 0L,
@@ -283,7 +263,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(tag1, tag2, tag1::tagId, 22L)
     }
 
-    @Test fun viewEntityTest() {
+    @Test(timeout = 1000L) fun viewEntityTest() {
         fun makeView(): ViewEntity {
             return ViewEntity(
                 id = 0L,
@@ -311,7 +291,7 @@ class BookDatabaseClassesTest {
         changeAndCheck(view1, view2, view1::filter, null)
     }
 
-   @Test fun bookAndAuthorsTest() {
+   @Test(timeout = 1000L) fun bookAndAuthorsTest() {
        fun makeBookAndAuthors(): BookAndAuthors {
            return BookAndAuthors(
                book = makeBook(),
