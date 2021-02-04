@@ -1347,7 +1347,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
  * Category data access object
  */
 @Dao
-abstract class CategoryDao {
+abstract class CategoryDao(private val db: BookDatabase) {
     /**
      * Get the list of categories
      */
@@ -1405,26 +1405,19 @@ abstract class CategoryDao {
     }
 
     /**
-     * Delete categories for books
-     * @param query The SQLite query to delete the categories
-     */
-    @RawQuery(observedEntities = [BookAndCategoryEntity::class])
-    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
-
-    /**
      * Delete all categories from books
      * @param bookIds A list of book ids. Null means use selected books.
      * @param filter A filter to restrict the book ids
      */
     @Transaction
     open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_CATEGORIES_TABLE",
             filter,
             BOOK_CATEGORIES_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
-            false)?.let { delete(it) }?: 0
+            false))
     }
 
     /**
@@ -1457,13 +1450,6 @@ abstract class CategoryDao {
     protected abstract suspend fun deleteCategory(categoryId: Long): Int
 
     /**
-     * Delete a category
-     * @param category The category to delete
-     */
-    @Delete
-    protected abstract suspend fun delete(category: CategoryEntity)
-
-    /**
      * Find a category by name
      * @param category The name of the category
      */
@@ -1487,13 +1473,14 @@ abstract class CategoryDao {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>?, deleteCategories: Boolean = true, filter: BookFilter.BuiltFilter? = null) {
+    open suspend fun delete(bookIds: Array<Any>?, deleteCategories: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
+        val count: Int
         // Should we delete categories
         if (deleteCategories) {
             // Yes get the id of the categories affected
             val categories = queryBookIds(bookIds, filter)
             // Delete the book category links
-            deleteBooks(bookIds, filter)
+            count = deleteBooks(bookIds, filter)
             categories?.let {
                 // Delete any empty categories
                 for (category in it) {
@@ -1504,8 +1491,10 @@ abstract class CategoryDao {
             }
         } else {
             // No, just delete the book category links
-            deleteBooks(bookIds, filter)
+            count = deleteBooks(bookIds, filter)
         }
+
+        return count
     }
 }
 
