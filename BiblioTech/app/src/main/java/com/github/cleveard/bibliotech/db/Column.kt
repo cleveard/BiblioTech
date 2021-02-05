@@ -341,7 +341,7 @@ abstract class ColumnDataDescriptor(
         ): Cursor {
             val hasConstraint = constraint != null && constraint.isNotEmpty()
             val query = "SELECT $idName as _id, $resultName AS _result FROM $tableName " +
-                (if (hasConstraint) "WHERE _result LIKE ? " else "") +
+                (if (hasConstraint) "WHERE _result LIKE ? ESCAPE '\\' " else "") +
                 (if (group) "GROUP BY _result " else "") +
                 "ORDER BY _result"
             return repo.getCursor(query,

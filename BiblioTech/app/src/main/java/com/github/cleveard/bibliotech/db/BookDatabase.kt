@@ -861,8 +861,17 @@ abstract class TagDao(private val db: BookDatabase) {
      * This uses a case insensitive compare
      */
     @Query(value = "SELECT * FROM $TAGS_TABLE"
-            + " WHERE $TAGS_NAME_COLUMN LIKE :name LIMIT 1")
-    abstract suspend fun findByName(name: String): TagEntity?
+            + " WHERE $TAGS_NAME_COLUMN LIKE :name ESCAPE '\\' LIMIT 1")
+    protected abstract suspend fun doFindByName(name: String): TagEntity?
+
+    /**
+     * Find an tag by name
+     * @param name The name to search for
+     * This uses a case insensitive compare
+     */
+    suspend fun findByName(name: String): TagEntity? {
+        return doFindByName(PredicateDataDescription.escapeLikeWildCards(name))
+    }
 
     /**
      * Query to count bits in the flags column
@@ -1284,8 +1293,20 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @param remaining The rest of the author name
      */
     @Query(value = "SELECT * FROM $AUTHORS_TABLE"
-        + " WHERE $LAST_NAME_COLUMN LIKE :last AND $REMAINING_COLUMN LIKE :remaining")
-    abstract suspend fun findByName(last: String, remaining: String): List<AuthorEntity>
+        + " WHERE $LAST_NAME_COLUMN LIKE :last ESCAPE '\\' AND $REMAINING_COLUMN LIKE :remaining ESCAPE '\\'")
+    abstract suspend fun doFindByName(last: String, remaining: String): List<AuthorEntity>
+
+    /**
+     * Find an author by name
+     * @param last The author last name
+     * @param remaining The rest of the author name
+     */
+    suspend fun findByName(last: String, remaining: String): List<AuthorEntity> {
+        return doFindByName(
+            PredicateDataDescription.escapeLikeWildCards(last),
+            PredicateDataDescription.escapeLikeWildCards(remaining)
+        )
+    }
 
     /**
      * Get the book author links for an author id
@@ -1454,8 +1475,16 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param category The name of the category
      */
     @Query(value = "SELECT * FROM $CATEGORIES_TABLE"
-            + " WHERE $CATEGORY_COLUMN LIKE :category")
-    abstract suspend fun findByName(category: String): List<CategoryEntity>
+            + " WHERE $CATEGORY_COLUMN LIKE :category ESCAPE '\\'")
+    abstract suspend fun doFindByName(category: String): List<CategoryEntity>
+
+    /**
+     * Find a category by name
+     * @param category The name of the category
+     */
+    suspend fun findByName(category: String): List<CategoryEntity> {
+        return doFindByName(PredicateDataDescription.escapeLikeWildCards(category))
+    }
 
     /**
      * Find books by category
@@ -1905,7 +1934,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      * @return The number of views delete
      */
     @Transaction
-    @Query(value = "DELETE FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :viewName ESCAPE '%'")
+    @Query(value = "DELETE FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :viewName ESCAPE '\\'")
     protected abstract suspend fun doDelete(viewName: String): Int
 
     /**
@@ -1953,7 +1982,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      * @param name The name of the view
      * @return The view or null if it wasn't found
      */
-    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '%'")
+    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '\\'")
     protected abstract suspend fun doFindByName(name: String): ViewEntity?
 
     /**

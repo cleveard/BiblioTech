@@ -24,7 +24,7 @@ open class PredicateDataDescription(
     /**
      * Convert the escape character to the escape clause for SQLite
      */
-    private val escapeString = if (escape) " ESCAPE '%'" else ""
+    private val escapeString = if (escape) " ESCAPE '\\'" else ""
 
     /**
      * Convert string values to ints and add to the argument list
@@ -204,8 +204,8 @@ open class PredicateDataDescription(
         /**
          * Pattern for escaping % and _ in like operator
          */
-        private val escapeRegex = Regex("([%_])")
-        private const val escapeReplace = "%$1"
+        private val escapeRegex = Regex("([%_\\\\])")
+        private const val escapeReplace = "\\\\$1"
 
         /**
          * Escape wilde cards in a string
@@ -323,7 +323,7 @@ private class GlobDataDescription(
     override fun buildExpression(buildQuery: BuildQuery, c: Array<String>, logical: String) {
         val expr = StringBuilder()
         for (name in c) {
-            expr.append("${if (expr.isEmpty()) "" else " $logical "}( $name LIKE ? ESCAPE '%' )")
+            expr.append("${if (expr.isEmpty()) "" else " $logical "}( $name LIKE ? ESCAPE '\\' )")
         }
         buildQuery.addFilterExpression(expr.toString())
     }
