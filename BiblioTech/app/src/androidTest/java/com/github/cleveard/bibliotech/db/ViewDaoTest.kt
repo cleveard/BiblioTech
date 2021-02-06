@@ -29,7 +29,7 @@ class ViewDaoTest {
         BookDatabase.close()
     }
 
-    @Test/*(timeout = 1000L)*/ fun testViewDao() {
+    @Test(timeout = 1000L) fun testViewDao() {
         runBlocking {
             val viewDao = db.getViewDao()
             // Make some views
@@ -59,10 +59,10 @@ class ViewDaoTest {
                 // Add the view
                 val id = viewDao.addOrUpdate(v) { false }
                 // Check id and findByName
-                assertWithMessage("Add View %s", v.name).let { assert ->
-                    assert.that(id).isNotEqualTo(0L)
-                    assert.that(id).isEqualTo(v.id)
-                    assert.that(viewDao.findByName(v.name)).isEqualTo(v)
+                assertWithMessage("Add View %s", v.name).apply {
+                    that(id).isNotEqualTo(0L)
+                    that(id).isEqualTo(v.id)
+                    that(viewDao.findByName(v.name)).isEqualTo(v)
                 }
             }
 
@@ -83,28 +83,28 @@ class ViewDaoTest {
 
             val newView = views[0].copy(id = 0L, desc = "descNew", filter = BookFilter(emptyArray(), emptyArray()))
             // Fail to add a conflicting view
-            assertWithMessage("Conflict Fail").let {assert ->
-                assert.that(viewDao.addOrUpdate(newView) { false }).isEqualTo(0L)
-                assert.checkNames()
+            assertWithMessage("Conflict Fail").apply {
+                that(viewDao.addOrUpdate(newView) { false }).isEqualTo(0L)
+                checkNames()
             }
 
             // Add a conflicting view
-            assertWithMessage("Conflict Succeed").let { assert ->
+            assertWithMessage("Conflict Succeed").apply {
                 val id = viewDao.addOrUpdate(newView) { true }
-                assert.that(id).isEqualTo(views[0].id)
-                assert.that(id).isEqualTo(newView.id)
-                assert.that(viewDao.findByName(newView.name)).isEqualTo(newView)
+                that(id).isEqualTo(views[0].id)
+                that(id).isEqualTo(newView.id)
+                that(viewDao.findByName(newView.name)).isEqualTo(newView)
                 names[newView.name] = newView
-                assert.checkNames()
+                checkNames()
             }
 
             // Delete the views one at a time and check the list
             for (i in views.size - 1 downTo 0) {
-                assertWithMessage("Delete View %s", views[i].name).let { assert ->
-                    assert.that(viewDao.delete(views[i].name)).isEqualTo(1)
-                    assert.that(viewDao.findByName(views[i].name)).isEqualTo(null)
+                assertWithMessage("Delete View %s", views[i].name).apply {
+                    that(viewDao.delete(views[i].name)).isEqualTo(1)
+                    that(viewDao.findByName(views[i].name)).isEqualTo(null)
                     names.remove(views[i].name)
-                    assert.checkNames()
+                    checkNames()
                 }
             }
         }
