@@ -675,7 +675,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * Add multiple tags for a book
      * @param bookId The id of the book
      * @param tags A list of possibly new tags for the book. Null means include selected tags
-     * @param tagIds An optional list of tag ids
+     * @param tagIds An optional list of tag ids. Null means to use the selected tags
      */
     @Transaction
     open suspend fun add(bookId: Long, tags: List<TagEntity>, tagIds: Array<Any>?) {
@@ -969,24 +969,17 @@ abstract class BookTagDao(private val db:BookDatabase) {
     abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
 
     /**
-     * Delete tags for books
-     * @param query SQLite query to delete tags
-     */
-    @RawQuery(observedEntities = [BookAndTagEntity::class])
-    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
-
-    /**
      * Delete multiple book tag entities
      * @param bookTagIds A list of ids for BookTagEntities.
      */
     @Transaction
     open suspend fun deleteById(bookTagIds: Array<Any>): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
             BOOK_TAGS_ID_COLUMN,
             null,
             bookTagIds,
-            false)?.let { delete(it) }?: 0
+            false))
     }
 
     /**
@@ -1001,9 +994,9 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * all tags from the books identified by booksIds
      */
     @Transaction
-    open suspend fun deleteTagsForBooks(bookIds: Array<Any>, filter: BookFilter.BuiltFilter? = null,
+    open suspend fun deleteTagsForBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
                                                 tagIds: Array<Any>? = null, tagsInvert: Boolean = true): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
             filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
@@ -1013,7 +1006,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
             BOOK_TAGS_TAG_ID_COLUMN,
             null,
             tagIds,
-            tagsInvert)?.let { delete(it) }?: 0
+            tagsInvert))
     }
 
     /**
@@ -1027,7 +1020,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
     @Transaction
     open suspend fun deleteSelectedTagsForBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
                                                 tagIds: Array<Any>? = null, invert: Boolean = false): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
             filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
@@ -1037,7 +1030,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
             BOOK_TAGS_TAG_ID_COLUMN,
             TagDao.selectedIdSubQuery,
             tagIds,
-            invert)?.let { delete(it) }?: 0
+            invert))
     }
 
     /**
@@ -1046,12 +1039,12 @@ abstract class BookTagDao(private val db:BookDatabase) {
      */
     @Transaction
     open suspend fun deleteTagsForTags(tagIds: Array<Any>?): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TAGS_TABLE",
             BOOK_TAGS_TAG_ID_COLUMN,
             TagDao.selectedIdSubQuery,
             tagIds,
-            false)?.let { delete(it) }?: 0
+            false))
     }
 
     /**
@@ -1066,7 +1059,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param bookIds A list of book ids. Null means use the selected books.
      * @param filter A filter to restrict the book ids
      */
-    private suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
+    suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_TAGS_TAG_ID_COLUMN FROM $BOOK_TAGS_TABLE",
             filter,
@@ -1160,13 +1153,14 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteSelectedBooks(bookIds: Array<Any>?, deleteTags: Boolean = false, filter: BookFilter.BuiltFilter? = null) {
+    open suspend fun deleteSelectedBooks(bookIds: Array<Any>?, deleteTags: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
+        val count: Int
         // Do we want to delete any books
         if (deleteTags) {
             // Yes, get the ids of tags that are affected
             val tags = queryBookIds(bookIds, filter)
             // Delete the book tag links
-            deleteSelectedTagsForBooks(bookIds, filter)
+            count = deleteTagsForBooks(bookIds, filter)
             tags?.let {
                 // Check for empty tags and delete them
                 for (tag in it) {
@@ -1177,8 +1171,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
             }
         } else {
             // Don't delete tags, so just delete the links
-            deleteSelectedTagsForBooks(bookIds, filter)
+            count = deleteTagsForBooks(bookIds, filter)
         }
+
+        return count
     }
 
     /**
@@ -2137,12 +2133,13 @@ abstract class BookDatabase : RoomDatabase() {
          */
         private fun getExpression(column: String?, selectedExpression: ((invert: Boolean) -> String)?, ids: Array<Any>?, invert: Boolean?, args: MutableList<Any>): String? {
             // Return null if we select nothing
-            if (column == null || (invert != true && ids.isNullOrEmpty() && selectedExpression == null))
+            val emptyIds = if (ids == null) selectedExpression == null else ids.isEmpty()
+            if (column == null || (invert != true && emptyIds))
                 return null
 
             // Build the expression string
             val builder = StringBuilder()
-            if (ids?.isNotEmpty() == true || selectedExpression != null) {
+            if (!emptyIds) {
                 builder.append("( ")
                 builder.append(column)
                 if (ids != null) {
