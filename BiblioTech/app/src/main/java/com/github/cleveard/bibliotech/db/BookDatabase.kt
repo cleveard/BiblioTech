@@ -2206,13 +2206,12 @@ abstract class BookDatabase : RoomDatabase() {
                     args
                 )?.let {expr ->
                     // We got an expression
-                    select = true
                     bookColumn = bookColumn?: column
                     if (expr != "") {
                         // Start with WHERE and then use AND to separate expressions
                         builder.append("${if (builder.isEmpty()) "WHERE " else " AND "}$expr")
                     }
-                }
+                }?: return null
             }
 
             if (filter != null && bookColumn != null) {
@@ -2221,10 +2220,7 @@ abstract class BookDatabase : RoomDatabase() {
             }
 
             // Return the query if there was one
-            return if (select) {
-                SimpleSQLiteQuery("$command $builder", args.toArray())
-            } else
-                return null     // No conditions selected anything
+            return SimpleSQLiteQuery("$command $builder", args.toArray())
         }
 
         /**
