@@ -1102,8 +1102,8 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param tagId The id of the tag
      */
     @Transaction
-    open suspend fun addTagToBook(bookId: Long, tagId: Long) {
-        add(BookAndTagEntity(0, tagId, bookId))
+    open suspend fun addTagToBook(bookId: Long, tagId: Long): Long {
+        return add(BookAndTagEntity(0, tagId, bookId))
     }
 
     /**
