@@ -10,7 +10,7 @@ import java.util.*
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-fun makeBook(unique: Int = 0): BookEntity {
+fun makeBook(unique: Int = 0, flags: Int = 0): BookEntity {
     return BookEntity(
         id = 0L,
         volumeId = "volumeId$unique",
@@ -27,13 +27,13 @@ fun makeBook(unique: Int = 0): BookEntity {
         modified = Date(22 + unique.toLong()),
         smallThumb = "smallThumb$unique",
         largeThumb = "largeThumb$unique",
-        flags = unique,
+        flags = flags,
     )
 }
 
-fun makeBookAndAuthors(unique: Int = 0): BookAndAuthors {
+fun makeBookAndAuthors(unique: Int = 0, flags: Int = 0): BookAndAuthors {
     return BookAndAuthors(
-        book = makeBook(unique),
+        book = makeBook(unique, flags),
         authors = emptyList(),
         categories = emptyList(),
         tags = emptyList()

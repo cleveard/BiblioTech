@@ -13,6 +13,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.math.exp
 
 @RunWith(AndroidJUnit4::class)
 class BookTagDaoTest {
@@ -33,8 +34,8 @@ class BookTagDaoTest {
 
     private suspend fun addBooks(): Array<BookAndAuthors> {
         val books = arrayOf(
-            makeBookAndAuthors(1),
-            makeBookAndAuthors(2)
+            makeBookAndAuthors(1, 0),
+            makeBookAndAuthors(2, BookEntity.SELECTED)
         )
 
         // Add the books
@@ -125,6 +126,7 @@ class BookTagDaoTest {
 
             var tagList: List<TagEntity>?
             // Add the tags for the books
+            @Suppress("VARIABLE_WITH_REDUNDANT_INITIALIZER")
             var tags = addTags(books, emptyArray())
             assertWithMessage("Delete keep tags").apply {
                 // Delete the tags for books[0]. Check that two book-tag links are deleted
@@ -237,17 +239,17 @@ class BookTagDaoTest {
         }
     }
 
-    @Test/*(timeout = 1000L)*/ fun testLinkAddDelete() {
+    @Test(timeout = 1000L) fun testLinkAddDelete() {
         runBlocking {
             val books = addBooks()
             val tags = addTags(null)
 
             val bookTagDao = db.getBookTagDao()
-            data class TagLink(
+            class TagLink(
                 val tag: TagEntity,
                 val bookAndTag: BookAndTagEntity
             )
-            data class Link(
+            class Link(
                 val book: BookAndAuthors,
                 val tagLink: Array<TagLink>
             )
@@ -394,6 +396,224 @@ class BookTagDaoTest {
                 that(bookTagDao.queryBookIds(arrayOf(books[0].book.id))).containsExactly(tags[2].id)
                 that(bookTagDao.queryBookIds(arrayOf(books[1].book.id))).containsExactly(tags[1].id)
             }
+        }
+    }
+
+    @Test(timeout = 1000L) fun testAddTagToBook() {
+        runBlocking {
+            val books = addBooks()
+            val tags = addTags(null)
+            val expectedTagIds = Array<ArrayList<Long>>(books.size) { ArrayList() }
+            val expectedLinks = Array<ArrayList<BookAndTagEntity>>(tags.size) { ArrayList() }
+
+            val bookTagDao = db.getBookTagDao()
+            for ((i, b) in books.withIndex()) {
+                for ((j, t) in tags.withIndex()) {
+                    val id = bookTagDao.addTagToBook(b.book.id, t.id)
+                    assertWithMessage("AddTagToBook %s %s", b.book.title, t.name)
+                        .that(id).isNotEqualTo(0)
+                    expectedTagIds[i].add(t.id)
+                    expectedLinks[j].add(BookAndTagEntity(id, t.id, b.book.id))
+                    for ((k, bb) in books.withIndex()) {
+                        assertWithMessage("AddTagToBook %s %s for %s", b.book.title, t.name, bb.book.title)
+                            .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                            .containsExactlyElementsIn(expectedTagIds[k])
+                    }
+                    for ((k, tt) in tags.withIndex()) {
+                        assertWithMessage("AddTagToBook %s %s for %s", b.book.title, t.name, t.name)
+                            .that(bookTagDao.queryTags(arrayOf(tt.id))?: emptyList<BookAndTagEntity>())
+                            .containsExactlyElementsIn(expectedLinks[k])
+                    }
+                }
+            }
+        }
+    }
+
+    @Test(timeout = 1000L) fun testAddTagsToBook() {
+        runBlocking {
+            val books = addBooks()
+            val tags = addTags(null)
+            val expected = Array<ArrayList<Long>>(books.size) { ArrayList() }
+            val groups = arrayOf(listOf(tags[0].id), listOf(tags[1].id, tags[2].id))
+
+            val bookTagDao = db.getBookTagDao()
+            for ((i, b) in books.withIndex()) {
+                for (g in groups) {
+                    bookTagDao.addTagsToBook(b.book.id, g)
+                    expected[i].addAll(g)
+                    for ((j, bb) in books.withIndex()) {
+                        assertWithMessage("AddTagsToBook %s %s for %s", b.book.title, g, bb.book.title)
+                            .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                            .containsExactlyElementsIn(expected[j])
+                    }
+                }
+            }
+        }
+    }
+
+    @Test(timeout = 1000L) fun testAddTagsToBooks() {
+        runBlocking {
+            val books = addBooks()
+            val tags = addTags(null)
+            val expected = ArrayList<Long>()
+            val groups = arrayOf(listOf(tags[0].id), listOf(tags[1].id, tags[2].id))
+
+            val bookTagDao = db.getBookTagDao()
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(books.map { it.book.id }, g)
+                expected.addAll(g)
+                for (bb in books) {
+                    assertWithMessage("AddTagsToBooks %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected)
+                }
+            }
+        }
+    }
+
+    @Test(timeout = 1000L) fun testAddTagsToBooksNullSelected() {
+        runBlocking {
+            val books = addBooks()
+            val bookIds = books.map { it.book.id }.toTypedArray<Any>()
+            val tags = addTags(null)
+            val filter1 = BookFilter(emptyArray(), arrayOf(
+                FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title1")))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            val filter2 = BookFilter(emptyArray(), arrayOf(
+                FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title2")))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            val expected = Array<ArrayList<Any>>(books.size) { ArrayList() }
+            val groups = arrayOf(arrayOf<Any>(tags[0].id), arrayOf<Any>(tags[1].id, tags[2].id))
+            val bookTagDao = db.getBookTagDao()
+
+            suspend fun deleteAll() {
+                bookTagDao.deleteTagsForBooks(bookIds)
+                for (e in expected)
+                    e.clear()
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("DeleteAll for %s", bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(bookIds, g, null)
+                expected[0].addAll(g)
+                for (bb in books) {
+                    assertWithMessage("AddTagsToBooks no filter %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[0])
+                }
+            }
+            deleteAll()
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(bookIds, g, filter1)
+                expected[0].addAll(g)
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("AddTagsToBooks with filter1 %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+            deleteAll()
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(bookIds, g, filter2)
+                expected[1].addAll(g)
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("AddTagsToBooks with filter2 %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+            deleteAll()
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(null, g, null)
+                expected[1].addAll(g)
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("AddTagsToBooks selected books no filter %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+            deleteAll()
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(null, g, filter1)
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("AddTagsToBooks selected books with filter1 %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+            deleteAll()
+
+            for (g in groups) {
+                bookTagDao.addTagsToBooks(null, g, filter2)
+                expected[1].addAll(g)
+                for ((i, bb) in books.withIndex()) {
+                    assertWithMessage("AddTagsToBooks selected books with filter2 %s for %s", g[0], bb.book.title)
+                        .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                        .containsExactlyElementsIn(expected[i])
+                }
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(bookIds, null, null)
+            expected[0].add(tags[0].id)
+            for (bb in books) {
+                assertWithMessage("AddTagsToBooks selected tags no filter for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[0])
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(bookIds, null, filter1)
+            expected[0].add(tags[0].id)
+            for ((i, bb) in books.withIndex()) {
+                assertWithMessage("AddTagsToBooks selected tags with filter1 for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[i])
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(bookIds, null, filter2)
+            expected[1].add(tags[0].id)
+            for ((i, bb) in books.withIndex()) {
+                assertWithMessage("AddTagsToBooks selected tags with filter2 for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[i])
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(null, null, null)
+            expected[1].add(tags[0].id)
+            for ((i, bb) in books.withIndex()) {
+                assertWithMessage("AddTagsToBooks selected books selected tags no filter for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[i])
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(null, null, filter1)
+            for ((i, bb) in books.withIndex()) {
+                assertWithMessage("AddTagsToBooks selected books selected tags with filter1 for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[i])
+            }
+            deleteAll()
+
+            bookTagDao.addTagsToBooks(null, null, filter2)
+            expected[1].add(tags[0].id)
+            for ((i, bb) in books.withIndex()) {
+                assertWithMessage("AddTagsToBooks selected books selected tags with filter2 for %s", bb.book.title)
+                    .that(bookTagDao.queryBookIds(arrayOf(bb.book.id))?: emptyList<Long>())
+                    .containsExactlyElementsIn(expected[i])
+            }
+            deleteAll()
         }
     }
 }
