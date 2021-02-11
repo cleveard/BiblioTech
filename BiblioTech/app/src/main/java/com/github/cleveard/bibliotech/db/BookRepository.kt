@@ -194,8 +194,8 @@ class BookRepository private constructor() {
      * Delete books from the book database
      * @param filter The current filter
      */
-    suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?) {
-        db.getBookDao().deleteSelected(filter)
+    suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>? = null) {
+        db.getBookDao().deleteSelected(filter, bookIds)
     }
 
     /**

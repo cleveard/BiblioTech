@@ -1547,7 +1547,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
         return BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TABLE",
             filter,
@@ -1720,18 +1720,19 @@ abstract class BookDao(private val db: BookDatabase) {
     /**
      * Delete books
      * @param filter A filter to restrict the book ids
+     * @param bookIds Optional bookIds to delete. Null means delete selected books
      */
     @Transaction
-    open suspend fun deleteSelected(filter: BookFilter.BuiltFilter?) {
+    open suspend fun deleteSelected(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>?) {
         // Delete all tags for the books - keep tags with no books
-        db.getBookTagDao().deleteSelectedBooks(null, false, filter)
+        db.getBookTagDao().deleteSelectedBooks(bookIds, false, filter)
         // Delete all authors for the books - delete authors with no books
-        db.getAuthorDao().delete(null, true, filter)
+        db.getAuthorDao().delete(bookIds, true, filter)
         // Delete all categories for the book - delete categories with no books
-        db.getCategoryDao().delete(null, true, filter)
+        db.getCategoryDao().delete(bookIds, true, filter)
 
         // Delete all thumbnails
-        queryBookIds(null, filter)?.let {
+        queryBookIds(bookIds, filter)?.let {
             for (book in it) {
                 thumbnails.deleteThumbFile(book, true)
                 thumbnails.deleteThumbFile(book, false)
@@ -1739,7 +1740,7 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Finally delete the books
-        deleteBooks(null, filter)
+        deleteBooks(bookIds, filter)
 
     }
 
