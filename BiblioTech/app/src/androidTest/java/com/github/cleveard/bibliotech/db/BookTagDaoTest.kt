@@ -122,7 +122,7 @@ class BookTagDaoTest {
             val books = addBooks()
             val filter = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title2")))
-            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
 
             var tagList: List<TagEntity>?
             // Add the tags for the books
@@ -264,7 +264,7 @@ class BookTagDaoTest {
             )
             val filter = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title2")))
-            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
 
             suspend fun addLinks() {
                 for (l in links) {
@@ -478,10 +478,10 @@ class BookTagDaoTest {
             val tags = addTags(null)
             val filter1 = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title1")))
-            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
             val filter2 = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title2")))
-            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
             val expected = Array<ArrayList<Any>>(books.size) { ArrayList() }
             val groups = arrayOf(arrayOf<Any>(tags[0].id), arrayOf<Any>(tags[1].id, tags[2].id))
             val bookTagDao = db.getBookTagDao()

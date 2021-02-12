@@ -44,7 +44,7 @@ class CategoryDaoTest {
             )
             val filter = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, arrayOf("title2")))
-            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN))
+            ).buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
 
             // Add the books
             db.getBookDao().addOrUpdate(books[0])
