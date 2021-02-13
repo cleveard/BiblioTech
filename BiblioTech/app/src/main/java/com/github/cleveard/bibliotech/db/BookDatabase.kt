@@ -1594,18 +1594,11 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     /**
-     * Delete a single book from the book table
-     * @param book The book to delete
-     */
-    @Delete
-    protected abstract suspend fun delete(book: BookEntity)
-
-    /**
      * Update a book in the book table
      * @param book The book to update
      */
     @Update
-    protected abstract suspend fun update(book: BookEntity)
+    protected abstract suspend fun update(book: BookEntity): Int
 
     /**
      * Class to get unique columns in the book table
@@ -1691,7 +1684,8 @@ abstract class BookDao(private val db: BookDatabase) {
             // Had a conflict, get the id and time added and update the book
             book.id = ids.id
             book.added = ids.added
-            update(book)
+            if (update(book) == 0)
+                book.id = 0L
         }
     }
 
@@ -1761,7 +1755,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param query The SQLite query to get the books
      */
     @RawQuery(observedEntities = [BookAndAuthors::class])
-    abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>
+    protected abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>
 
     /**
      * Get books
