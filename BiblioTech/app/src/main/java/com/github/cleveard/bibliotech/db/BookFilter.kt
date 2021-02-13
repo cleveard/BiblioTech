@@ -357,14 +357,7 @@ data class OrderField(
      * @param other The other field
      */
     fun isSameQuery(other: OrderField) : Boolean {
-        // Make sure other is an OrderField
-        if (this === other) return true
-
-        // The query is the same if the column and order are the same.
-        // Separators don't matter
-        if (column != other.column) return false
-        if (order != other.order) return false
-        return true
+        return this == other
     }
 }
 
