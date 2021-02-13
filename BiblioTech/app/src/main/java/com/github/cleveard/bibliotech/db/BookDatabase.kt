@@ -2186,7 +2186,6 @@ abstract class BookDatabase : RoomDatabase() {
             val args = ArrayList<Any>()
 
             // Create the conditions
-            var select = false
             var bookColumn: String? = null
             // Loop through the conditions in the varargs
             for (i in 0..condition.size - 4 step 4) {

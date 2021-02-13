@@ -3,6 +3,7 @@ package com.github.cleveard.bibliotech.gb
 import android.net.Uri
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
+import androidx.paging.PagingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -82,6 +83,14 @@ internal class GoogleBookLookup private constructor() {
                 nextKey = nextKey
             )
         }
+
+        /** @inheritDoc */
+        override fun getRefreshKey(state: PagingState<Int, Any>): Int? {
+            return state.anchorPosition
+        }
+
+        override val jumpingSupported: Boolean
+            get() = true
     }
 
     companion object {
