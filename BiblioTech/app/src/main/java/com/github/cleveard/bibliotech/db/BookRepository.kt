@@ -60,12 +60,13 @@ class BookRepository private constructor() {
         /**
          * Initialize the BookRepository
          * @param context Application context
+         * @param inMemory Create the book database in memory
          */
-        fun initialize(context: Context) {
+        fun initialize(context: Context, inMemory: Boolean = false) {
             // Only initialize if it has been closed
             if (mRepo == null) {
                 // Initialize the database
-                BookDatabase.initialize(context)
+                BookDatabase.initialize(context, inMemory)
                 // Create the repository
                 mRepo = BookRepository()
             }
@@ -194,8 +195,8 @@ class BookRepository private constructor() {
      * Delete books from the book database
      * @param filter The current filter
      */
-    suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>? = null) {
-        db.getBookDao().deleteSelected(filter, bookIds)
+    suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>? = null): Int {
+        return db.getBookDao().deleteSelected(filter, bookIds)
     }
 
     /**
