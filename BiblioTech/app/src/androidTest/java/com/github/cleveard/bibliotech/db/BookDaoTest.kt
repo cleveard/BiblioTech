@@ -34,21 +34,9 @@ class BookDaoTest {
         BookDatabase.close()
     }
 
-    private suspend fun addBooks(seed: Long, message: String, count: Int): BookDbTracker {
-        // Updating a book that conflicts with two other books will fail
-        val expected = BookDbTracker(db, seed)
-        expected.addTag()
-        expected.addTag(TagEntity.SELECTED)
-        expected.addTag(TagEntity.SELECTED)
-        expected.addTag(0)
-
-        expected.addBooks(message, count)
-        return expected
-    }
-
     @Test(timeout = 25000L) fun testAddDeleteBookEntity() {
         runBlocking {
-            val expected = addBooks(2564621L, "AddBooks Delete", 20)
+            val expected = BookDbTracker.addBooks(db,2564621L, "AddBooks Delete", 20)
             val bookDao = db.getBookDao()
 
             var count = 0
@@ -82,7 +70,7 @@ class BookDaoTest {
 
     @Test(timeout = 25000L) fun testAddDeleteBookEntityEmptyFilter() {
         runBlocking {
-            val expected = addBooks(9922621L, "AddBooks Empty Filter", 20)
+            val expected = BookDbTracker.addBooks(db,9922621L, "AddBooks Empty Filter", 20)
             val filter = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, emptyArray())
             )).buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
@@ -117,28 +105,9 @@ class BookDaoTest {
         }
     }
 
-    private fun BookDbTracker.makeFilter(): BookFilter {
-        val values = ArrayList<String>()
-        fun getValues(count: Int, selected: Boolean) {
-            repeat(count) {
-                var book: BookAndAuthors
-                do {
-                    book = bookEntities[random.nextInt(bookEntities.size)]
-                } while (book.book.isSelected != selected && values.contains(book.book.title))
-                values.add(book.book.title)
-            }
-        }
-        val selected = bookEntities.entities.filter { it.book.isSelected }.count().coerceAtMost(3)
-        getValues(selected, true)
-        getValues(5 - selected, false)
-        return BookFilter(emptyArray(), arrayOf(
-            FilterField(Column.TITLE, Predicate.ONE_OF, values.toTypedArray())
-        ))
-    }
-
     @Test(timeout = 25000L) fun testAddDeleteBookEntityWithFilter() {
         runBlocking {
-            val expected = addBooks(8964521L, "AddBooks Filter", 20)
+            val expected = BookDbTracker.addBooks(db,8964521L, "AddBooks Filter", 20)
             val bookFilter = expected.makeFilter()
             val filter = bookFilter.buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
             val bookDao = db.getBookDao()
@@ -179,7 +148,7 @@ class BookDaoTest {
 
     @Test(timeout = 25000L) fun testUpdateBookEntity() {
         runBlocking {
-            val expected = addBooks(554321L, "AddBooks Update", 20)
+            val expected = BookDbTracker.addBooks(db,554321L, "AddBooks Update", 20)
 
             repeat (5) {
                 val i = expected.random.nextInt(expected.bookEntities.size)
@@ -201,7 +170,7 @@ class BookDaoTest {
     @Test(timeout = 5000L, expected = SQLiteConstraintException::class) fun testUpdateFails() {
         runBlocking {
             // Updating a book that conflicts with two other books will fail
-            val expected = addBooks(5668721L, "AddBooks Update", 20)
+            val expected = BookDbTracker.addBooks(db,5668721L, "AddBooks Update", 20)
             val book = expected.bookEntities.new()
             book.book.ISBN = expected.bookEntities[3].book.ISBN
             book.book.sourceId = expected.bookEntities[11].book.sourceId
@@ -212,7 +181,7 @@ class BookDaoTest {
 
     @Test(timeout = 5000L) fun testGetBooks() {
         runBlocking {
-            val expected = addBooks(56542358L, "GetBooks", 20)
+            val expected = BookDbTracker.addBooks(db,56542358L, "GetBooks", 20)
             assertWithMessage("GetBooks").apply {
                 val source = db.getBookDao().getBooks()
                 val result = source.load(
@@ -234,7 +203,7 @@ class BookDaoTest {
 
     @Test(timeout = 5000L) fun testGetBooksFiltered() {
         runBlocking {
-            val expected = addBooks(565199823L, "GetBooks Filtered", 20)
+            val expected = BookDbTracker.addBooks(db,565199823L, "GetBooks Filtered", 20)
             assertWithMessage("GetBooks").apply {
                 val filter = expected.makeFilter()
                 val source = db.getBookDao().getBooks(filter, context)
@@ -262,7 +231,7 @@ class BookDaoTest {
 
     @Test(timeout = 5000L) fun testQueryBookIds() {
         runBlocking {
-            val expected = addBooks(2564621L, "AddBooks Delete", 20)
+            val expected = BookDbTracker.addBooks(db,2564621L, "AddBooks Delete", 20)
             val bookDao = db.getBookDao()
 
             val ids = ArrayList<Long>().apply {
@@ -300,7 +269,7 @@ class BookDaoTest {
 
     @Test(timeout = 5000L) fun testQueryBookIdsEmptyFilter() {
         runBlocking {
-            val expected = addBooks(2564621L, "AddBooks Delete", 20)
+            val expected = BookDbTracker.addBooks(db,2564621L, "AddBooks Delete", 20)
             val filter = BookFilter(emptyArray(), arrayOf(
                 FilterField(Column.TITLE, Predicate.ONE_OF, emptyArray())
             )).buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
@@ -341,7 +310,7 @@ class BookDaoTest {
 
     @Test(timeout = 5000L) fun testQueryBookIdsWithFilter() {
         runBlocking {
-            val expected = addBooks(2564621L, "AddBooks Delete", 20)
+            val expected = BookDbTracker.addBooks(db,2564621L, "AddBooks Delete", 20)
             val bookFilter = expected.makeFilter()
             val filter = bookFilter.buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
             val bookDao = db.getBookDao()
@@ -429,12 +398,10 @@ class BookDaoTest {
                     s = s.filter { bookFilter.filterList[0].values.contains(it.book.title) }
                 if (book != null)
                     s = s.filter { it.book.id == book.book.id }
-                if (operation == true) {
-                    s = s.filter { (it.book.flags and mask) != mask }.map { it.book.flags = it.book.flags or mask; it }
-                } else if (operation == false) {
-                    s = s.filter { (it.book.flags and mask) != 0 }.map { it.book.flags = it.book.flags and mask.inv(); it }
-                } else {
-                    s = s.map { it.book.flags = it.book.flags xor mask; it }
+                when (operation) {
+                    true -> { s = s.filter { (it.book.flags and mask) != mask }.map { it.book.flags = it.book.flags or mask; it } }
+                    false -> { s = s.filter { (it.book.flags and mask) != 0 }.map { it.book.flags = it.book.flags and mask.inv(); it } }
+                    else -> { s = s.map { it.book.flags = it.book.flags xor mask; it } }
                 }
                 val expCount = s.count()
                 val count = bookDao.changeBits(operation, mask, book?.book?.id, filter)
@@ -457,14 +424,14 @@ class BookDaoTest {
 
     @Test(timeout = 50000L) fun testBitChanges() {
         runBlocking {
-            val expected = addBooks(552841129L, "Test Bit Change", 20)
+            val expected = BookDbTracker.addBooks(db,552841129L, "Test Bit Change", 20)
             expected.testBitChanges("", null)
         }
     }
 
     @Test(timeout = 50000L) fun testBitChangesFiltered() {
         runBlocking {
-            val expected = addBooks(1165478L, "Test Bit Change filtered", 20)
+            val expected = BookDbTracker.addBooks(db,1165478L, "Test Bit Change filtered", 20)
             expected.testBitChanges(" filtered", expected.makeFilter())
         }
     }

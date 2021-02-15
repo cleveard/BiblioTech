@@ -4,6 +4,7 @@ import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.makeBookAndAuthors
 import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertWithMessage
+import kotlinx.coroutines.CoroutineScope
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -21,7 +22,15 @@ fun StandardSubjectBuilder.compareBooks(actual: BookAndAuthors?, expected: BookA
 
 }
 
-class BookDbTracker(private val db: BookDatabase, seed: Long) {
+abstract class BookDbTracker(seed: Long) {
+    abstract suspend fun getBook(bookId: Long): BookAndAuthors?
+    abstract suspend fun getTag(tagId: Long): TagEntity?
+    abstract suspend fun addOrUpdate(book: BookAndAuthors, tags: Array<Any>?): Array<Any>?
+    abstract suspend fun addTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long
+    abstract suspend fun findTagByName(name: String): TagEntity?
+    abstract suspend fun findCategoryByName(name: String): List<CategoryEntity>?
+    abstract suspend fun findAuthorByName(lastName: String, firstName: String): List<AuthorEntity>?
+
     val random = Random(seed)
     var tagEntities: Table<TagEntity> = object: Table<TagEntity>(
         {flags, _, unique -> TagEntity(0L, "tag$unique", "desc$unique", flags) },
@@ -68,7 +77,7 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
         val entity = tagEntities.new(flags)
         tagEntities.linked(entity)
         tagEntities.unlinked(entity)
-        assertWithMessage("AddTag").that(db.getTagDao().add(entity)).isNotEqualTo(0L)
+        assertWithMessage("AddTag").that(addTag(entity)).isNotEqualTo(0L)
     }
 
     private fun checkConsistency(message: String) {
@@ -79,26 +88,22 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
     }
 
     suspend fun checkDatabase(message: String) {
-        val bookDao = db.getBookDao()
-        val tagDao = db.getTagDao()
-        val authorDao = db.getAuthorDao()
-        val categoryDao = db.getCategoryDao()
         for (book in bookEntities.deleted)
-            assertWithMessage("%s: %s", message, book.book.title).that(bookDao.getBook(book.book.id)).isNull()
+            assertWithMessage("%s: %s", message, book.book.title).that(getBook(book.book.id)).isNull()
         for (book in bookEntities.entities)
-            assertWithMessage("%s: %s", message, book.book.title).compareBooks(bookDao.getBook(book.book.id), book)
+            assertWithMessage("%s: %s", message, book.book.title).compareBooks(getBook(book.book.id), book)
         for (tag in tagEntities.deleted)
-            assertWithMessage("%s: %s", message, tag.name).that(tagDao.findByName(tag.name)).isNull()
+            assertWithMessage("%s: %s", message, tag.name).that(findTagByName(tag.name)).isNull()
         for (tag in tagEntities.entities)
-            assertWithMessage("%s: %s", message, tag.name).that(tagDao.findByName(tag.name)).isEqualTo(tag)
+            assertWithMessage("%s: %s", message, tag.name).that(findTagByName(tag.name)).isEqualTo(tag)
         for (category in categoryEntities.deleted)
-            assertWithMessage("%s: %s", message, category.category).that(categoryDao.findByName(category.category)).isEmpty()
+            assertWithMessage("%s: %s", message, category.category).that(findCategoryByName(category.category)).isEmpty()
         for (category in categoryEntities.entities)
-            assertWithMessage("%s: %s", message, category.category).that(categoryDao.findByName(category.category)).containsExactlyElementsIn(listOf(category))
+            assertWithMessage("%s: %s", message, category.category).that(findCategoryByName(category.category)).containsExactlyElementsIn(listOf(category))
         for (author in authorEntities.deleted)
-            assertWithMessage("%s: %s", message, author.lastName).that(authorDao.findByName(author.lastName, author.remainingName)).isEmpty()
+            assertWithMessage("%s: %s", message, author.lastName).that(findAuthorByName(author.lastName, author.remainingName)).isEmpty()
         for (author in authorEntities.entities)
-            assertWithMessage("%s: %s", message, author.lastName).that(authorDao.findByName(author.lastName, author.remainingName)).containsExactlyElementsIn(listOf(author))
+            assertWithMessage("%s: %s", message, author.lastName).that(findAuthorByName(author.lastName, author.remainingName)).containsExactlyElementsIn(listOf(author))
     }
 
     private suspend fun addOneBook(message: String, flags: Int = 0) {
@@ -108,24 +113,22 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
     }
 
     suspend fun addOneBook(message: String, book: BookAndAuthors) {
-        val bookDao = db.getBookDao()
-        val tagDao = db.getTagDao()
-
         // Add 0 to 3 authors
         book.authors = authorEntities.createRelationList(3)
         // Add 0 to 3 categories
         book.categories = categoryEntities.createRelationList(3)
         // Add 0 to 4 additional tags
         val tagCount = random.nextInt(5).coerceAtMost(tagEntities.size)
-        val tags: Array<Any>?
+        var tags: Array<Any>?
         if (tagCount != 0 || random.nextBoolean()) {
-            tags = Array(random.nextInt(5)) { 0L }
-            repeat (tags.size) {i ->
-                var id: Long
-                do {
-                    id = tagEntities[random.nextInt(tagEntities.size)].id
-                } while (id == 0L || tags.contains(id))
-                tags[i] = id
+            tags = Array<Any>(random.nextInt(5)) { 0L }.also {
+                repeat(it.size) { i ->
+                    var id: Long
+                    do {
+                        id = tagEntities[random.nextInt(tagEntities.size)].id
+                    } while (id == 0L || it.contains(id))
+                    it[i] = id
+                }
             }
         } else
             tags = null
@@ -133,21 +136,21 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
         book.tags = tagEntities.createRelationList(2)
 
         assertWithMessage("%s: Add %s", message, book.book.title).apply {
-            bookDao.addOrUpdate(book, tags)
+            tags = addOrUpdate(book, tags)
             that(book.book.id).isNotEqualTo(0L)
             book.tags = (tags?: ArrayList<Any>().apply {
                 addAll(tagEntities.entities.filter { it.isSelected }.map { it.id })
             }.toArray()).let {
                 val newTags = ArrayList<TagEntity>(book.tags)
                 for (id in it) {
-                    val tag = tagDao.get(id as Long)
+                    val tag = getTag(id as Long)
                     if (tag != null && !book.tags.contains(tag))
                         newTags.add(tag)
                 }
                 newTags
             }
 
-            compareBooks(bookDao.getBook(book.book.id), book)
+            compareBooks(getBook(book.book.id), book)
         }
     }
 
@@ -175,11 +178,110 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
             linkBook(book)
     }
 
-    suspend fun addBooks(message:String, count: Int) {
+    suspend fun addBooks(message:String, count: Int): BookDbTracker {
         repeat (count) {
             addOneBook(message, random.nextInt(BookEntity.SELECTED or BookEntity.EXPANDED))
         }
         checkConsistency(message)
+        return this
+    }
+
+    suspend fun addTags(): BookDbTracker {
+        addTag()
+        addTag(TagEntity.SELECTED)
+        addTag(TagEntity.SELECTED)
+        addTag(0)
+        return this
+    }
+
+    fun makeFilter(): BookFilter {
+        val values = ArrayList<String>()
+        fun getValues(count: Int, selected: Boolean) {
+            repeat(count) {
+                var book: BookAndAuthors
+                do {
+                    book = bookEntities[random.nextInt(bookEntities.size)]
+                } while (book.book.isSelected != selected && values.contains(book.book.title))
+                values.add(book.book.title)
+            }
+        }
+        val selected = bookEntities.entities.filter { it.book.isSelected }.count().coerceAtMost(3)
+        getValues(selected, true)
+        getValues(5 - selected, false)
+        return BookFilter(emptyArray(), arrayOf(
+            FilterField(Column.TITLE, Predicate.ONE_OF, values.toTypedArray())
+        ))
+    }
+
+    companion object {
+        suspend fun addBooks(db: BookDatabase, seed: Long, message: String, count: Int): BookDbTracker {
+            // Updating a book that conflicts with two other books will fail
+            return object: BookDbTracker(seed) {
+                override suspend fun getBook(bookId: Long): BookAndAuthors? {
+                    return db.getBookDao().getBook(bookId)
+                }
+
+                override suspend fun getTag(tagId: Long): TagEntity? {
+                    return db.getTagDao().get(tagId)
+                }
+
+                override suspend fun addOrUpdate(book: BookAndAuthors, tags: Array<Any>?): Array<Any>? {
+                    db.getBookDao().addOrUpdate(book, tags)
+                    return tags
+                }
+
+                override suspend fun addTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)?): Long {
+                    return db.getTagDao().add(tag, callback)
+                }
+
+                override suspend fun findTagByName(name: String): TagEntity? {
+                    return db.getTagDao().findByName(name)
+                }
+
+                override suspend fun findCategoryByName(name: String): List<CategoryEntity> {
+                    return db.getCategoryDao().findByName(name)
+                }
+
+                override suspend fun findAuthorByName(lastName: String, firstName: String): List<AuthorEntity> {
+                    return db.getAuthorDao().findByName(lastName, firstName)
+                }
+            }.addTags().addBooks(message, count)
+        }
+
+        suspend fun addBooks(repo: BookRepository, seed: Long, message: String, count: Int): BookDbTracker {
+            // Updating a book that conflicts with two other books will fail
+            return object: BookDbTracker(seed) {
+                val db = BookDatabase.db
+                override suspend fun getBook(bookId: Long): BookAndAuthors? {
+                    return db.getBookDao().getBook(bookId)
+                }
+
+                override suspend fun getTag(tagId: Long): TagEntity? {
+                    return repo.getTag(tagId)
+                }
+
+                override suspend fun addOrUpdate(book: BookAndAuthors, tags: Array<Any>?): Array<Any>? {
+                    repo.addOrUpdateBook(book)
+                    return null
+                }
+
+                override suspend fun addTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)?): Long {
+                    return repo.addOrUpdateTag(tag, callback)
+                }
+
+                override suspend fun findTagByName(name: String): TagEntity? {
+                    return repo.findTagByName(name)
+                }
+
+                override suspend fun findCategoryByName(name: String): List<CategoryEntity> {
+                    return db.getCategoryDao().findByName(name)
+                }
+
+                override suspend fun findAuthorByName(lastName: String, firstName: String): List<AuthorEntity> {
+                    return db.getAuthorDao().findByName(lastName, firstName)
+                }
+            }.addTags().addBooks(message, count)
+        }
     }
 
     data class EntityAndCount<T>(var entity: T, var count: Int = 0)
@@ -195,8 +297,7 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
             private set
         fun new(flags: Int = 0): T {
             ++next
-            val entity = make(flags, next, unique())
-            return entity
+            return this.make(flags, next, unique())
         }
 
         operator fun get(i: Int): T {
@@ -285,7 +386,7 @@ class BookDbTracker(private val db: BookDatabase, seed: Long) {
             for (e in sequence)
                 counts[e] = (counts[e]?: 0) + 1
             for (e in list)
-                assertWithMessage("%s: CheckCounts %s", message, name(e.entity)).that(counts[e.entity]).isEqualTo(e.count)
+                assertWithMessage("%s: CheckCounts %s", message, name(e.entity)).that(counts[e.entity]?: 0).isEqualTo(e.count)
         }
 
         protected fun unique(): String {
