@@ -1535,26 +1535,19 @@ abstract class BookDao(private val db: BookDatabase) {
     protected abstract suspend fun add(book: BookEntity): Long
 
     /**
-     * Delete books from the book table
-     * @param query The SQLite query to delete the books
-     */
-    @RawQuery(observedEntities = [BookAndAuthors::class])
-    protected abstract suspend fun delete(query: SupportSQLiteQuery): Int?
-
-    /**
      * Delete books
      * @param bookIds A list of book ids. Null means delete the selected books.
      * @param filter A filter to restrict the book ids
      */
     @Transaction
     protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return BookDatabase.buildQueryForIds(
+        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
             "DELETE FROM $BOOK_TABLE",
             filter,
             BOOK_ID_COLUMN,
             selectedIdSubQuery,
             bookIds,
-            false)?.let { delete(it) }?: 0
+            false))
     }
 
     /**
@@ -1717,7 +1710,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param bookIds Optional bookIds to delete. Null means delete selected books
      */
     @Transaction
-    open suspend fun deleteSelected(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>?) {
+    open suspend fun deleteSelected(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>?): Int {
         // Delete all tags for the books - keep tags with no books
         db.getBookTagDao().deleteSelectedBooks(bookIds, false, filter)
         // Delete all authors for the books - delete authors with no books
@@ -1734,7 +1727,7 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Finally delete the books
-        deleteBooks(bookIds, filter)
+        return deleteBooks(bookIds, filter)
 
     }
 
@@ -1851,14 +1844,6 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     /**
-     * Query to update the tag table
-     * @return The number of rows changed
-     */
-    @Transaction
-    @RawQuery(observedEntities = [BookEntity::class])
-    protected abstract suspend fun update(query: SupportSQLiteQuery): Int?
-
-    /**
      * Change bits in the flags column
      * @param operation The operation to perform. True to set, false to clear, null to toggle
      * @param mask The bits to change
@@ -1866,7 +1851,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the rows
      * @return The number of rows changed
      */
-    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter?): Int? {
+    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter?): Int {
         val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
         // Only select the rows where the change will make a difference
         if (operation == true)
@@ -1874,7 +1859,7 @@ abstract class BookDao(private val db: BookDatabase) {
         else if (operation == false)
             condition.selectByFlagBits(mask, 0, false, BOOK_FLAGS)
         val bits = BookDatabase.changeBits(operation, BOOK_FLAGS, mask)
-        return update(SimpleSQLiteQuery("UPDATE $BOOK_TABLE $bits$condition", filter?.args))
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOK_TABLE $bits$condition", filter?.args))
     }
 
     companion object {
