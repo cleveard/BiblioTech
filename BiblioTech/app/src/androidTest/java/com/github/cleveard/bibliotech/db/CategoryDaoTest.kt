@@ -29,7 +29,7 @@ class CategoryDaoTest {
         BookDatabase.close()
     }
 
-    @Test(timeout = 1000L) fun testAddUpdateDelete()
+    @Test(timeout = 5000L) fun testAddUpdateDelete()
     {
         runBlocking {
             val categoryDao = db.getCategoryDao()

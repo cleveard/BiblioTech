@@ -115,7 +115,7 @@ class BookTagDaoTest {
         return tags
     }
 
-    @Test(timeout = 1000L) fun testTagAddUpdateDelete() {
+    @Test(timeout = 5000L) fun testTagAddUpdateDelete() {
         runBlocking {
             val tagDao = db.getTagDao()
             val bookTagDao = db.getBookTagDao()
@@ -239,7 +239,7 @@ class BookTagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testLinkAddDelete() {
+    @Test(timeout = 5000L) fun testLinkAddDelete() {
         runBlocking {
             val books = addBooks()
             val tags = addTags(null)
@@ -399,7 +399,7 @@ class BookTagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testAddTagToBook() {
+    @Test(timeout = 5000L) fun testAddTagToBook() {
         runBlocking {
             val books = addBooks()
             val tags = addTags(null)
@@ -429,7 +429,7 @@ class BookTagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testAddTagsToBook() {
+    @Test(timeout = 5000L) fun testAddTagsToBook() {
         runBlocking {
             val books = addBooks()
             val tags = addTags(null)
@@ -451,7 +451,7 @@ class BookTagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testAddTagsToBooks() {
+    @Test(timeout = 5000L) fun testAddTagsToBooks() {
         runBlocking {
             val books = addBooks()
             val tags = addTags(null)
@@ -471,7 +471,7 @@ class BookTagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testAddTagsToBooksNullSelected() {
+    @Test(timeout = 5000L) fun testAddTagsToBooksNullSelected() {
         runBlocking {
             val books = addBooks()
             val bookIds = books.map { it.book.id }.toTypedArray<Any>()

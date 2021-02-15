@@ -29,7 +29,7 @@ class ViewDaoTest {
         BookDatabase.close()
     }
 
-    @Test(timeout = 1000L) fun testViewDao() {
+    @Test(timeout = 5000L) fun testViewDao() {
         runBlocking {
             val viewDao = db.getViewDao()
             // Make some views

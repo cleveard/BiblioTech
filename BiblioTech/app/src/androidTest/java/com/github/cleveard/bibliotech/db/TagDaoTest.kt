@@ -26,7 +26,7 @@ class TagDaoTest {
         BookDatabase.close()
     }
 
-    @Test(timeout = 1000L) fun testAddUpdateDelete()
+    @Test(timeout = 5000L) fun testAddUpdateDelete()
     {
         runBlocking {
             // Add a couple of tags
@@ -102,7 +102,7 @@ class TagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testQueries() {
+    @Test(timeout = 5000L) fun testQueries() {
         runBlocking {
             // Add a couple of tags
             val tags = listOf(
@@ -171,7 +171,7 @@ class TagDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testBitChanges() {
+    @Test(timeout = 5000L) fun testBitChanges() {
         runBlocking {
             // Add a couple of tags
             val tags = listOf(

@@ -46,7 +46,7 @@ class BookDaoTest {
         return expected
     }
 
-    @Test(timeout = 5000L) fun testAddDeleteBookEntity() {
+    @Test(timeout = 25000L) fun testAddDeleteBookEntity() {
         runBlocking {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
             val bookDao = db.getBookDao()
@@ -80,7 +80,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 5000L) fun testAddDeleteBookEntityEmptyFilter() {
+    @Test(timeout = 25000L) fun testAddDeleteBookEntityEmptyFilter() {
         runBlocking {
             val expected = addBooks(9922621L, "AddBooks Empty Filter", 20)
             val filter = BookFilter(emptyArray(), arrayOf(
@@ -136,7 +136,7 @@ class BookDaoTest {
         ))
     }
 
-    @Test(timeout = 5000L) fun testAddDeleteBookEntityWithFilter() {
+    @Test(timeout = 25000L) fun testAddDeleteBookEntityWithFilter() {
         runBlocking {
             val expected = addBooks(8964521L, "AddBooks Filter", 20)
             val bookFilter = expected.makeFilter()
@@ -177,7 +177,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 5000L) fun testUpdateBookEntity() {
+    @Test(timeout = 25000L) fun testUpdateBookEntity() {
         runBlocking {
             val expected = addBooks(554321L, "AddBooks Update", 20)
 
@@ -198,7 +198,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L, expected = SQLiteConstraintException::class) fun testUpdateFails() {
+    @Test(timeout = 5000L, expected = SQLiteConstraintException::class) fun testUpdateFails() {
         runBlocking {
             // Updating a book that conflicts with two other books will fail
             val expected = addBooks(5668721L, "AddBooks Update", 20)
@@ -210,7 +210,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testGetBooks() {
+    @Test(timeout = 5000L) fun testGetBooks() {
         runBlocking {
             val expected = addBooks(56542358L, "GetBooks", 20)
             assertWithMessage("GetBooks").apply {
@@ -232,7 +232,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testGetBooksFiltered() {
+    @Test(timeout = 5000L) fun testGetBooksFiltered() {
         runBlocking {
             val expected = addBooks(565199823L, "GetBooks Filtered", 20)
             assertWithMessage("GetBooks").apply {
@@ -260,7 +260,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testQueryBookIds() {
+    @Test(timeout = 5000L) fun testQueryBookIds() {
         runBlocking {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
             val bookDao = db.getBookDao()
@@ -298,7 +298,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testQueryBookIdsEmptyFilter() {
+    @Test(timeout = 5000L) fun testQueryBookIdsEmptyFilter() {
         runBlocking {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
             val filter = BookFilter(emptyArray(), arrayOf(
@@ -339,7 +339,7 @@ class BookDaoTest {
         }
     }
 
-    @Test(timeout = 1000L) fun testQueryBookIdsWithFilter() {
+    @Test(timeout = 5000L) fun testQueryBookIdsWithFilter() {
         runBlocking {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
             val bookFilter = expected.makeFilter()
@@ -455,14 +455,14 @@ class BookDaoTest {
         checkChange("all", true,  0b10010, null)
     }
 
-    @Test(timeout = 10000L) fun testBitChanges() {
+    @Test(timeout = 50000L) fun testBitChanges() {
         runBlocking {
             val expected = addBooks(552841129L, "Test Bit Change", 20)
             expected.testBitChanges("", null)
         }
     }
 
-    @Test(timeout = 10000L) fun testBitChangesFiltered() {
+    @Test(timeout = 50000L) fun testBitChangesFiltered() {
         runBlocking {
             val expected = addBooks(1165478L, "Test Bit Change filtered", 20)
             expected.testBitChanges(" filtered", expected.makeFilter())
