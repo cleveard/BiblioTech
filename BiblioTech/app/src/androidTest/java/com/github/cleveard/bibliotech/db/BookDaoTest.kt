@@ -6,8 +6,10 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.cleveard.bibliotech.getLive
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
 import com.github.cleveard.bibliotech.testutils.compareBooks
+import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -49,19 +51,22 @@ class BookDaoTest {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
             val bookDao = db.getBookDao()
 
+            var count = 0
             for (b in ArrayList<BookAndAuthors>().apply {
                 addAll(expected.bookEntities.entities)
             }) {
-                if (b.book.isSelected)
+                if (b.book.isSelected) {
                     expected.unlinkBook(b)
+                    ++count
+                }
             }
-            bookDao.deleteSelected(null,null)
+            assertWithMessage("Delete Selected").that(bookDao.deleteSelected(null,null)).isEqualTo(count)
             expected.checkDatabase("Delete Selected")
 
             var occurrence = 0
             while (expected.bookEntities.size > 0) {
                 ++occurrence
-                val count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
+                count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
                 val bookIds = Array<Any>(count) { 0L }
                 repeat (count) {
                     val i = expected.random.nextInt(expected.bookEntities.size)
@@ -69,7 +74,7 @@ class BookDaoTest {
                     bookIds[it] = book.book.id
                     expected.unlinkBook(book)
                 }
-                bookDao.deleteSelected(null, bookIds)
+                assertWithMessage("Deleted $occurrence").that(bookDao.deleteSelected(null, bookIds)).isEqualTo(bookIds.size)
                 expected.checkDatabase("Delete $occurrence")
             }
         }
@@ -83,19 +88,22 @@ class BookDaoTest {
             )).buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
             val bookDao = db.getBookDao()
 
+            var count = 0
             for (b in ArrayList<BookAndAuthors>().apply {
                 addAll(expected.bookEntities.entities)
             }) {
-                if (b.book.isSelected)
+                if (b.book.isSelected) {
                     expected.unlinkBook(b)
+                    ++count
+                }
             }
-            bookDao.deleteSelected(filter,null)
-            expected.checkDatabase("Delete Selected")
+            assertWithMessage("Delete Selected Empty Filter").that(bookDao.deleteSelected(filter,null)).isEqualTo(count)
+            expected.checkDatabase("Delete Selected Empty Filter")
 
             var occurrence = 0
             while (expected.bookEntities.size > 0) {
                 ++occurrence
-                val count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
+                count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
                 val bookIds = Array<Any>(count) { 0L }
                 repeat (count) {
                     val i = expected.random.nextInt(expected.bookEntities.size)
@@ -103,24 +111,24 @@ class BookDaoTest {
                     bookIds[it] = book.book.id
                     expected.unlinkBook(book)
                 }
-                bookDao.deleteSelected(filter, bookIds)
-                expected.checkDatabase("Delete $occurrence")
+                assertWithMessage("Deleted $occurrence Empty Filter").that(bookDao.deleteSelected(filter, bookIds)).isEqualTo(bookIds.size)
+                expected.checkDatabase("Delete $occurrence Empty Filter")
             }
         }
     }
 
-    private fun makeFilter(expected: BookDbTracker): BookFilter {
+    private fun BookDbTracker.makeFilter(): BookFilter {
         val values = ArrayList<String>()
         fun getValues(count: Int, selected: Boolean) {
             repeat(count) {
                 var book: BookAndAuthors
                 do {
-                    book = expected.bookEntities[expected.random.nextInt(expected.bookEntities.size)]
+                    book = bookEntities[random.nextInt(bookEntities.size)]
                 } while (book.book.isSelected != selected && values.contains(book.book.title))
                 values.add(book.book.title)
             }
         }
-        val selected = expected.bookEntities.entities.filter { it.book.isSelected }.count().coerceAtMost(3)
+        val selected = bookEntities.entities.filter { it.book.isSelected }.count().coerceAtMost(3)
         getValues(selected, true)
         getValues(5 - selected, false)
         return BookFilter(emptyArray(), arrayOf(
@@ -131,33 +139,39 @@ class BookDaoTest {
     @Test(timeout = 5000L) fun testAddDeleteBookEntityWithFilter() {
         runBlocking {
             val expected = addBooks(8964521L, "AddBooks Filter", 20)
-            val bookFilter = makeFilter(expected)
+            val bookFilter = expected.makeFilter()
             val filter = bookFilter.buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
             val bookDao = db.getBookDao()
             val keptCount = expected.bookEntities.size - bookFilter.filterList[0].values.size
 
+            var count = 0
             for (b in ArrayList<BookAndAuthors>().apply {
                 addAll(expected.bookEntities.entities)
             }) {
-                if (b.book.isSelected && bookFilter.filterList[0].values.contains(b.book.title))
+                if (b.book.isSelected && bookFilter.filterList[0].values.contains(b.book.title)) {
                     expected.unlinkBook(b)
+                    ++count
+                }
             }
-            bookDao.deleteSelected(filter,null)
+            assertWithMessage("Delete Selected Filtered").that(bookDao.deleteSelected(filter,null)).isEqualTo(count)
             expected.checkDatabase("Delete Selected Filtered")
 
             var occurrence = 0
             while (expected.bookEntities.size > keptCount) {
                 ++occurrence
-                val count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
+                count = expected.random.nextInt(4).coerceAtMost(expected.bookEntities.size)
                 val bookIds = Array<Any>(count) { 0L }
+                var size = 0
                 repeat (count) {
                     val i = expected.random.nextInt(expected.bookEntities.size)
                     val book = expected.bookEntities[i]
                     bookIds[it] = book.book.id
-                    if (bookFilter.filterList[0].values.contains(book.book.title))
+                    if (bookFilter.filterList[0].values.contains(book.book.title)) {
                         expected.unlinkBook(book)
+                        ++size
+                    }
                 }
-                bookDao.deleteSelected(filter, bookIds)
+                assertWithMessage("Deleted $occurrence Filtered").that(bookDao.deleteSelected(filter, bookIds)).isEqualTo(size)
                 expected.checkDatabase("Delete $occurrence Filtered")
             }
         }
@@ -222,7 +236,7 @@ class BookDaoTest {
         runBlocking {
             val expected = addBooks(565199823L, "GetBooks Filtered", 20)
             assertWithMessage("GetBooks").apply {
-                val filter = makeFilter(expected)
+                val filter = expected.makeFilter()
                 val source = db.getBookDao().getBooks(filter, context)
                 val books = ArrayList<BookAndAuthors>()
                 for (b in expected.bookEntities.entities) {
@@ -328,7 +342,7 @@ class BookDaoTest {
     @Test(timeout = 1000L) fun testQueryBookIdsWithFilter() {
         runBlocking {
             val expected = addBooks(2564621L, "AddBooks Delete", 20)
-            val bookFilter = makeFilter(expected)
+            val bookFilter = expected.makeFilter()
             val filter = bookFilter.buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
             val bookDao = db.getBookDao()
 
@@ -365,6 +379,93 @@ class BookDaoTest {
                         ids.add(book.book.id)
                 }
             }
+        }
+    }
+
+
+    private suspend fun BookDbTracker.testBitChanges(message: String, bookFilter: BookFilter?) {
+        val bookDao = db.getBookDao()
+        val filter = bookFilter?.let { it.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true) }
+
+        suspend fun StandardSubjectBuilder.checkCountBits(bits: Int, value: Int, include: Boolean, id: Long?) {
+            var s = bookEntities.entities
+            if (bookFilter != null)
+                s = s.filter { bookFilter.filterList[0].values.contains(it.book.title) }
+            if (id != null)
+                s = s.filter { it.book.id == id }
+            s = if (include)
+                s.filter { (it.book.flags and bits) == value }
+            else
+                s.filter { (it.book.flags and bits) != value }
+            that(bookDao.countBits(bits, value, include, id, filter)).isEqualTo(s.count())
+        }
+
+        suspend fun checkCount(bits: Int, value: Int, id: Long?) {
+            assertWithMessage("checkCount$message value: %s id: %s", value, id).apply {
+                checkCountBits(bits, value, true, null)
+                checkCountBits(bits, value, false, null)
+                checkCountBits(bits, value, true, id)
+                checkCountBits(bits, value, false, id)
+            }
+        }
+
+        checkCount(0b11, 0b01, null)
+        checkCount(0b11, 0b11, null)
+
+        fun nextBook(): BookAndAuthors {
+            return bookEntities[random.nextInt(bookEntities.size)]
+        }
+        repeat(10) {
+            checkCount(0b11, 0b11, nextBook().book.id)
+            checkCount(0b11, 0b01, nextBook().book.id)
+        }
+
+        suspend fun checkChange(all: String, operation: Boolean?, mask: Int, book: BookAndAuthors?) {
+            assertWithMessage(
+                "changeBits$message %s %s op: %s, mask: %s", book?.book?.flags, all, operation, mask
+            ).apply {
+                var s = bookEntities.entities
+                if (bookFilter != null)
+                    s = s.filter { bookFilter.filterList[0].values.contains(it.book.title) }
+                if (book != null)
+                    s = s.filter { it.book.id == book.book.id }
+                if (operation == true) {
+                    s = s.filter { (it.book.flags and mask) != mask }.map { it.book.flags = it.book.flags or mask; it }
+                } else if (operation == false) {
+                    s = s.filter { (it.book.flags and mask) != 0 }.map { it.book.flags = it.book.flags and mask.inv(); it }
+                } else {
+                    s = s.map { it.book.flags = it.book.flags xor mask; it }
+                }
+                val expCount = s.count()
+                val count = bookDao.changeBits(operation, mask, book?.book?.id, filter)
+                that(count).isEqualTo(expCount)
+                checkDatabase("changeBits$message $all op: $operation, mask: $mask")
+            }
+        }
+
+
+        repeat( 10) {
+            checkChange("single $it", true,  0b11000, nextBook())
+            checkChange("single $it", false, 0b01000, nextBook())
+            checkChange("single $it", null,  0b10010, nextBook())
+        }
+
+        checkChange("all", null,  0b10011, null)
+        checkChange("all", false, 0b01001, null)
+        checkChange("all", true,  0b10010, null)
+    }
+
+    @Test(timeout = 10000L) fun testBitChanges() {
+        runBlocking {
+            val expected = addBooks(552841129L, "Test Bit Change", 20)
+            expected.testBitChanges("", null)
+        }
+    }
+
+    @Test(timeout = 10000L) fun testBitChangesFiltered() {
+        runBlocking {
+            val expected = addBooks(1165478L, "Test Bit Change filtered", 20)
+            expected.testBitChanges(" filtered", expected.makeFilter())
         }
     }
 }
