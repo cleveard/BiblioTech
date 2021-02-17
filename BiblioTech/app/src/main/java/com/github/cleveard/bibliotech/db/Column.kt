@@ -528,10 +528,16 @@ private val anyColumn = object: ColumnDataDescriptor(
         values: Array<String>
     ): Boolean {
         var hasValues = false
+        // Convert NOT_GlOB and NOT_ON_OF because final NOT is handled later
+        val positivePredicate = when (predicate) {
+            Predicate.NOT_GLOB -> Predicate.GLOB
+            Predicate.NOT_ONE_OF -> Predicate.ONE_OF
+            else -> predicate
+        }
         // Add an expression for every other column unless excluded
         for (c in Column.values()) {
             if (c.desc != this && excludeFilterColumn.indexOf(c) == -1)
-                hasValues = c.desc.addExpression(buildQuery, predicate, values) || hasValues
+                hasValues = c.desc.addExpression(buildQuery, positivePredicate, values) || hasValues
         }
         return hasValues
     }
