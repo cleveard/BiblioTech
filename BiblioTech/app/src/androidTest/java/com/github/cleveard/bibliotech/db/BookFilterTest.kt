@@ -54,7 +54,7 @@ class BookFilterTest {
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty Filters", 40)
             for (c in columnGetValue) {
                 for (p in predicateValue) {
-                    testFilter("Empty", contents.asSequence(), Pair(c, p)) { _, _ -> emptyArray() }
+                    testFilter("Empty", contents.asSequence(), sequenceOf(Pair(c, p))) { _, _ -> emptyArray() }
                 }
             }
         }
@@ -67,7 +67,7 @@ class BookFilterTest {
             val random = Random(8832156L)
             for (c in columnGetValue) {
                 for (p in predicateValue) {
-                    testFilter("Random", contents.asSequence(), Pair(c, p)) { column, predicate ->
+                    testFilter("Single Random", contents.asSequence(), sequenceOf(Pair(c, p))) { column, predicate ->
                         val values = ArrayList<String>()
                         val count = random.nextInt(1, 5)
                         repeat(10) {
@@ -90,7 +90,7 @@ class BookFilterTest {
         runBlocking {
             for (c in columnGetValue) {
                 for (o in Order.values()) {
-                    testOrder("Single", contents.asSequence(), Pair(c, o))
+                    testFilter("Single Order", contents.asSequence(), sequenceOf(Pair(c, o))) {_, _ -> emptyArray() }
                 }
             }
         }
@@ -129,44 +129,43 @@ class BookFilterTest {
         }
     }
 
-    private fun testFilter(label: String, seq: Sequence<BookAndAuthors>, vararg filter: Pair<ColumnValue, PredicateValue>, getValues: (ColumnValue, PredicateValue) -> Array<String>) {
+    private fun testFilter(label: String, seq: Sequence<BookAndAuthors>, filter: Sequence<Pair<ColumnValue, Any>>, getValues: (ColumnValue, PredicateValue) -> Array<String>) {
         val message = StringBuilder("$label Filter ")
-        val list = ArrayList<FilterField>()
-        var sequence = seq
-        for (f in filter) {
-            message.append("${f.first.column}, ${f.second.predicate}, ")
-            val vArray = getValues(f.first, f.second)
-            list.add(FilterField(f.first.column, f.second.predicate, vArray))
-            sequence = sequence.filterSequence(f.first, f.second, vArray)
-        }
-
-        val bookFilter = BookFilter(emptyArray(), list.toTypedArray())
-        val books = getContents(bookFilter).apply { sortBy { it.book.id } }
-        val expected = ArrayList<BookAndAuthors>().apply { addAll(sequence) ; sortBy { it.book.id } }
-        assertWithMessage(message.toString()).compare(books, expected)
-    }
-
-    private fun testOrder(label: String, seq: Sequence<BookAndAuthors>, vararg order: Pair<ColumnValue, Order>) {
-        val message = StringBuilder("$label Order ")
-        val list = ArrayList<OrderField>()
+        val filterList = ArrayList<FilterField>()
+        val orderList = ArrayList<OrderField>()
         val sortOrder = ArrayList<BookAndAuthors.(BookAndAuthors) -> Int>()
         var sequence = seq
-        for (o in order) {
-            message.append("${o.first.column}, ${o.second} ")
-            list.add(OrderField(o.first.column, o.second, false))
-            sortOrder.add(if (o.second == Order.Ascending)
-                o.first.orderCompare
-            else {
-                { -o.first.orderCompare.invoke(this, it) }
-            })
-            sequence = o.first.orderSequence.invoke(sequence)
+        for (o in filter) {
+            val second = o.second
+            if (second is Order) {
+                message.append("${o.first.column}, $second ")
+                orderList.add(OrderField(o.first.column, second, false))
+                sortOrder.add(if (second == Order.Ascending)
+                    o.first.orderCompare
+                else {
+                    { -o.first.orderCompare.invoke(this, it) }
+                })
+                sequence = o.first.orderSequence.invoke(sequence)
+            }
         }
 
+        for (f in filter) {
+            val second = f.second
+            if (second is PredicateValue) {
+                message.append("${f.first.column}, ${second.predicate}, ")
+                val vArray = getValues(f.first, second)
+                filterList.add(FilterField(f.first.column, second.predicate, vArray))
+                sequence = sequence.filterSequence(f.first, second, vArray)
+            }
+        }
+
+
         assertWithMessage(message.toString()).apply {
-            val bookFilter = BookFilter(list.toTypedArray(), emptyArray())
+            val bookFilter = BookFilter(orderList.toTypedArray(), filterList.toTypedArray())
             val books = getContents(bookFilter)
             val sortSequence = sortOrder.asSequence()
-            checkOrder(books, sortSequence)
+            if (sortOrder.isNotEmpty())
+                checkOrder(books, sortSequence)
             val withId = sortSequence + sequenceOf({ this.book.id.compareTo(it.book.id) })
             books.sortWith {b1, b2 -> orderBooks(b1, b2, withId) }
             val expected = ArrayList<BookAndAuthors>().apply { addAll(sequence) ; sortWith {b1, b2 -> orderBooks(b1, b2, withId) } }
