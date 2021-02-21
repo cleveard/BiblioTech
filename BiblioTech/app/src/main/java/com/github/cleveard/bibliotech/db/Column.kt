@@ -182,9 +182,7 @@ abstract class ColumnDataDescriptor(
      */
     open fun addOrder(buildQuery: BuildQuery, direction: Order) {
         // Default to adding columns in order
-        addJoin(buildQuery)
         for (f in columnNames) {
-            buildQuery.addSelect(f)
             buildQuery.addOrderColumn(f, direction.dir)
         }
     }
@@ -386,6 +384,20 @@ abstract class SubQueryColumnDataDescriptor(
      */
     data class JoinTable(val name: String, val selectColumn: String, val queryColumn: String)
 
+    /**
+     * Add columns to order list
+     * @param buildQuery The query we are building
+     * @param direction The direction the columns are orders
+     */
+    override fun addOrder(buildQuery: BuildQuery, direction: Order) {
+        // Default to adding columns in order
+        addJoin(buildQuery)
+        for (f in columnNames) {
+            buildQuery.addSelect(f)
+            buildQuery.addOrderColumn(f, direction.dir)
+        }
+    }
+
     /** @inheritDoc */
     override fun doAddExpression(
         buildQuery: BuildQuery,
@@ -501,7 +513,23 @@ private val anyColumn = object: ColumnDataDescriptor(
     arrayOf(Predicate.GLOB, Predicate.NOT_GLOB)
 ) {
     // Set of columns to exclude from the Any column
-    private val excludeFilterColumn = arrayOf<Column>()
+    private val excludeFilterColumn = arrayOf<String>(
+        // All of the columns that ANY will add. You can uncomment
+        // these if you are trying to narrow a test error
+        // Make sure you uncomment the same ones in the
+        // ANY CollumnValue in the BookFilter test class
+        // "FIRST_NAME",
+        // "TAGS",
+        // "CATEGORIES",
+        // "TITLE",
+        // "SUBTITLE",
+        // "DESCRIPTION",
+        // "SOURCE",
+        // "SOURCE_ID",
+        // "ISBN",
+        // "PAGE_COUNT",
+        // "BOOK_COUNT",
+    )
 
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -536,7 +564,7 @@ private val anyColumn = object: ColumnDataDescriptor(
         }
         // Add an expression for every other column unless excluded
         for (c in Column.values()) {
-            if (c.desc != this && excludeFilterColumn.indexOf(c) == -1)
+            if (c.desc != this && excludeFilterColumn.indexOf(c.name) == -1)
                 hasValues = c.desc.addExpression(buildQuery, positivePredicate, values) || hasValues
         }
         return hasValues
@@ -684,7 +712,7 @@ private val categories = object: SubQueryColumnDataDescriptor(
 
 /** Source of book details */
 private val source = object: ColumnDataDescriptor(
-    arrayOf(SOURCE_ID_COLUMN),
+    arrayOf("ifnull($SOURCE_ID_COLUMN, '')"),
     R.string.source,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
@@ -712,7 +740,7 @@ private val source = object: ColumnDataDescriptor(
 
 /** Id of book details in the source */
 private val sourceId = object: ColumnDataDescriptor(
-    arrayOf(VOLUME_ID_COLUMN),
+    arrayOf("ifnull($VOLUME_ID_COLUMN, '')"),
     R.string.volume,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
@@ -729,7 +757,7 @@ private val sourceId = object: ColumnDataDescriptor(
 
 /** ISBN */
 private val isbn = object: ColumnDataDescriptor(
-    arrayOf(ISBN_COLUMN),
+    arrayOf("ifnull($ISBN_COLUMN, '')"),
     R.string.isbn,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
 ) {
