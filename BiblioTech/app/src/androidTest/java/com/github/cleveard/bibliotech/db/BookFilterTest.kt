@@ -98,8 +98,7 @@ class BookFilterTest {
         }
     }
 
-    @Ignore("Investigating test failure")
-    @Test/*(timeout = 25000L)*/ fun testMultipleOrderMultipleFilter() {
+    @Test(timeout = 25000L) fun testMultipleOrderMultipleFilter() {
         runBlocking {
             assertWithMessage("Test Multiple").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty", 40)
@@ -145,8 +144,8 @@ class BookFilterTest {
         }
     }
 
-    @Ignore("This test is used to debug errors in other tests")
-    @Test(timeout = 25000L) fun debugTests() {
+    //@Test
+    fun debugTests() {
         runBlocking {
             assertWithMessage("Debug Test").that(contents.size).isGreaterThan(39)
             val test = TestFilter.fromString(
@@ -280,14 +279,30 @@ class BookFilterTest {
         val oneValue: BookAndAuthors.(Random) -> String?,
         val orderCompare: BookAndAuthors.(BookAndAuthors) -> Int,
         val orderSequence: Sequence<BookAndAuthors>.() -> Sequence<BookAndAuthors>,
-        val allValues: BookAndAuthors.(p: Predicate) -> Sequence<Sequence<Any?>>,
+        val allValues: BookAndAuthors.(p: Predicate) -> Sequence<Sequence<Any>>,
     ) {
         // Place holder - actual entry is set below
         // Set the entry for the Column.Any column
         ANY(Column.ANY, { anyValue(it) }, { 0 }, { this },
             {predicate ->
                 values().asSequence()
-                .filter { it != ANY && it.column.desc.predicates.contains(predicate) }  // Add more filters as needed
+                .filter { it != ANY &&
+                    // All of the columns that ANY will add. You can uncomment
+                    // these if you are trying to narrow a test error
+                    // Make sure you uncomment the same ones in the
+                    // anyColumn object in the Column.kt
+                    // it != FIRST_NAME &&
+                    // it != TAGS &&
+                    // it != CATEGORIES &&
+                    // it != TITLE &&
+                    // it != SUBTITLE &&
+                    // it != DESCRIPTION &&
+                    // it != SOURCE &&
+                    // it != SOURCE_ID &&
+                    // it != ISBN &&
+                    // it != PAGE_COUNT &&
+                    // it != BOOK_COUNT &&
+                    it.column.desc.predicates.contains(predicate) }  // Add more filters as needed
                 .map { it.allValues.invoke(this, predicate) }         // Convert array entries to value sequences
                 .flatten()                          // Flatten the sequence
             }
@@ -360,11 +375,11 @@ class BookFilterTest {
         SUBTITLE(Column.SUBTITLE, { book.subTitle }, { book.subTitle.compareWith(it.book.subTitle) }, { this }, {
             sequenceOf(sequenceOf(book.subTitle))
         }),
-        SOURCE_ID(Column.SOURCE_ID, { book.volumeId }, { book.volumeId.compareWith(it.book.volumeId) }, { this }, {
-            sequenceOf(sequenceOf(book.volumeId))
+        SOURCE_ID(Column.SOURCE_ID, { book.volumeId }, { (book.volumeId?: "").compareWith(it.book.volumeId?: "") }, { this }, {
+            sequenceOf(sequenceOf(book.volumeId?: ""))
         }),
-        SOURCE(Column.SOURCE, { book.sourceId }, { book.sourceId.compareWith(it.book.sourceId) }, { this }, {
-            sequenceOf(sequenceOf(book.sourceId))
+        SOURCE(Column.SOURCE, { book.sourceId }, { (book.sourceId?: "").compareWith(it.book.sourceId?: "") }, { this }, {
+            sequenceOf(sequenceOf(book.sourceId?: ""))
         }),
         RATING(Column.RATING, { book.rating.toString() }, { book.rating.compareTo(it.book.rating) }, { this }, {
             sequenceOf(sequenceOf(book.rating))
@@ -372,8 +387,8 @@ class BookFilterTest {
         PAGE_COUNT(Column.PAGE_COUNT, { book.pageCount.toString() }, { book.pageCount.compareTo(it.book.pageCount) }, { this }, {
             sequenceOf(sequenceOf(book.pageCount))
         }),
-        ISBN(Column.ISBN, { book.ISBN }, { book.ISBN.compareWith(it.book.ISBN) }, { this }, {
-            sequenceOf(sequenceOf(book.ISBN))
+        ISBN(Column.ISBN, { book.ISBN }, { (book.ISBN?: "").compareWith(it.book.ISBN?: "") }, { this }, {
+            sequenceOf(sequenceOf(book.ISBN?: ""))
         }),
         DESCRIPTION(Column.DESCRIPTION, { book.description }, { book.description.compareWith(it.book.description) }, { this }, {
             sequenceOf(sequenceOf(book.description))
@@ -515,42 +530,34 @@ class BookFilterTest {
     private enum class PredicateValue(
         val predicate: Predicate,
         val modifyString: String?.(Random) -> String?,
-        val test: Sequence<Sequence<Any?>>.(Array<String>) -> Boolean
+        val test: Sequence<Sequence<Any>>.(Array<String>) -> Boolean
     ) {
-        ONE_OF(Predicate.ONE_OF, { this }, { testValues(it, PredicateTests.ONE_OF) == true }),
-        NOT_ONE_OF(Predicate.NOT_ONE_OF, { this }, { testValues(it, PredicateTests.ONE_OF) == false }),
-        NOT_GLOB(Predicate.NOT_GLOB, { this?.randomSubstring(it) }, { testValues(it, PredicateTests.GLOB) == false }),
-        GLOB(Predicate.GLOB, { this?.randomSubstring(it) }, { testValues(it, PredicateTests.GLOB) == true }),
-        LT(Predicate.LT, { this }, { testValues(it, PredicateTests.LT) == true }),
-        GT(Predicate.GT, { this }, { testValues(it, PredicateTests.GT) == true }),
-        LE(Predicate.LE, { this }, { testValues(it, PredicateTests.LE) == true }),
-        GE(Predicate.GE, { this }, { testValues(it, PredicateTests.GE) == true });
+        ONE_OF(Predicate.ONE_OF, { this }, { testValues(it, PredicateTests.ONE_OF) }),
+        NOT_ONE_OF(Predicate.NOT_ONE_OF, { this }, { !testValues(it, PredicateTests.ONE_OF) }),
+        NOT_GLOB(Predicate.NOT_GLOB, { this?.randomSubstring(it) }, { !testValues(it, PredicateTests.GLOB) }),
+        GLOB(Predicate.GLOB, { this?.randomSubstring(it) }, { testValues(it, PredicateTests.GLOB) }),
+        LT(Predicate.LT, { this }, { testValues(it, PredicateTests.LT) }),
+        GT(Predicate.GT, { this }, { testValues(it, PredicateTests.GT) }),
+        LE(Predicate.LE, { this }, { testValues(it, PredicateTests.LE) }),
+        GE(Predicate.GE, { this }, { testValues(it, PredicateTests.GE) });
 
         companion object {
 
-            private fun Sequence<Sequence<Any?>>.testValues(filterValues: Array<String>, predicate: PredicateTests): Boolean? {
-                var result: Boolean? = null
+            private fun Sequence<Sequence<Any>>.testValues(filterValues: Array<String>, predicate: PredicateTests): Boolean {
                 forEach {values ->
-                    var count = 0
                     values.forEach {
-                        ++count
-                        if (it != null) {
-                            val test = when (it) {
-                                is String -> predicate.string.invoke(it, filterValues)
-                                is Int -> predicate.int.invoke(it, filterValues)
-                                is Double -> predicate.double.invoke(it, filterValues)
-                                is Date -> predicate.date.invoke(it, filterValues)
-                                else -> false
-                            }
-                            if (test)
-                                return true
-                            result = test
+                        val test = when (it) {
+                            is String -> predicate.string.invoke(it, filterValues)
+                            is Int -> predicate.int.invoke(it, filterValues)
+                            is Double -> predicate.double.invoke(it, filterValues)
+                            is Date -> predicate.date.invoke(it, filterValues)
+                            else -> false
                         }
+                        if (test)
+                            return true
                     }
-                    if (count == 0)
-                        result = false
                 }
-                return result
+                return false
             }
 
             private fun String.randomSubstring(r: Random): String {
