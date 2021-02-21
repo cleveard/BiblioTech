@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
+import com.google.common.truth.Truth
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
@@ -22,6 +23,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.random.Random
+import kotlin.reflect.KMutableProperty0
 
 @RunWith(AndroidJUnit4::class)
 class BookFilterTest {
@@ -45,6 +47,148 @@ class BookFilterTest {
     @After
     fun tearDown() {
         BookRepository.close()
+    }
+
+    @Test(timeout = 5000L) fun testOrderField() {
+        val o1 = OrderField(Column.SOURCE, Order.Descending, true)
+        assertWithMessage("Order Field").apply {
+            var o2 = o1.copy()
+            that(o1 == o2).isTrue()
+            o2 = o1.copy(column = Column.ISBN)
+            that(o1 == o2).isFalse()
+            o2 = o1.copy(order = Order.Ascending)
+            that(o1 == o2).isFalse()
+            o2 = o1.copy(headers = false)
+            that(o1 == o2).isFalse()
+        }
+    }
+
+    @Test(timeout = 5000L) fun testFilterField() {
+        val f1 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
+        assertWithMessage("Order Field").apply {
+            var o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
+            that(f1 == o2).isTrue()
+            o2 = FilterField(Column.ISBN, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
+            that(f1 == o2).isFalse()
+            o2 = FilterField(Column.SOURCE, Predicate.GE, arrayOf("jjll", "kkik", "kkkok"))
+            that(f1 == o2).isFalse()
+            o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkikx", "kkkok"))
+            that(f1 == o2).isFalse()
+        }
+    }
+
+    /**
+     * Change a property and check that it isn't equal
+     * @param v1 Object to be changed
+     * @param v2 Object that is equal to v1
+     * @param p Property to change
+     * @param v Value to set
+     */
+    private fun <T, R> StandardSubjectBuilder.changeAndCheck(v1: T, v2: T, p: KMutableProperty0<R>, v: R) {
+        val save = p.get()
+        p.set(v)
+        that(p.get()).isEqualTo(v)
+        that(v1 == v2).isFalse()
+        that(v1.hashCode()).isNotEqualTo(v2.hashCode())
+        p.set(save)
+        that(p.get()).isEqualTo(save)
+        that(v1 == v2).isTrue()
+        that(v1.hashCode()).isEqualTo(v2.hashCode())
+    }
+
+    @Test(timeout = 5000L) fun testBookFilter() {
+        val bf1 = BookFilter(
+            arrayOf(
+                OrderField(Column.ISBN, Order.Ascending, false),
+                OrderField(Column.BOOK_COUNT, Order.Descending, true)
+            ),
+            arrayOf(
+                FilterField(Column.BOOK_COUNT, Predicate.GE, arrayOf("4", "5", "6")),
+                FilterField(Column.PAGE_COUNT, Predicate.LT, arrayOf("60", "40", "30"))
+            )
+        )
+        assertWithMessage("Book Filter").apply {
+            var bf2 = BookFilter(
+                arrayOf(
+                    OrderField(Column.ISBN, Order.Ascending, false),
+                    OrderField(Column.BOOK_COUNT, Order.Descending, true)
+                ),
+                arrayOf(
+                    FilterField(Column.BOOK_COUNT, Predicate.GE, arrayOf("4", "5", "6")),
+                    FilterField(Column.PAGE_COUNT, Predicate.LT, arrayOf("60", "40", "30"))
+                )
+            )
+            var o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
+            that(bf1 == bf2).isTrue()
+            bf2 = BookFilter(
+                arrayOf(
+                    OrderField(Column.TITLE, Order.Ascending, false),
+                    OrderField(Column.BOOK_COUNT, Order.Descending, true)
+                ),
+                arrayOf(
+                    FilterField(Column.BOOK_COUNT, Predicate.GE, arrayOf("4", "5", "6")),
+                    FilterField(Column.PAGE_COUNT, Predicate.LT, arrayOf("60", "40", "30"))
+                )
+            )
+            that(bf1 == bf2).isFalse()
+            bf2 = BookFilter(
+                arrayOf(
+                    OrderField(Column.ISBN, Order.Ascending, false),
+                    OrderField(Column.BOOK_COUNT, Order.Descending, true)
+                ),
+                arrayOf(
+                    FilterField(Column.BOOK_COUNT, Predicate.GE, arrayOf("4", "5", "6")),
+                    FilterField(Column.TAGS, Predicate.LT, arrayOf("60", "40", "30"))
+                )
+            )
+            that(bf1 == bf2).isFalse()
+        }
+    }
+
+    @Test(timeout = 5000L) fun testBookFilterSerialize() {
+        runBlocking {
+            val random = Random(419675L)
+            val string = BookFilter.encodeToString(null)
+            assertWithMessage("Serialize null").that(BookFilter.decodeFromString(string)).isNull()
+            repeat (200) {
+                val orderDesc = ArrayList<Pair<ColumnValue,Order>>()
+                val filterDesc = ArrayList<Pair<ColumnValue,PredicateValue>>()
+                repeat (random.nextInt(0, 7)) {
+                    var p: Pair<ColumnValue,Order>
+                    do {
+                        p = Pair(ColumnValue.values()[random.nextInt(ColumnValue.values().size)],
+                            if (random.nextBoolean()) Order.Ascending else Order.Descending)
+                    } while (orderDesc.contains(p))
+                    orderDesc.add(p)
+                }
+                repeat(random.nextInt(0, 7)) {
+                    var p: Pair<ColumnValue,PredicateValue>
+                    do {
+                        var c: ColumnValue
+                        do {
+                            c = ColumnValue.values()[random.nextInt(ColumnValue.values().size)]
+                        } while (c.column.desc.predicates.isEmpty())
+                        val pr = c.column.desc.predicates[random.nextInt(c.column.desc.predicates.size)]
+                        p = Pair(c, PredicateValue.values().first {x -> x.predicate == pr })
+                    } while (filterDesc.contains(p))
+                    filterDesc.add(p)
+                }
+                TestFilter(orderDesc.asSequence(), filterDesc.asSequence()) { column, predicate ->
+                    val values = ArrayList<String>()
+                    val count = random.nextInt(0, 8)
+                    repeat(10) {
+                        if (values.size < count) {
+                            val v: String?
+                            val book = contents[random.nextInt(contents.size)]
+                            v = predicate.modifyString.invoke(column.oneValue.invoke(book, random), random)
+                            if (!v.isNullOrEmpty() && !values.contains(v))
+                                values.add(v)
+                        }
+                    }
+                    values.toTypedArray()
+                }.testSerialize(this@BookFilterTest, "Serialize $it")
+            }
+        }
     }
 
     @Test(timeout = 25000L) fun testEmptySingleFilterFieldNoOrder() {
@@ -223,6 +367,28 @@ class BookFilterTest {
                 books.sortWith { b1, b2 -> orderBooks(b1, b2, withId) }
                 val expected = ArrayList<BookAndAuthors>().apply { addAll(sequence); sortWith { b1, b2 -> orderBooks(b1, b2, withId) } }
                 compare(books, expected)
+            }
+        }
+
+        fun testSerialize(test: BookFilterTest, label: String) {
+            val message = StringBuilder("$label Filter ")
+            val filterList = ArrayList<FilterField>()
+            val orderList = ArrayList<OrderField>()
+            for (o in order) {
+                message.append("${o.first.column}, ${o.second}, ")
+                orderList.add(OrderField(o.first.column, o.second, false))
+            }
+
+            for (f in filter) {
+                message.append("${f.first.column}, ${f.second.predicate}, ")
+                filterList.add(FilterField(f.first.column, f.second.predicate, f.third))
+            }
+
+            assertWithMessage("%s: Filter: %s", message.toString(), this).apply {
+                val bookFilter = BookFilter(orderList.toTypedArray(), filterList.toTypedArray())
+                val string = BookFilter.encodeToString(bookFilter)
+                val newFilter = BookFilter.decodeFromString(string)
+                that(newFilter).isEqualTo(bookFilter)
             }
         }
 
