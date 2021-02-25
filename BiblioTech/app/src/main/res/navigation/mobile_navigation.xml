@@ -15,6 +15,9 @@
             app:argType="string"
             app:nullable="true"
             android:defaultValue="@null" />
+        <action
+            android:id="@+id/action_nav_books_to_exportImportFragment"
+            app:destination="@id/exportImportFragment" />
     </fragment>
 
     <fragment
@@ -28,5 +31,17 @@
     <action
         android:id="@+id/scan_codes"
         app:destination="@id/nav_scan" />
+
+    <fragment
+        android:id="@+id/exportImportFragment"
+        android:name="com.github.cleveard.bibliotech.ui.interchange.ExportImportFragment"
+        android:label="@string/menu_export_import"
+        tools:layout="@layout/export_import_fragment">
+        <argument
+            android:name="filterName"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+    </fragment>
 
 </navigation>

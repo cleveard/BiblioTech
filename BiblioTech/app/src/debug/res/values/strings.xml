@@ -4,4 +4,5 @@
     <string name="app_name">BiblioTech-Debug</string>
     <string name="menu_books">Books Test</string>
     <string name="menu_scan">Scan Test</string>
+    <string name="menu_export_import">Export/Import Test</string>
 </resources>

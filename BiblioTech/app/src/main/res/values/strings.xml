@@ -7,6 +7,7 @@
 
     <string name="menu_books">Books</string>
     <string name="menu_scan">Scan</string>
+    <string name="menu_export_import">Export/Import</string>
 
     <string name="book_thumb">Book Thumbnail</string>
     <string name="id">ID:</string>

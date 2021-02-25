@@ -25,6 +25,7 @@ import androidx.navigation.NavDirections
 import androidx.navigation.fragment.NavHostFragment
 import java.io.File
 import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
@@ -130,6 +131,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         navController.addOnDestinationChangedListener { _, destination, arguments ->
             lastNavId = destination.id
             lastNavFilter = arguments?.getString("filterName")?: ""
+            navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
+                lastNavId == R.id.nav_books
         }
 
         // Passing each menu ID as a set of Ids because each
@@ -152,12 +155,18 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                 R.id.nav_books -> MobileNavigationDirections.filterBooks()
                 // This is the id for the scan destination
                 R.id.nav_scan -> MobileNavigationDirections.scanCodes()
+                R.id.action_nav_books_to_exportImportFragment -> {
+                    if (lastNavId != R.id.nav_books)
+                        return@setNavigationItemSelectedListener false
+                    BooksFragmentDirections.actionNavBooksToExportImportFragment(lastNavFilter)
+                }
                 else -> return@setNavigationItemSelectedListener false
             }
             // Try to navigate and close the drawer if we succeed.
-            if (navigate(action))
+            val navigated = navigate(action)
+            if (navigated)
                 drawerLayout.closeDrawer(GravityCompat.START)
-            false
+            navigated
         }
 
         // Get the saved filter list and observe changes to it
