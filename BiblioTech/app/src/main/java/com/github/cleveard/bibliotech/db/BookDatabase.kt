@@ -1851,6 +1851,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the rows
      * @return The number of rows changed
      */
+    @Transaction
     open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter?): Int {
         val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
         // Only select the rows where the change will make a difference
