@@ -140,4 +140,14 @@
     <string name="book_selected">Book Selected</string>
     <string name="sort_direction">Sort Direction</string>
     <string name="colon">:</string>
+
+    <string name="export_books">Export Books</string>
+    <string name="reject_all_conflicts">Reject All Conflicts</string>
+    <string name="accept_all_conflicts">Accept All Conflicts</string>
+    <string name="ask_conflicts">Ask About Conflicts</string>
+    <string name="export">Export</string>
+    <string name="select_view">Select View</string>
+    <string name="export_views">Export Views</string>
+    <string name="import_label">Import</string>
+    <string name="all_books">** All Books **</string>
 </resources>
