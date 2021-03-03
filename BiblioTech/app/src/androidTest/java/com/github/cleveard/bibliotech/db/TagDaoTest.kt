@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.cleveard.bibliotech.getLive
+import com.github.cleveard.bibliotech.utils.getLive
 import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.*
@@ -142,7 +142,7 @@ class TagDaoTest {
             var tagList: List<TagEntity>?
             // Check the live list
             assertWithMessage("getLive").apply {
-                tagList = getLive(tagDao.getLive())
+                tagList = tagDao.getLive().getLive()
                 that(tagList?.size).isEqualTo(tags.size)
                 for (i in tags.indices)
                     that(tagList?.get(i)).isEqualTo(tags[i])
@@ -150,7 +150,7 @@ class TagDaoTest {
 
             // Check the live list, selected
             assertWithMessage("getLive selected").apply {
-                tagList = getLive(tagDao.getLive(true))
+                tagList = tagDao.getLive(true).getLive()
                 that(tagList?.size).isEqualTo(1)
                 that(tagList?.get(0)).isEqualTo(tags[1])
             }
@@ -195,8 +195,8 @@ class TagDaoTest {
                 assertWithMessage("checkCount value: %s id: %s", value, id).apply {
                     that(tagDao.countBits(bits, value, true, id)).isEqualTo(expTrue)
                     that(tagDao.countBits(bits, value, false, id)).isEqualTo(expFalse)
-                    that(getLive(tagDao.countBitsLive(bits, value, true, id))).isEqualTo(expTrue)
-                    that(getLive(tagDao.countBitsLive(bits, value, false, id))).isEqualTo(expFalse)
+                    that(tagDao.countBitsLive(bits, value, true, id).getLive()).isEqualTo(expTrue)
+                    that(tagDao.countBitsLive(bits, value, false, id).getLive()).isEqualTo(expFalse)
                 }
             }
             checkCount(0b11, 0b01, null, 1, 2)

@@ -4,7 +4,7 @@ package com.github.cleveard.bibliotech.db
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.cleveard.bibliotech.getLive
+import com.github.cleveard.bibliotech.utils.getLive
 import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
@@ -67,7 +67,7 @@ class ViewDaoTest {
             }
 
             suspend fun StandardSubjectBuilder.checkNames() {
-                val nameList = getLive(viewDao.getViewNames())
+                val nameList = viewDao.getViewNames().getLive()
                 that(nameList?.size).isEqualTo(names.size)
                 val inList = HashSet<String>()
                 for (n in nameList!!) {

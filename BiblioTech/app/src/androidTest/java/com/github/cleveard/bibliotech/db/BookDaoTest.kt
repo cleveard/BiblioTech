@@ -6,7 +6,6 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.cleveard.bibliotech.getLive
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder

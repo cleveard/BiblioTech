@@ -1,14 +1,8 @@
 package com.github.cleveard.bibliotech
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.Observer
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookEntity
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.withContext
 import java.util.*
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 val bookTestNow = Calendar.getInstance().timeInMillis
 fun makeBook(unique: Int = 0, flags: Int = 0, uniqueString: String = unique.toString()): BookEntity {
@@ -39,22 +33,4 @@ fun makeBookAndAuthors(unique: Int = 0, flags: Int = 0, uniqueString: String = u
         categories = emptyList(),
         tags = emptyList()
     )
-}
-
-suspend fun <T> getLive(live: LiveData<T>): T? {
-    return withContext(MainScope().coroutineContext) {
-        var observer: Observer<T>? = null
-        try {
-            suspendCoroutine {
-                observer = Observer<T> { value ->
-                    if (value != null)
-                        it.resume(value)
-                }.also { obs ->
-                    live.observeForever(obs)
-                }
-            }
-        } finally {
-            observer?.let { live.removeObserver(it) }
-        }
-    }
 }

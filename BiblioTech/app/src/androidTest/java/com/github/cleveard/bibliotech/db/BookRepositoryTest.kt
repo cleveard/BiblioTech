@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteConstraintException
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.cleveard.bibliotech.getLive
+import com.github.cleveard.bibliotech.utils.getLive
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
@@ -141,8 +141,8 @@ class BookRepositoryTest {
                 assertWithMessage("checkCount value: %s id: %s", value, id).apply {
                     that(tagFlags.countBits(bits, value, true, id, null)).isEqualTo(expTrue)
                     that(tagFlags.countBits(bits, value, false, id, null)).isEqualTo(expFalse)
-                    that(getLive(tagFlags.countBitsLive(bits, value, true, id, null))).isEqualTo(expTrue)
-                    that(getLive(tagFlags.countBitsLive(bits, value, false, id, null))).isEqualTo(expFalse)
+                    that(tagFlags.countBitsLive(bits, value, true, id, null).getLive()).isEqualTo(expTrue)
+                    that(tagFlags.countBitsLive(bits, value, false, id, null).getLive()).isEqualTo(expFalse)
                 }
             }
             checkCount(0b11, 0b01, null, 1, 2)
@@ -446,7 +446,7 @@ class BookRepositoryTest {
             var tagList: List<TagEntity>?
             // Check the live list
             assertWithMessage("getLive").apply {
-                tagList = getLive(repo.getTagsLive())
+                tagList = repo.getTagsLive().getLive()
                 that(tagList?.size).isEqualTo(tags.size)
                 for (i in tags.indices)
                     that(tagList?.get(i)).isEqualTo(tags[i])
@@ -454,7 +454,7 @@ class BookRepositoryTest {
 
             // Check the live list, selected
             assertWithMessage("getLive selected").apply {
-                tagList = getLive(repo.getTagsLive(true))
+                tagList = repo.getTagsLive(true).getLive()
                 that(tagList?.size).isEqualTo(1)
                 that(tagList?.get(0)).isEqualTo(tags[1])
             }
@@ -680,7 +680,7 @@ class BookRepositoryTest {
             }
 
             suspend fun StandardSubjectBuilder.checkNames() {
-                val nameList = getLive(repo.getViewNames())
+                val nameList = repo.getViewNames().getLive()
                 that(nameList?.size).isEqualTo(names.size)
                 val inList = HashSet<String>()
                 for (n in nameList!!) {
