@@ -150,4 +150,6 @@
     <string name="export_views">Export Views</string>
     <string name="import_label">Import</string>
     <string name="all_books">** All Books **</string>
+    <string name="no_books_selected_for_export">No books were found to be exported.</string>
+    <string name="no_views_selected_for_export">No views were found to be exported.</string>
 </resources>

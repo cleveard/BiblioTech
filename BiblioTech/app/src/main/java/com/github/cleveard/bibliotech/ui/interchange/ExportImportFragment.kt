@@ -24,6 +24,7 @@ import androidx.paging.PagingData
 import androidx.paging.PagingSource
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -38,7 +39,7 @@ class ExportImportFragment : Fragment() {
     companion object {
         fun newInstance() = ExportImportFragment()
 
-        val exportBookFields = arrayOf<Pair<String, (Int, BookAndAuthors) -> String>>(
+        private val exportBookFields = arrayOf<Pair<String, (Int, BookAndAuthors) -> String>>(
             Pair(BOOK_ID_COLUMN, {i, b -> if (i > 0) "" else b.book.id.toString() }),
             Pair(TITLE_COLUMN, {i, b -> if (i > 0) "" else b.book.title }),
             Pair(SUBTITLE_COLUMN, {i, b -> if (i > 0) "" else b.book.subTitle }),
@@ -61,6 +62,21 @@ class ExportImportFragment : Fragment() {
             Pair(TAGS_NAME_COLUMN, { i, b -> if (i >= b.tags.size) "" else b.tags[i].name }),
             Pair(TAGS_DESC_COLUMN, { i, b -> if (i >= b.tags.size) "" else b.tags[i].desc })
         )
+
+        private val exportViewFields = arrayOf<Pair<String, (ViewEntity) -> String>>(
+            Pair(VIEWS_ID_COLUMN, { it.id.toString() }),
+            Pair(VIEWS_NAME_COLUMN, { it.name }),
+            Pair(VIEWS_DESC_COLUMN, { it.desc }),
+            Pair(VIEWS_FILTER_COLUMN, { BookFilter.encodeToString(it.filter)?: "" })
+        )
+
+        private val quote = Regex("[\",\n]")
+        private fun String?.quoteForCSV(): String {
+            return if (this?.contains(quote) == true)
+                "\"${replace("\"", "\"\"")}\""
+            else
+                this?: ""
+        }
     }
 
     private val args: ExportImportFragmentArgs by navArgs()
@@ -105,7 +121,8 @@ class ExportImportFragment : Fragment() {
                 return intent
             }
         }) {
-            exportBooks(it)
+            if (it != null)
+                exportBooks(it)
         }
 
     private val exportFiltersLauncher: ActivityResultLauncher<String> =
@@ -116,7 +133,8 @@ class ExportImportFragment : Fragment() {
                 return intent
             }
         }) {
-            exportFilters(it)
+            if (it != null)
+                exportFilters(it)
         }
 
     private val importLauncher: ActivityResultLauncher<Array<String>> =
@@ -127,7 +145,8 @@ class ExportImportFragment : Fragment() {
                 return intent
             }
         }) {
-            importData(it)
+            if (it != null)
+                importData(it)
         }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
@@ -189,6 +208,13 @@ class ExportImportFragment : Fragment() {
 
     private suspend fun toast(msg: String) {
         withContext(Dispatchers.Main) {
+            Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private suspend fun toast(msgId: Int, vararg args: Any) {
+        withContext(Dispatchers.Main) {
+            val msg = requireContext().resources.getString(msgId, *args)
             Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
         }
     }
@@ -264,31 +290,59 @@ class ExportImportFragment : Fragment() {
                 stream.write('\n'.toInt())
 
                 val quote = Regex("[\",\n]")
+                var count = 0
                 source.forEach {b ->
+                    ++count
                     repeat(b.authors.size.coerceAtLeast(b.tags.size)
                         .coerceAtLeast(b.categories.size)
                         .coerceAtLeast(1)) { j ->
                         for (i in exportBookFields.indices) {
                             if (i > 0)
                                 stream.write(','.toInt())
-                            var s = exportBookFields[i].second(j, b)
-                            if (s.contains(quote))
-                                s = "\"${exportBookFields[i].second(j, b).replace("\"", "\"\"")}\""
+                            val s = exportBookFields[i].second(j, b).quoteForCSV()
                             stream.write(s.toByteArray())
                         }
                         stream.write('\n'.toInt())
                     }
                 }
-                true
+                if (count == 0)
+                    toast(R.string.no_books_selected_for_export)
+                count > 0
             }
         }
     }
 
     private fun exportFilters(path: Uri) {
         viewModel.viewModelScope.launch {
-            doExport(path) {
-                toast("exportFilters($path)")
-                false
+            @Suppress("BlockingMethodInNonBlockingContext")
+            doExport(path) {stream ->
+                viewModel.repo.getViewNames().getLive()?.let {viewList ->
+                    for (i in exportViewFields.indices) {
+                        if (i > 0)
+                            stream.write(','.toInt())
+                        stream.write(exportViewFields[i].first.toByteArray())
+                    }
+                    stream.write('\n'.toInt())
+
+                    val repo = viewModel.repo
+                    val quote = Regex("[\",\n]")
+                    var count = 0
+                    for (b in viewList) {
+                        repo.findViewByName(b)?.let {v ->
+                            ++count
+                            for (i in exportViewFields.indices) {
+                                if (i > 0)
+                                    stream.write(','.toInt())
+                                val s = exportViewFields[i].second(v).quoteForCSV()
+                                stream.write(s.toByteArray())
+                            }
+                            stream.write('\n'.toInt())
+                        }
+                    }
+                    if (count == 0)
+                        toast(R.string.no_views_selected_for_export)
+                    count > 0
+                }?: false
             }
         }
     }
