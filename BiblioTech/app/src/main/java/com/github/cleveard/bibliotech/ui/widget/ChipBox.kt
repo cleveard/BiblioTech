@@ -384,10 +384,13 @@ open class ChipBox: FlexboxLayout {
                     return@launch
                 }
             }
+            // Terminate the chip edit before we create the new chip
+            val chip = editingChip
+            editingChip = null
             createChip(this, trim)?.let {newChip ->
-                editingChip?.let {oldChip ->
+                chip?.let {oldChip ->
+                    textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
                     delegate.onChipReplaced(this@ChipBox, newChip, oldChip, this)
-                    editingChip = null
                 }?: delegate.onChipAdded(this@ChipBox, newChip, this)
             }
         }
