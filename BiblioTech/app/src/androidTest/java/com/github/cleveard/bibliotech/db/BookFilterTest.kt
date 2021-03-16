@@ -8,7 +8,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
-import com.google.common.truth.Truth
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
@@ -23,7 +22,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.random.Random
-import kotlin.reflect.KMutableProperty0
 
 @RunWith(AndroidJUnit4::class)
 class BookFilterTest {
@@ -77,25 +75,6 @@ class BookFilterTest {
         }
     }
 
-    /**
-     * Change a property and check that it isn't equal
-     * @param v1 Object to be changed
-     * @param v2 Object that is equal to v1
-     * @param p Property to change
-     * @param v Value to set
-     */
-    private fun <T, R> StandardSubjectBuilder.changeAndCheck(v1: T, v2: T, p: KMutableProperty0<R>, v: R) {
-        val save = p.get()
-        p.set(v)
-        that(p.get()).isEqualTo(v)
-        that(v1 == v2).isFalse()
-        that(v1.hashCode()).isNotEqualTo(v2.hashCode())
-        p.set(save)
-        that(p.get()).isEqualTo(save)
-        that(v1 == v2).isTrue()
-        that(v1.hashCode()).isEqualTo(v2.hashCode())
-    }
-
     @Test(timeout = 5000L) fun testBookFilter() {
         val bf1 = BookFilter(
             arrayOf(
@@ -118,7 +97,6 @@ class BookFilterTest {
                     FilterField(Column.PAGE_COUNT, Predicate.LT, arrayOf("60", "40", "30"))
                 )
             )
-            var o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
             that(bf1 == bf2).isTrue()
             bf2 = BookFilter(
                 arrayOf(
@@ -186,7 +164,7 @@ class BookFilterTest {
                         }
                     }
                     values.toTypedArray()
-                }.testSerialize(this@BookFilterTest, "Serialize $it")
+                }.testSerialize("Serialize $it")
             }
         }
     }
@@ -370,7 +348,7 @@ class BookFilterTest {
             }
         }
 
-        fun testSerialize(test: BookFilterTest, label: String) {
+        fun testSerialize(label: String) {
             val message = StringBuilder("$label Filter ")
             val filterList = ArrayList<FilterField>()
             val orderList = ArrayList<OrderField>()
