@@ -181,6 +181,7 @@ internal open class BooksAdapter(
                 val pos = layoutPosition
                 boundBook?.apply {
                     access.toggleSelection(book.id, pos)
+                    notifyItemChanged(pos)
                 }
             }
         }
@@ -289,7 +290,10 @@ internal open class BooksAdapter(
             val view = itemView.findViewById<View>(R.id.book_list_open)
             val visible = view?.visibility != View.VISIBLE
             bindAdditionalViews(visible)
-            (itemView.tag as? Long)?.let { id -> access.toggleExpanded(id) }
+            (itemView.tag as? Long)?.let {
+                id -> access.toggleExpanded(id)
+                notifyItemChanged(layoutPosition)
+            }
             return visible
         }
 

@@ -65,6 +65,7 @@ internal open class TagsAdapter(private val access: ParentAccess) :
         contactView.setOnClickListener {view ->
             (view.tag as? Long)?.let {id ->
                 access.toggleSelection(id, holder.layoutPosition)
+                notifyItemChanged(holder.layoutPosition)
             }
         }
 

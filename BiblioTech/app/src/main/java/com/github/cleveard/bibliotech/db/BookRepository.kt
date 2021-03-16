@@ -185,10 +185,11 @@ class BookRepository private constructor() {
     /**
      * Add a book to the database or update a book already there
      * @param book The book to add or update
+     * @param callback Callback used to resolve conflicts
      * The book is added and selected tags
      */
-    suspend fun addOrUpdateBook(book: BookAndAuthors) {
-        db.getBookDao().addOrUpdate(book)
+    suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
+        return db.getBookDao().addOrUpdate(book, null, callback)
     }
 
     /**

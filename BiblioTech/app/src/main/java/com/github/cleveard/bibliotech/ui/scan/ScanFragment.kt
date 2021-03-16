@@ -366,9 +366,8 @@ class ScanFragment : Fragment() {
         container.findViewById<Button>(R.id.scan_search).setOnClickListener {
             val titleView = container.findViewById<EditText>(R.id.scan_title)
             val authorView = container.findViewById<EditText>(R.id.scan_author)
-            val isbn: String
             // Don't search by ISBN if the author or title have focus
-            isbn = if (titleView.hasFocus() || authorView.hasFocus())
+            val isbn: String = if (titleView.hasFocus() || authorView.hasFocus())
                 ""
             else
                 container.findViewById<EditText>(R.id.scan_isbn).text.toString()
@@ -1416,8 +1415,6 @@ class ScanFragment : Fragment() {
                                     selection.put(index, it)
                                 }
                             }
-                            // Refresh the adapter
-                            adapter.notifyItemChanged(position)
                         }
 
                         // Get the context

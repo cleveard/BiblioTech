@@ -148,9 +148,9 @@ class FilterConverters {
     }
 }
 
-private suspend fun <T> callConflict(conflict: T, callback: (suspend CoroutineScope.(T) -> Boolean)?): Boolean {
+private suspend fun <T> callConflict(conflict: T, callback: (suspend CoroutineScope.(T) -> Boolean)?, nullReturn: Boolean = false): Boolean {
     return coroutineScope {
-        callback?.let { it(conflict) } == true
+        callback?.let { it(conflict) }?: nullReturn
     }
 }
 
@@ -1654,11 +1654,9 @@ abstract class BookDao(private val db: BookDatabase) {
      * Add or update a book in the data base
      */
     @Transaction
-    protected open suspend fun addOrUpdate(book: BookEntity) {
+    protected open suspend fun addOrUpdate(book: BookEntity, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
         // Assume adding, set the added and modified time to now
         val time = Calendar.getInstance().time
-        book.added = time
-        book.modified = time
 
         // If either the volume or source ids are not null
         // make sure both aren't null
@@ -1672,36 +1670,47 @@ abstract class BookDao(private val db: BookDatabase) {
         if (ids == null) {
             // Didn't find a conflict add the book
             book.id = 0
+            book.added = time
+            book.modified = time
             book.id = add(book)
-        } else {
+        } else if (callConflict(book, callback, true)){
             // Had a conflict, get the id and time added and update the book
             book.id = ids.id
             book.added = ids.added
+            book.modified = time
             if (update(book) == 0)
                 book.id = 0L
-        }
+        } else
+            book.id = 0L
+
+        return book.id
     }
 
     /**
      * Add book with additional tags
      * @param book The book to add
      * @param tagIds The list of tag ids. Null means to use the selected tags.
+     * @param callback Callback used to resolve conflicts
      */
     @Transaction
-    open suspend fun addOrUpdate(book: BookAndAuthors, tagIds: Array<Any>? = null) {
+    open suspend fun addOrUpdate(book: BookAndAuthors, tagIds: Array<Any>? = null, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
         // Add or update the book
-        addOrUpdate(book.book)
+        val id = addOrUpdate(book.book, callback)
 
-        // Delete existing thumbnails, if any
-        thumbnails.deleteThumbFile(book.book.id, true)
-        thumbnails.deleteThumbFile(book.book.id, false)
+        if (id != 0L) {
+            // Delete existing thumbnails, if any
+            thumbnails.deleteThumbFile(book.book.id, true)
+            thumbnails.deleteThumbFile(book.book.id, false)
 
-        // Add categories
-        db.getCategoryDao().add(book.book.id, book.categories)
-        // Add Authors
-        db.getAuthorDao().add(book.book.id, book.authors)
-        // Add Tags from book along with additional tags
-        db.getTagDao().add(book.book.id, book.tags, tagIds)
+            // Add categories
+            db.getCategoryDao().add(book.book.id, book.categories)
+            // Add Authors
+            db.getAuthorDao().add(book.book.id, book.authors)
+            // Add Tags from book along with additional tags
+            db.getTagDao().add(book.book.id, book.tags, tagIds)
+        }
+
+        return id
     }
 
     /**
@@ -2114,7 +2123,7 @@ abstract class BookDatabase : RoomDatabase() {
          */
         private fun getExpression(column: String?, selectedExpression: ((invert: Boolean) -> String)?, ids: Array<Any>?, invert: Boolean?, args: MutableList<Any>): String? {
             // Return null if we select nothing
-            val emptyIds = if (ids == null) selectedExpression == null else ids.isEmpty()
+            val emptyIds = ids?.isEmpty() ?: (selectedExpression == null)
             if (column == null || (invert != true && emptyIds))
                 return null
 
