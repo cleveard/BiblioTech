@@ -278,7 +278,7 @@ class ExportImportFragment : Fragment() {
 
         // Start import when import button clicked
         view.findViewById<Button>(R.id.action_import).setOnClickListener {
-            importLauncher.launch(arrayOf("text/csv"), null)
+            importLauncher.launch(arrayOf("text/*"), null)
         }
 
         // Default to reject all conflicts
@@ -326,7 +326,8 @@ class ExportImportFragment : Fragment() {
                 // Get the file
                 val file = requireContext().contentResolver.openOutputStream(path, "w")
                 file?.let {
-                    val stream = BufferedWriter(OutputStreamWriter(it))
+                    val writer = OutputStreamWriter(it)
+                    val stream = BufferedWriter(writer)
                     var keep = false
                     try {
                         // Call the exporter
@@ -334,6 +335,8 @@ class ExportImportFragment : Fragment() {
                     } finally {
                         // Close the stream
                         stream.close()
+                        writer.close()
+                        it.close()
                         // Delete it, if we don't want to keep it
                         if (!keep) {
                             DocumentFile.fromSingleUri(requireContext(), path)?.delete()
@@ -483,9 +486,10 @@ class ExportImportFragment : Fragment() {
      * CSV Reader class
      * @param stream The stream the CSV is read from
      */
-    private class CSVReader(stream: InputStream) {
+    private class CSVReader(private val stream: InputStream) {
+        private val rawReader = InputStreamReader(stream)
         /** The reader for the input stream */
-        private val reader = BufferedReader(InputStreamReader(stream))
+        private val reader = BufferedReader(rawReader)
         /** Flag for end of line */
         private var eol = false
         /** flag for end of file */
@@ -499,6 +503,8 @@ class ExportImportFragment : Fragment() {
         /** Close the stream */
         fun close() {
             reader.close()
+            rawReader.close()
+            stream.close()
         }
 
         /**
