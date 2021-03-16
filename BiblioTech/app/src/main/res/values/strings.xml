@@ -142,9 +142,9 @@
     <string name="colon">:</string>
 
     <string name="export_books">Export Books</string>
-    <string name="reject_all_conflicts">Reject All Conflicts</string>
-    <string name="accept_all_conflicts">Accept All Conflicts</string>
-    <string name="ask_conflicts">Ask About Conflicts</string>
+    <string name="keep_existing">Keep Existing Books and Views</string>
+    <string name="replace_existing">Replace Existing Books and Views</string>
+    <string name="select_to_replace">Select Books and Views to Replace Existing</string>
     <string name="export">Export</string>
     <string name="select_view">Select View</string>
     <string name="export_views">Export Views</string>
@@ -152,4 +152,15 @@
     <string name="all_books">** All Books **</string>
     <string name="no_books_selected_for_export">No books were found to be exported.</string>
     <string name="no_views_selected_for_export">No views were found to be exported.</string>
+    <string name="bad_format_import">The selected content was not the correct format.</string>
+    <string name="io_error_export">There was an IO Error writing the data.</string>
+    <string name="io_error_import">There was an IO Error reading the data.</string>
+    <string name="canceled_import">The import was canceled.</string>
+    <string name="replace_all">Replace All</string>
+    <string name="replace_none">Replace None</string>
+    <string name="name_and_desc">%1$s: %2$s</string>
+    <string name="ask_replace_message_books">Select Existing Books to Import</string>
+    <string name="ask_replace_message_filters">Select Existing Views to Import</string>
+    <string name="export_complete">Export Complete</string>
+    <string name="import_complete">Import Complete</string>
 </resources>

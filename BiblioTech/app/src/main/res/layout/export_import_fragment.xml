@@ -85,19 +85,19 @@
 
         <RadioButton
             android:id="@+id/reject_all"
-            android:text="@string/reject_all_conflicts"
+            android:text="@string/keep_existing"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
 
         <RadioButton
             android:id="@+id/accept_all"
-            android:text="@string/accept_all_conflicts"
+            android:text="@string/replace_existing"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
 
         <RadioButton
             android:id="@+id/ask_conflicts"
-            android:text="@string/ask_conflicts"
+            android:text="@string/select_to_replace"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
 
