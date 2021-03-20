@@ -68,6 +68,7 @@ const val AUTHORS_TABLE = "authors"                                 // Authors t
 const val AUTHORS_ID_COLUMN = "authors_id"                          // Incrementing id
 const val LAST_NAME_COLUMN = "authors_last_name"                    // Author last name
 const val REMAINING_COLUMN = "authors_remaining"                    // First and middle names
+const val AUTHORS_FLAGS = "authors_flags"                           // Flags for authors
 
 // Book Authors table name and its column names
 const val BOOK_AUTHORS_TABLE = "book_authors"                       // Book Authors table name
@@ -79,6 +80,7 @@ const val BOOK_AUTHORS_AUTHOR_ID_COLUMN = "book_authors_author_id"  // Authors r
 const val CATEGORIES_TABLE = "categories"               // Categories table name
 const val CATEGORIES_ID_COLUMN = "categories_id"        // Incrementing id
 const val CATEGORY_COLUMN = "categories_category"       // Category name
+const val CATEGORIES_FLAGS = "categories_flags"         // Flags for categories
 
 // Book Categories table name and its column names
 const val BOOK_CATEGORIES_TABLE = "book_categories"                         // Book Categories table names
@@ -105,6 +107,7 @@ const val VIEWS_ID_COLUMN = "views_id"                  // Incrementing id
 const val VIEWS_NAME_COLUMN = "views_name"              // View name
 const val VIEWS_DESC_COLUMN = "views_desc"              // View description
 const val VIEWS_FILTER_COLUMN = "views_filter"          // View filter
+const val VIEWS_FLAGS = "views_flags"                   // Flags for Views
 
 // Extensions for thumbnail files in the cache.
 const val kSmallThumb = ".small.png"
@@ -161,8 +164,8 @@ private suspend fun <T> callConflict(conflict: T, callback: (suspend CoroutineSc
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
-        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN],unique = true),
-        Index(value = [ISBN_COLUMN],unique = true)
+        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN]),
+        Index(value = [ISBN_COLUMN])
     ])
 data class BookEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
@@ -203,6 +206,7 @@ data class BookEntity(
     companion object {
         const val SELECTED = 1
         const val EXPANDED = 2
+        const val HIDDEN = 4
     }
 }
 
@@ -212,13 +216,18 @@ data class BookEntity(
 @Entity(tableName = AUTHORS_TABLE,
     indices = [
         Index(value = [AUTHORS_ID_COLUMN],unique = true),
-        Index(value = [LAST_NAME_COLUMN,REMAINING_COLUMN],unique = true)
+        Index(value = [LAST_NAME_COLUMN,REMAINING_COLUMN])
     ])
 data class AuthorEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = AUTHORS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = LAST_NAME_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var lastName: String,
-    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var remainingName: String
+    @ColumnInfo(name = REMAINING_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var remainingName: String,
+    @ColumnInfo(name = AUTHORS_FLAGS,defaultValue = "0") var flags: Int = 0
 ) {
+    companion object {
+        const val HIDDEN = 1
+    }
+
     constructor(id: Long, in_name: String): this(id, "", "") {
         name = in_name
     }
@@ -278,12 +287,17 @@ data class BookAndAuthorEntity(
 @Entity(tableName = CATEGORIES_TABLE,
     indices = [
         Index(value = [CATEGORIES_ID_COLUMN],unique = true),
-        Index(value = [CATEGORY_COLUMN],unique = true)
+        Index(value = [CATEGORY_COLUMN])
     ])
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = CATEGORIES_ID_COLUMN) var id: Long,
-    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var category: String
-)
+    @ColumnInfo(name = CATEGORY_COLUMN,defaultValue = "",collate = ColumnInfo.NOCASE) var category: String,
+    @ColumnInfo(name = CATEGORIES_FLAGS,defaultValue = "0") var flags: Int = 0
+) {
+    companion object {
+        const val HIDDEN = 1
+    }
+}
 
 /**
  * Room entity for the book categories table
@@ -315,7 +329,8 @@ data class BookAndCategoryEntity(
  */
 @Entity(tableName = TAGS_TABLE,
     indices = [
-        Index(value = [TAGS_ID_COLUMN],unique = true)
+        Index(value = [TAGS_ID_COLUMN],unique = true),
+        Index(value = [TAGS_NAME_COLUMN])
     ])
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
@@ -334,6 +349,7 @@ data class TagEntity(
 
     companion object {
         const val SELECTED = 1
+        const val HIDDEN = 2
     }
 }
 
@@ -369,14 +385,19 @@ data class BookAndTagEntity(
 @Entity(tableName = VIEWS_TABLE,
     indices = [
         Index(value = [VIEWS_ID_COLUMN],unique = true),
-        Index(value = [VIEWS_NAME_COLUMN],unique = true)
+        Index(value = [VIEWS_NAME_COLUMN])
     ])
 data class ViewEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VIEWS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VIEWS_NAME_COLUMN,collate = ColumnInfo.NOCASE) var name: String,
     @ColumnInfo(name = VIEWS_DESC_COLUMN,defaultValue = "") var desc: String,
-    @ColumnInfo(name = VIEWS_FILTER_COLUMN) var filter: BookFilter? = null
-)
+    @ColumnInfo(name = VIEWS_FILTER_COLUMN) var filter: BookFilter? = null,
+    @ColumnInfo(name = VIEWS_FLAGS) var flags: Int = 0
+) {
+    companion object {
+        const val HIDDEN = 1
+    }
+}
 
 /**
  * Selectable Book object with authors, tags and categories
@@ -784,6 +805,11 @@ abstract class TagDao(private val db: BookDatabase) {
         return tag.id
     }
 
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
+    }
+
     // Class used to query just the tag id for a tag
     protected data class TagId(
         @ColumnInfo(name = TAGS_ID_COLUMN) val id: Long
@@ -980,6 +1006,11 @@ abstract class BookTagDao(private val db:BookDatabase) {
             null,
             bookTagIds,
             false))
+    }
+
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
     }
 
     /**
@@ -1217,6 +1248,11 @@ abstract class AuthorDao(private val db: BookDatabase) {
             add(bookId, author)
     }
 
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
+    }
+
     /**
      * Add a single author for a book
      * @param bookId The id of the book
@@ -1395,6 +1431,11 @@ abstract class CategoryDao(private val db: BookDatabase) {
         deleteBooks(arrayOf(bookId), null)
         for (cat in categories)
             add(bookId, cat)
+    }
+
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
     }
 
     /**
@@ -1872,6 +1913,11 @@ abstract class BookDao(private val db: BookDatabase) {
         return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOK_TABLE $bits$condition", filter?.args))
     }
 
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
+    }
+
     companion object {
         /** Sub-query that returns the selected book ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
@@ -1896,6 +1942,11 @@ abstract class ViewDao(private val db: BookDatabase) {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             doGetViewNames()
         }
+    }
+
+    @Transaction
+    open suspend fun copy(bookId: Long): Long {
+        return 0L
     }
 
     /**
@@ -1993,9 +2044,12 @@ abstract class ViewDao(private val db: BookDatabase) {
         BookAndTagEntity::class,
         CategoryEntity::class,
         BookAndCategoryEntity::class,
-        ViewEntity::class
+        ViewEntity::class,
+        UndoRedoOperationEntity::class,
+        UndoTransactionEntity::class,
+        RedoTransactionEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -2005,6 +2059,7 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getAuthorDao(): AuthorDao
     abstract fun getCategoryDao(): CategoryDao
     abstract fun getViewDao(): ViewDao
+    abstract fun getUndoRedoDao(): UndoRedoDao
 
     /** Writable database used for update and delete queries */
     private lateinit var writableDb: SupportSQLiteDatabase
@@ -2287,6 +2342,37 @@ abstract class BookDatabase : RoomDatabase() {
             },
             object: Migration(3, 4) {
                 override fun migrate(database: SupportSQLiteDatabase) {
+                }
+            },
+            object: Migration(4, 5) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    // Add tables for the undo and redo
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$REDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_redo_table_transaction_id` ON `$REDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_redo_table_transaction_undo_id` ON `$REDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
+                    // Add flags to authors, categories and views tables
+                    database.execSQL("ALTER TABLE $AUTHORS_TABLE ADD COLUMN `$AUTHORS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    database.execSQL("ALTER TABLE $CATEGORIES_TABLE ADD COLUMN `$CATEGORIES_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    database.execSQL("ALTER TABLE $VIEWS_TABLE ADD COLUMN `$VIEWS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    // Change UNIQUE indexes to be non-unique
+                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `books` (`books_volume_id`, `books_source_id`)")
+                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn`")
+                    database.execSQL("DROP INDEX IF EXISTS `index_authors_authors_last_name_authors_remaining`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `authors` (`authors_last_name`, `authors_remaining`)")
+                    database.execSQL("DROP INDEX IF EXISTS `index_tags_tags_name`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_tags_name`")
+                    database.execSQL("DROP INDEX IF EXISTS `index_categories_categories_category`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_categories_categories_category` ON `categories` (`categories_category`)")
+                    database.execSQL("DROP INDEX IF EXISTS `index_views_views_name`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_views_views_name` ON `views` (`views_name`)")
                 }
             }
         )
