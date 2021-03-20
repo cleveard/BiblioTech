@@ -1,5 +1,5 @@
 package com.github.cleveard.bibliotech.db
-/*
+
 import android.content.Context
 import android.database.Cursor
 import android.graphics.Bitmap
@@ -2378,4 +2378,3 @@ abstract class BookDatabase : RoomDatabase() {
         )
     }
 }
-*/
