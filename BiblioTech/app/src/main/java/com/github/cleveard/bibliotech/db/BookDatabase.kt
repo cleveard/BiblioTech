@@ -47,8 +47,7 @@ const val kAsc = "ASC"
         BookAndCategoryEntity::class,
         ViewEntity::class,
         UndoRedoOperationEntity::class,
-        UndoTransactionEntity::class,
-        RedoTransactionEntity::class
+        UndoTransactionEntity::class
     ],
     version = 5,
     exportSchema = false
@@ -62,8 +61,24 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getViewDao(): ViewDao
     abstract fun getUndoRedoDao(): UndoRedoDao
 
+    data class TableDescription(
+        val name: String,
+        val idColumn: String,
+        val flagColumn: String?,
+        val flagValue: Int,
+        val bookIdColumn: String?,
+        val linkIdColumn: String?
+    ) {
+        fun getVisibleExpression(hidden: Boolean = false): String {
+            if (flagColumn.isNullOrEmpty())
+                return ""
+            return "( ( $flagColumn & $flagValue ) ${if (hidden) "!=" else "="} 0 )"
+        }
+    }
+
     /** Writable database used for update and delete queries */
     private lateinit var writableDb: SupportSQLiteDatabase
+    private var deleteOnCloseName: String? = null
 
     /** Initialize the writable database */
     private fun initWritableQueries() {
@@ -87,6 +102,30 @@ abstract class BookDatabase : RoomDatabase() {
     }
 
     /**
+     * Execute an UPDATE or DELETE SQL Query
+     * @param query The query to run
+     * Must be called within a transaction
+     */
+    fun execInsert(query: SupportSQLiteQuery?): Long {
+        if (query == null)
+            return 0L
+        // Compile the query and bind its arguments
+        val statement = writableDb.compileStatement(query.sql)
+        query.bindTo(statement)
+        // Run the query
+        return statement.executeInsert()
+    }
+
+    /**
+     *  Close the database and delete if testing
+     * @param context The context for testing to use to delete the database
+     */
+    fun close(context: Context) {
+        close()
+        deleteOnCloseName?.let { context.deleteDatabase(it) }
+    }
+
+    /**
      *  @inheritDoc
      *  Closes the writable database if it has been set
      */
@@ -97,6 +136,15 @@ abstract class BookDatabase : RoomDatabase() {
     }
 
     companion object {
+        val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, null, null)
+        val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, null, null)
+        val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, null, null)
+        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, null, null)
+        val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, null, null)
+        val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+        val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
+        val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
+
         /**
          * The name of the books database
          */
@@ -112,41 +160,46 @@ abstract class BookDatabase : RoomDatabase() {
         /**
          * Initialize the data base
          * @param context Application context
-         * @param inMemory True to create an in-memory database
+         * @param testing True to create a database for testing
+         * @param name The name of the database. Use null for the default name or in-memory if testing is true
          */
-        fun initialize(context: Context, inMemory: Boolean = false) {
+        fun initialize(context: Context, testing: Boolean = false, name: String? = null) {
             if (mDb == null) {
-                mDb = create(context, inMemory)
+                mDb = create(context, testing, name)
             }
         }
 
         /**
          * Close the data base
+         * @param context The context for testing to use to delete the database
          */
-        fun close() {
-            mDb?.close()
+        fun close(context: Context) {
+            mDb?.close(context)
             mDb = null
         }
 
         /**
          * Create the data base
          * @param context Application context
-         * @param inMemory True to create an in-memory database
+         * @param testing True to create a database for testing
+         * @param name The name of the database. Use null for the default name or in-memory if testing is true
          */
-        private fun create(context: Context, inMemory: Boolean): BookDatabase {
+        private fun create(context: Context, testing: Boolean, name: String?): BookDatabase {
             val builder: Builder<BookDatabase>
-            if (inMemory) {
+            if (testing && name == null) {
                 builder = Room.inMemoryDatabaseBuilder(context, BookDatabase::class.java)
             } else {
+                if (testing)
+                    context.deleteDatabase(name)
                 builder = Room.databaseBuilder(
-                    context, BookDatabase::class.java, DATABASE_FILENAME
+                    context, BookDatabase::class.java, name?: DATABASE_FILENAME
                 )
 
                 // If we have a prepopulate database use it.
                 // This should only be used with a fresh debug install
                 val assets = context.resources.assets
                 try {
-                    val asset = "database/$DATABASE_FILENAME"
+                    val asset = "database/${name?: DATABASE_FILENAME}"
                     val stream = assets.open(asset)
                     stream.close()
                     builder.createFromAsset(asset)
@@ -160,6 +213,8 @@ abstract class BookDatabase : RoomDatabase() {
             // Build the database
             val db = builder.build()
             db.initWritableQueries()
+            if (testing)
+                db.deleteOnCloseName = name
             return db
         }
 
@@ -206,6 +261,8 @@ abstract class BookDatabase : RoomDatabase() {
         /**
          * Build a query
          * @param command The SQLite command
+         * @param flagColumn The column name for the flags. Null if hidden flag is not used.
+         * @param flagValue The value of the hidden flag
          * @param condition The conditions of the query.
          * Each condition is 3 values in this order:
          *    column name
@@ -215,12 +272,14 @@ abstract class BookDatabase : RoomDatabase() {
          * @see #getExpression(String?, String?, Array<Any>?, Boolean?, MutableList<Any>)
          * Multiple conditions are joined by AND
          */
-        internal fun buildQueryForIds(command: String, vararg condition: Any?) =
-            buildQueryForIds(command, null, *condition)
+        internal fun buildQueryForIds(command: String, flagColumn: String?, flagValue: Int, vararg condition: Any?) =
+            buildQueryForIds(command, flagColumn, flagValue, null, *condition)
 
         /**
          * Build a query
          * @param command The SQLite command
+         * @param flagColumn The column name for the flags. Null if hidden flag is not used.
+         * @param flagValue The value of the hidden flag
          * @param filter A filter to restrict the book ids
          * @param condition The conditions of the query.
          * Each condition is 3 values in this order:
@@ -232,7 +291,30 @@ abstract class BookDatabase : RoomDatabase() {
          * Multiple conditions are joined by AND. If a filter is used, then it is used with
          * the column name from the first condition
          */
-        internal fun buildQueryForIds(command: String, filter: BookFilter.BuiltFilter?, vararg condition: Any?): SupportSQLiteQuery? {
+        internal fun buildQueryForIds(command: String, flagColumn: String?, flagValue: Int, filter: BookFilter.BuiltFilter?, vararg condition: Any?): SupportSQLiteQuery? {
+            return buildWhereExpressionForIds(flagColumn, flagValue, filter, *condition)?.let {
+                // Return the query if there was one
+                SimpleSQLiteQuery("$command${it.expression}", it.args)
+            }
+        }
+
+
+        /**
+         * Build a query
+         * @param flagColumn The column name for the flags. Null if hidden flag is not used.
+         * @param flagValue The value of the hidden flag
+         * @param filter A filter to restrict the book ids
+         * @param condition The conditions of the query.
+         * Each condition is 3 values in this order:
+         *    column name
+         *    selected SQLite expression lambda
+         *    value array
+         *    invert boolean
+         * @see #getExpression(String?, String?, Array<Any>?, Boolean?, MutableList<Any>)
+         * Multiple conditions are joined by AND. If a filter is used, then it is used with
+         * the column name from the first condition
+         */
+        internal fun buildWhereExpressionForIds(flagColumn: String?, flagValue: Int, filter: BookFilter.BuiltFilter?, vararg condition: Any?): WhereExpression? {
             val builder = StringBuilder()
             val args = ArrayList<Any>()
 
@@ -254,18 +336,21 @@ abstract class BookDatabase : RoomDatabase() {
                     bookColumn = bookColumn?: column
                     if (expr != "") {
                         // Start with WHERE and then use AND to separate expressions
-                        builder.append("${if (builder.isEmpty()) "WHERE " else " AND "}$expr")
+                        builder.append("${if (builder.isEmpty()) " WHERE " else " AND "}$expr")
                     }
                 }?: return null
             }
 
             if (filter != null && bookColumn != null) {
-                builder.append("${if (builder.isEmpty()) "WHERE " else " AND "} ( $bookColumn IN ( ${filter.command} ) )")
+                builder.append("${if (builder.isEmpty()) " WHERE " else " AND "} ( $bookColumn IN ( ${filter.command} ) )")
                 args.addAll(filter.args)
             }
 
+            if (flagColumn != null)
+                builder.append("${if (builder.isEmpty()) " WHERE " else " AND "} ( ( $flagColumn & $flagValue ) == 0)")
+
             // Return the query if there was one
-            return SimpleSQLiteQuery("$command $builder", args.toArray())
+            return WhereExpression(builder.toString(), args.toArray())
         }
 
         /**
@@ -305,6 +390,19 @@ abstract class BookDatabase : RoomDatabase() {
             // Add in filter
             if (filter != null && filter.command.isNotEmpty())
                 append(" ${if (isEmpty()) "WHERE" else "AND"} ( $idColumn IN ( ${filter.command} ) )")
+            return this
+        }
+
+        /**
+         * Build a query to change flag bits in a flag column
+         * @param flagValue The hidden flag
+         * @param result True for is visible and false for is not visible
+         * @param flagColumn The column to be change
+         */
+        fun StringBuilder.selectVisible(
+            flagColumn: String, flagValue: Int, result: Boolean = true
+        ): StringBuilder {
+            append(" ${if (isEmpty()) "WHERE" else "AND"} ( ( $flagColumn & $flagValue ) ${if (result) "==" else "!="} 0 )")
             return this
         }
 
@@ -355,15 +453,12 @@ abstract class BookDatabase : RoomDatabase() {
             object: Migration(4, 5) {
                 override fun migrate(database: SupportSQLiteDatabase) {
                     // Add tables for the undo and redo
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`)")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$REDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_redo_table_transaction_id` ON `$REDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_redo_table_transaction_undo_id` ON `$REDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)");
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)");
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`, `$OPERATION_OPERATION_ID_COLUMN`)");
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL, `$TRANSACTION_FLAGS_COLUMN` INTEGER NOT NULL)");
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)");
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)");
                     // Add flags to authors, categories and views tables
                     database.execSQL("ALTER TABLE $AUTHORS_TABLE ADD COLUMN `$AUTHORS_FLAGS` INTEGER NOT NULL DEFAULT 0")
                     database.execSQL("ALTER TABLE $CATEGORIES_TABLE ADD COLUMN `$CATEGORIES_FLAGS` INTEGER NOT NULL DEFAULT 0")

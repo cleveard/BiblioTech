@@ -60,13 +60,14 @@ class BookRepository private constructor() {
         /**
          * Initialize the BookRepository
          * @param context Application context
-         * @param inMemory Create the book database in memory
+         * @param testing True to create a database for testing
+         * @param name The name of the database. Use null for the default name or in-memory if testing is true
          */
-        fun initialize(context: Context, inMemory: Boolean = false) {
+        fun initialize(context: Context, testing: Boolean = false, name: String? = null) {
             // Only initialize if it has been closed
             if (mRepo == null) {
                 // Initialize the database
-                BookDatabase.initialize(context, inMemory)
+                BookDatabase.initialize(context, testing, name)
                 // Create the repository
                 mRepo = BookRepository()
             }
@@ -74,12 +75,13 @@ class BookRepository private constructor() {
 
         /**
          * Close the BookRepository
+         * @param context The context for testing to use to delete the database
          */
-        fun close() {
+        fun close(context: Context) {
             mRepo?.also{
                 mRepo = null
             }
-            BookDatabase.close()
+            BookDatabase.close(context)
         }
     }
 
@@ -183,13 +185,32 @@ class BookRepository private constructor() {
     }
 
     /**
+     * Get books from the data base
+     * @return A PagingSource containing the books
+     */
+    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList()
+    }
+
+    /**
+     * Get books from the data base
+     * @param filter Description of a filter that filters and orders the books
+     * @return A PagingSource containing the books
+     */
+    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList(filter, context)
+    }
+
+    /**
      * Add a book to the database or update a book already there
      * @param book The book to add or update
      * @param callback Callback used to resolve conflicts
      * The book is added and selected tags
      */
-    suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
-        return db.getBookDao().addOrUpdate(book, null, callback)
+    suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
+        return withUndo("Add Book") {
+            db.getBookDao().addOrUpdateWithUndo(book, null, callback)
+        }
     }
 
     /**
@@ -197,7 +218,9 @@ class BookRepository private constructor() {
      * @param filter The current filter
      */
     suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>? = null): Int {
-        return db.getBookDao().deleteSelected(filter, bookIds)
+        return withUndo("Deleted Books") {
+            db.getBookDao().deleteSelectedWithUndo(filter, bookIds)
+        }
     }
 
     /**
@@ -243,23 +266,30 @@ class BookRepository private constructor() {
      * merge two tags into one, when you edit an existing tag and rename it to another existing tag.
      */
     suspend fun addOrUpdateTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
-        return db.getTagDao().add(tag, callback)
+        return withUndo("Update Tag") {
+            db.getTagDao().addWithUndo(tag, callback)
+        }
     }
 
     /**
      * Delete tag
      */
-    suspend fun deleteSelectedTags() {
-        db.getTagDao().deleteSelected()
+    suspend fun deleteSelectedTags(): Int {
+        return withUndo("Delete Tags") {
+            db.getTagDao().deleteSelectedWithUndo()
+        }
     }
 
     /**
      * Add multiple tags to multiple books
      * @param bookIds An array of book ids. Null means use the selected books.
      * @param tagIds An array of tag ids. Null means use the selected tags
+     * @return The number of links added
      */
-    suspend fun addTagsToBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?) {
-        db.getBookTagDao().addTagsToBooks(bookIds, tagIds, filter)
+    suspend fun addTagsToBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?): Int {
+        return withUndo("Add Tags To Books") {
+            db.getBookTagDao().addTagsToBooksWithUndo(bookIds, tagIds, filter)
+        }
     }
 
     /**
@@ -267,9 +297,12 @@ class BookRepository private constructor() {
      * @param bookIds An array of book ids. Null means use the selected books.
      * @param tagIds An array of tag ids. Null means use the selected tags
      * @param invert True to remove the tags that match tagIds. False to remove the tags not matched by tagIds.
+     * @return The number of links removed
      */
-    suspend fun removeTagsFromBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?, invert: Boolean = false) {
-        db.getBookTagDao().deleteSelectedTagsForBooks(bookIds, filter, tagIds, invert)
+    suspend fun removeTagsFromBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?, invert: Boolean = false): Int {
+        return withUndo("Remove Tags From Books") {
+            db.getBookTagDao().deleteSelectedTagsForBooksWithUndo(bookIds, filter, tagIds, invert)
+        }
     }
 
     /**
@@ -310,8 +343,10 @@ class BookRepository private constructor() {
      *                   true to accept the conflict or false to abort the add
      * @return The id of the view in the database, or 0L if the add was aborted
      */
-    suspend fun addOrUpdateView(view: ViewEntity, onConflict: suspend CoroutineScope.(conflict: ViewEntity) -> Boolean): Long {
-        return db.getViewDao().addOrUpdate(view, onConflict)
+    suspend fun addOrUpdateView(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)? = null): Long {
+        return withUndo("Update View") {
+            db.getViewDao().addOrUpdateWithUndo(view, onConflict)
+        }
     }
 
     /**
@@ -329,6 +364,36 @@ class BookRepository private constructor() {
      * @return The number of views deleted
      */
     suspend fun removeView(name: String): Int {
-        return db.getViewDao().delete(name)
+        return withUndo("Remove View") {
+            db.getViewDao().deleteWithUndo(name)
+        }
+    }
+
+    val maxUndoLevels
+        get() = db.getUndoRedoDao().maxUndoLevels
+    suspend fun setMaxUndoLevels(level: Int) =
+        db.getUndoRedoDao().setMaxUndoLevels(level)
+
+    suspend fun <T> withUndo(desc: String, operation: suspend () -> T): T {
+        return db.getUndoRedoDao().withUndo(desc, null, operation)
+    }
+
+    fun canUndo(): Boolean = db.getUndoRedoDao().canUndo()
+    fun canRedo(): Boolean = db.getUndoRedoDao().canRedo()
+
+    suspend fun getNextUndo(): String? {
+        return db.getUndoRedoDao().getNextUndo()?.desc
+    }
+
+    suspend fun getNextRedo(): String? {
+        return db.getUndoRedoDao().getNextRedo()?.desc
+    }
+
+    suspend fun undo(): Boolean {
+        return db.getUndoRedoDao().undo()
+    }
+
+    suspend fun redo(): Boolean {
+        return db.getUndoRedoDao().redo()
     }
 }

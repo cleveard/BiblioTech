@@ -115,7 +115,7 @@ abstract class BuildQuery(
     /**
      * Make an SQLite builder for a sub-query
      */
-    abstract fun newSQLiteBuilder(): SQLiteQueryBuilder
+    abstract fun newSQLiteBuilder(table: BookDatabase.TableDescription): SQLiteQueryBuilder
 }
 
 /** An interface used to build an SQLite command */
@@ -331,17 +331,17 @@ abstract class ColumnDataDescriptor(
          */
         fun buildAutoCompleteCursor(
             repo: BookRepository,
-            idName: String,
+            table: BookDatabase.TableDescription,
             resultName: String,
-            tableName: String,
             constraint: String?,
             group: Boolean = false
         ): Cursor {
-            val hasConstraint = constraint != null && constraint.isNotEmpty()
-            val query = "SELECT $idName as _id, $resultName AS _result FROM $tableName " +
-                (if (hasConstraint) "WHERE _result LIKE ? ESCAPE '\\' " else "") +
-                (if (group) "GROUP BY _result " else "") +
-                "ORDER BY _result"
+            val hasConstraint = !constraint.isNullOrEmpty()
+            val where = if (!table.flagColumn.isNullOrEmpty() || hasConstraint) " WHERE" else ""
+            val flag = if (!table.flagColumn.isNullOrEmpty()) " ( ( ${table.flagColumn} ) & ${table.flagValue} ) = 0" else ""
+            val filter = if (hasConstraint) " _result LIKE ? ESCAPE '\\'" else ""
+            val groupBy = if (group) " GROUP BY _result" else ""
+            val query = "SELECT ${table.idColumn} as _id, $resultName AS _result FROM ${table.name}$where$flag$filter$groupBy ORDER BY _result"
             return repo.getCursor(query,
                 if (hasConstraint)
                     arrayOf("%${PredicateDataDescription.escapeLikeWildCards(constraint!!)}%")
@@ -366,24 +366,9 @@ abstract class SubQueryColumnDataDescriptor(
     nameResourceId: Int,
    predicates: Array<Predicate>,
     private val selectColumn: String,
-    private val queryTable: QueryTable,
-    private val joinTable: JoinTable,
+    private val queryTable: BookDatabase.TableDescription,
+    private val joinTable: BookDatabase.TableDescription,
 ) : ColumnDataDescriptor(columnNames, nameResourceId, predicates) {
-    /**
-     * Description of the table the filter values are in
-     * @param name The name of the table
-     * @param idColumn The idColumn of the table
-     */
-    data class QueryTable(val name: String, val idColumn: String)
-
-    /**
-     * Description of the table that connects the filter values and the main table
-     * @param name The name of the table
-     * @param selectColumn The name of the column that connects to the main table
-     * @param queryColumn The name of the column that connects to the filter values
-     */
-    data class JoinTable(val name: String, val selectColumn: String, val queryColumn: String)
-
     /**
      * Add columns to order list
      * @param buildQuery The query we are building
@@ -405,7 +390,7 @@ abstract class SubQueryColumnDataDescriptor(
         values: Array<String>
     ): Boolean {
         // Get the sub query builder
-        val subQuery = buildQuery.newSQLiteBuilder()
+        val subQuery = buildQuery.newSQLiteBuilder(queryTable)
         // Select the id column
         subQuery.addSelect(queryTable.idColumn)
         // Start the expression
@@ -417,7 +402,7 @@ abstract class SubQueryColumnDataDescriptor(
         if (hasExpr) {
             val subExpr = subQuery.createCommand(queryTable.name)
             val expr =
-                "${if (predicate.desc.negate) "NOT " else ""}EXISTS ( SELECT NULL FROM ${joinTable.name} WHERE $selectColumn = ${joinTable.selectColumn} AND ${joinTable.queryColumn} IN ( $subExpr ) )"
+                "${if (predicate.desc.negate) "NOT " else ""}EXISTS ( SELECT NULL FROM ${joinTable.name} WHERE $selectColumn = ${joinTable.bookIdColumn} AND ${joinTable.linkIdColumn} IN ( $subExpr ) )"
             buildQuery.addFilterExpression(expr)
             buildQuery.argList.addAll(subQuery.argList)
         }
@@ -431,8 +416,8 @@ private val lastFirst = object: SubQueryColumnDataDescriptor(
     R.string.author,
     emptyArray(),        // Both author columns filter the same. Only use one
     BOOK_ID_COLUMN,
-    QueryTable(AUTHORS_TABLE, AUTHORS_ID_COLUMN),
-    JoinTable(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+    BookDatabase.authorsTable,
+    BookDatabase.bookAuthorsTable
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -457,8 +442,8 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
     R.string.author,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
     BOOK_ID_COLUMN,
-    QueryTable(AUTHORS_TABLE, AUTHORS_ID_COLUMN),
-    JoinTable(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+    BookDatabase.authorsTable,
+    BookDatabase.bookAuthorsTable
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -501,8 +486,8 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
-        return buildAutoCompleteCursor(repo, AUTHORS_ID_COLUMN,
-            "$REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN", AUTHORS_TABLE, constraint)
+        return buildAutoCompleteCursor(repo, BookDatabase.authorsTable,
+            "$REMAINING_COLUMN || ' ' || $LAST_NAME_COLUMN", constraint)
     }
 }
 
@@ -517,7 +502,7 @@ private val anyColumn = object: ColumnDataDescriptor(
         // All of the columns that ANY will add. You can uncomment
         // these if you are trying to narrow a test error
         // Make sure you uncomment the same ones in the
-        // ANY CollumnValue in the BookFilter test class
+        // ANY ColumnValue in the BookFilter test class
         // "FIRST_NAME",
         // "TAGS",
         // "CATEGORIES",
@@ -594,8 +579,8 @@ private val title = object: ColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
-        return buildAutoCompleteCursor(repo, BOOK_ID_COLUMN,
-            TITLE_COLUMN, BOOK_TABLE, constraint, true)
+        return buildAutoCompleteCursor(repo, BookDatabase.bookTable,
+            TITLE_COLUMN, constraint, true)
     }
 }
 
@@ -642,8 +627,8 @@ private val tags = object: SubQueryColumnDataDescriptor(
     R.string.tag,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
     BOOK_ID_COLUMN,
-    QueryTable(TAGS_TABLE, TAGS_ID_COLUMN),
-    JoinTable(BOOK_TAGS_TABLE, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
+    BookDatabase.tagsTable,
+    BookDatabase.bookTagsTable
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -668,8 +653,8 @@ private val tags = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
-        return buildAutoCompleteCursor(repo, TAGS_ID_COLUMN,
-            TAGS_NAME_COLUMN, TAGS_TABLE, constraint)
+        return buildAutoCompleteCursor(repo, BookDatabase.tagsTable,
+            TAGS_NAME_COLUMN, constraint)
     }
 }
 
@@ -679,8 +664,8 @@ private val categories = object: SubQueryColumnDataDescriptor(
     R.string.category,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
     BOOK_ID_COLUMN,
-    QueryTable(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN),
-    JoinTable(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
+    BookDatabase.categoriesTable,
+    BookDatabase.bookCategoriesTable
 ) {
     /** @inheritDoc */
     override fun addJoin(buildQuery: BuildQuery) {
@@ -705,8 +690,8 @@ private val categories = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
-        return buildAutoCompleteCursor(repo, CATEGORIES_ID_COLUMN,
-            CATEGORY_COLUMN, CATEGORIES_TABLE, constraint)
+        return buildAutoCompleteCursor(repo, BookDatabase.categoriesTable,
+            CATEGORY_COLUMN, constraint)
     }
 }
 
@@ -733,8 +718,8 @@ private val source = object: ColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
-        return buildAutoCompleteCursor(repo, BOOK_ID_COLUMN,
-            SOURCE_ID_COLUMN, BOOK_TABLE, constraint, true)
+        return buildAutoCompleteCursor(repo, BookDatabase.bookTable,
+            SOURCE_ID_COLUMN, constraint, true)
     }
 }
 

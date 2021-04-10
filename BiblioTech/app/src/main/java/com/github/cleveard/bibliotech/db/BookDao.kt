@@ -1,24 +1,20 @@
 package com.github.cleveard.bibliotech.db
 
 import android.content.Context
-import android.database.Cursor
+import android.database.sqlite.SQLiteConstraintException
 import android.graphics.Bitmap
 import android.os.Parcel
 import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.room.ForeignKey.CASCADE
-import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
-import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.idWithFilter
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectByFlagBits
+import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectVisible
 import com.github.cleveard.bibliotech.utils.Thumbnails
 import kotlinx.coroutines.*
-import java.io.*
-import java.lang.Exception
 import java.util.*
 import java.lang.StringBuilder
 import kotlin.collections.ArrayList
@@ -367,14 +363,21 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_TABLE",
-            filter,
+    protected open suspend fun deleteBooksWithUndo(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            BOOK_FLAGS, BookEntity.HIDDEN, filter,
             BOOK_ID_COLUMN,
             selectedIdSubQuery,
             bookIds,
-            false))
+            false
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("UPDATE $BOOK_TABLE SET $BOOK_FLAGS = ${BookEntity.HIDDEN}${it.expression}",
+                        it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -406,7 +409,7 @@ abstract class BookDao(private val db: BookDatabase) {
     suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE",
-            filter,
+            BOOK_FLAGS, BookEntity.HIDDEN, filter,
             BOOK_ID_COLUMN,
             selectedIdSubQuery,
             bookIds,
@@ -421,23 +424,11 @@ abstract class BookDao(private val db: BookDatabase) {
     protected abstract suspend fun update(book: BookEntity): Int
 
     /**
-     * Class to get unique columns in the book table
-     */
-    @TypeConverters(DateConverters::class)
-    protected data class ConflictIds(
-        @ColumnInfo(name = BOOK_ID_COLUMN) val id: Long,
-        @ColumnInfo(name = VOLUME_ID_COLUMN) val volumeId: String?,
-        @ColumnInfo(name = SOURCE_ID_COLUMN) val sourceId: String?,
-        @ColumnInfo(name = ISBN_COLUMN) val ISBN: String?,
-        @ColumnInfo(name = DATE_ADDED_COLUMN) val added: Date
-    )
-
-    /**
      * Look for existing book
      * @param query The SQLite query to find the existing book
      */
     @RawQuery
-    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): ConflictIds?
+    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): List<BookEntity>?
 
     /**
      * Find a conflicting book
@@ -445,20 +436,18 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param sourceId The conflicting source id
      * @param ISBN The conflicting ISBN
      */
-    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): ConflictIds? {
+    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): List<BookEntity>? {
         // If this book doesn't have a volume id or ISBN, Then we can't conflict
         if (volumeId == null && ISBN == null)
             return null
         val args = ArrayList<String?>(3)
 
         // Build query to look for conflict
-        var query =
-            "SELECT $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN, $DATE_ADDED_COLUMN FROM $BOOK_TABLE" +
-            " WHERE"
+        val query = StringBuilder("SELECT * FROM $BOOK_TABLE WHERE (")
 
         // If there is a volume id, then look for it
         if (volumeId != null) {
-            query += " ( $VOLUME_ID_COLUMN = ? AND $SOURCE_ID_COLUMN = ? )"
+            query.append(" ( $VOLUME_ID_COLUMN = ? AND $SOURCE_ID_COLUMN = ? )")
             args.add(volumeId)
             args.add(sourceId)
         }
@@ -466,22 +455,22 @@ abstract class BookDao(private val db: BookDatabase) {
         // If there is an ISBN look for it
         if (ISBN != null) {
             if (volumeId != null)
-                query += " OR"
-            query += " $ISBN_COLUMN = ?"
+                query.append(" OR")
+            query.append(" $ISBN_COLUMN = ?")
             args.add(ISBN)
         }
 
         // Only need one row to conflict
-        query += " LIMIT 1"
+        query.append(" ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
 
-        return findConflict(SimpleSQLiteQuery(query, args.toArray()))
+        return findConflict(SimpleSQLiteQuery(query.toString(), args.toArray()))
     }
 
     /**
      * Add or update a book in the data base
      */
     @Transaction
-    protected open suspend fun addOrUpdate(book: BookEntity, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
+    protected open suspend fun addOrUpdateWithUndo(book: BookEntity, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
         // Assume adding, set the added and modified time to now
         val time = Calendar.getInstance().time
 
@@ -494,19 +483,26 @@ abstract class BookDao(private val db: BookDatabase) {
 
         // Look for a conflict
         val ids = findConflict(book.volumeId, book.sourceId, book.ISBN)
-        if (ids == null) {
+        if (ids.isNullOrEmpty()) {
             // Didn't find a conflict add the book
             book.id = 0
             book.added = time
             book.modified = time
             book.id = add(book)
-        } else if (BookDatabase.callConflict(book, callback, true)){
+            if (book.id != 0L)
+                UndoRedoDao.OperationType.ADD_BOOK.recordAdd(db.getUndoRedoDao(), book.id)
+        } else if (BookDatabase.callConflict(ids, callback, true)) {
+            if (ids.size != 1)
+                throw SQLiteConstraintException("Multiple conflicting books")
             // Had a conflict, get the id and time added and update the book
-            book.id = ids.id
-            book.added = ids.added
+            book.id = ids[0].id
+            book.added = ids[0].added
             book.modified = time
-            if (update(book) == 0)
+            if (!UndoRedoDao.OperationType.CHANGE_BOOK.recordUpdate(db.getUndoRedoDao(), book.id) {
+                update(book) > 0
+            }) {
                 book.id = 0L
+            }
         } else
             book.id = 0L
 
@@ -520,9 +516,9 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param callback Callback used to resolve conflicts
      */
     @Transaction
-    open suspend fun addOrUpdate(book: BookAndAuthors, tagIds: Array<Any>? = null, callback: (suspend CoroutineScope.(conflict: BookEntity) -> Boolean)? = null): Long {
+    open suspend fun addOrUpdateWithUndo(book: BookAndAuthors, tagIds: Array<Any>? = null, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
         // Add or update the book
-        val id = addOrUpdate(book.book, callback)
+        val id = addOrUpdateWithUndo(book.book, callback)
 
         if (id != 0L) {
             // Delete existing thumbnails, if any
@@ -530,11 +526,11 @@ abstract class BookDao(private val db: BookDatabase) {
             thumbnails.deleteThumbFile(book.book.id, false)
 
             // Add categories
-            db.getCategoryDao().add(book.book.id, book.categories)
+            db.getCategoryDao().addWithUndo(book.book.id, book.categories)
             // Add Authors
-            db.getAuthorDao().add(book.book.id, book.authors)
+            db.getAuthorDao().addWithUndo(book.book.id, book.authors)
             // Add Tags from book along with additional tags
-            db.getTagDao().add(book.book.id, book.tags, tagIds)
+            db.getTagDao().addWithUndo(book.book.id, book.tags, tagIds)
         }
 
         return id
@@ -546,13 +542,13 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param bookIds Optional bookIds to delete. Null means delete selected books
      */
     @Transaction
-    open suspend fun deleteSelected(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>?): Int {
+    open suspend fun deleteSelectedWithUndo(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>?): Int {
         // Delete all tags for the books - keep tags with no books
-        db.getBookTagDao().deleteSelectedBooks(bookIds, false, filter)
+        db.getBookTagDao().deleteSelectedBooksWithUndo(bookIds, false, filter)
         // Delete all authors for the books - delete authors with no books
-        db.getAuthorDao().delete(bookIds, true, filter)
+        db.getAuthorDao().deleteWithUndo(bookIds, true, filter)
         // Delete all categories for the book - delete categories with no books
-        db.getCategoryDao().delete(bookIds, true, filter)
+        db.getCategoryDao().deleteWithUndo(bookIds, true, filter)
 
         // Delete all thumbnails
         queryBookIds(bookIds, filter)?.let {
@@ -563,7 +559,7 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Finally delete the books
-        return deleteBooks(bookIds, filter)
+        return deleteBooksWithUndo(bookIds, filter)
 
     }
 
@@ -575,7 +571,7 @@ abstract class BookDao(private val db: BookDatabase) {
      */
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
-            + " WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+            + " WHERE $BOOK_ID_COLUMN = :bookId AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) LIMIT 1")
     @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     abstract suspend fun getBook(bookId: Long): BookAndAuthors?
 
@@ -586,11 +582,14 @@ abstract class BookDao(private val db: BookDatabase) {
     @RawQuery(observedEntities = [BookAndAuthors::class])
     protected abstract fun getBooks(query: SupportSQLiteQuery): PagingSource<Int, BookAndAuthors>
 
+    @RawQuery(observedEntities = [BookAndAuthors::class])
+    protected abstract fun getBookList(query: SupportSQLiteQuery): LiveData<List<BookAndAuthors>>
+
     /**
      * Get books
      */
     fun getBooks(): PagingSource<Int, BookAndAuthors> {
-        return getBooks(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE"))
+        return getBooks(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )"))
     }
 
     /**
@@ -600,21 +599,42 @@ abstract class BookDao(private val db: BookDatabase) {
     fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
         if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
             return getBooks()
-        return getBooks(BookFilter.buildFilterQuery(filter, context))
+        return getBooks(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
+    }
+
+    /**
+     * Get books
+     */
+    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
+        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
+            getBookList(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) ORDER BY $BOOK_ID_COLUMN"))
+        }
+    }
+
+    /**
+     * Get books
+     * @param filter The filter description used to filter and order the books
+     */
+    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
+        if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
+            return getBookList()
+        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
+            getBookList(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
+        }
     }
 
     /**
      * Get the small thumbnail url for a book
      * @param bookId The book id
      */
-    @Query("SELECT $SMALL_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+    @Query("SELECT $SMALL_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) LIMIT 1")
     protected abstract suspend fun getSmallThumbnailUrl(bookId: Long): String?
 
     /**
      * Get the large thumbnail url for a book
      * @param bookId The book id
      */
-    @Query("SELECT $LARGE_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId LIMIT 1")
+    @Query("SELECT $LARGE_THUMB_COLUMN FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = :bookId AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) LIMIT 1")
     protected abstract suspend fun getLargeThumbnailUrl(bookId: Long): String?
 
     /**
@@ -652,6 +672,7 @@ abstract class BookDao(private val db: BookDatabase) {
      */
     open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int? {
         val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
+            .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
             .selectByFlagBits(bits, value, include, BOOK_FLAGS)
             .toString()
         return countBits(SimpleSQLiteQuery(
@@ -671,12 +692,29 @@ abstract class BookDao(private val db: BookDatabase) {
     open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int?> {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
+                .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
                 .selectByFlagBits(bits, value, include, BOOK_FLAGS)
                 .toString()
             countBitsLive(SimpleSQLiteQuery(
                 "SELECT COUNT($BOOK_ID_COLUMN) FROM $BOOK_TABLE$condition", filter?.args
             ))
         }
+    }
+
+    /**
+     * Change bits in the flags column
+     * @param mask The bits to change
+     * @param value The value to set
+     * @param id The id of the tag to change. Null to change all
+     * @return The number of rows changed
+     */
+    @Transaction
+    open suspend fun changeBits(mask: Int, value: Int, id: Long?): Int? {
+        val condition = StringBuilder().idWithFilter(id, null, BOOK_ID_COLUMN)
+            .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
+        // Only select the rows where the change will make a difference
+        condition.selectByFlagBits(mask, value, false, BOOK_FLAGS)
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOK_TABLE SET $BOOK_FLAGS = ( $BOOK_FLAGS & ${mask.inv()} ) | $value$condition"))
     }
 
     /**
@@ -690,6 +728,7 @@ abstract class BookDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter?): Int {
         val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
+            .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
         // Only select the rows where the change will make a difference
         if (operation == true)
             condition.selectByFlagBits(mask, mask, false, BOOK_FLAGS)
@@ -699,16 +738,11 @@ abstract class BookDao(private val db: BookDatabase) {
         return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOK_TABLE $bits$condition", filter?.args))
     }
 
-    @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
-    }
-
     companion object {
         /** Sub-query that returns the selected book ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
-            "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( " +
-            "( $BOOK_FLAGS & ${BookEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
+            "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 " +
+            "AND ( $BOOK_FLAGS & ${BookEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
         }
     }
 }

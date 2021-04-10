@@ -3,10 +3,8 @@ package com.github.cleveard.bibliotech.db
 import android.database.Cursor
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
-import kotlinx.coroutines.*
-import java.io.*
-import java.util.*
 
 // Authors table name and its column names
 const val AUTHORS_TABLE = "authors"                                 // Authors table name
@@ -100,7 +98,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
     /**
      * Get the list of authors
      */
-    @Query(value = "SELECT * FROM $AUTHORS_TABLE ORDER BY $LAST_NAME_COLUMN, $REMAINING_COLUMN")
+    @Query(value = "SELECT * FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) = 0 ) ORDER BY $LAST_NAME_COLUMN, $REMAINING_COLUMN")
     abstract suspend fun get(): List<AuthorEntity>?
 
     /**
@@ -113,19 +111,48 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * Add multiple authors for a book
      * @param bookId The id of the book
      * @param authors The list of authors
+     * @param deleteAuthors True to delete unused authors
      */
     @Transaction
-    open suspend fun add(bookId: Long, authors: List<AuthorEntity>) {
-         // Delete current authors of the books
-        deleteBooks(arrayOf(bookId), null)
-        // Add new authors
-        for (author in authors)
-            add(bookId, author)
+    open suspend fun addWithUndo(bookId: Long, authors: List<AuthorEntity>, deleteAuthors: Boolean = true) {
+        if (deleteAuthors) {
+            // Yes, get the ids of the authors that are affects
+            val oldAuthors = queryBookIds(arrayOf(bookId), null)
+            // Delete the authors
+            deleteBooksWithUndo(arrayOf(bookId), null)
+            // Add new authors
+            for (author in authors)
+                addWithUndo(bookId, author)
+            oldAuthors?.let {
+                // Delete authors with no books
+                for (author in it) {
+                    if (authors.indexOfFirst {a -> a.id == author } < 0) {
+                        val list: List<BookAndAuthorEntity> = findById(author, 1)
+                        if (list.isEmpty()) {
+                            UndoRedoDao.OperationType.DELETE_AUTHOR.recordDelete(db.getUndoRedoDao(), author) {
+                                deleteAuthor(author)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // No, just delete the links
+            deleteBooksWithUndo(arrayOf(bookId), null)
+            // Add new authors
+            for (author in authors)
+                addWithUndo(bookId, author)
+        }
     }
 
     @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
+    open suspend fun copy(authorId: Long): Long {
+        return db.execInsert(SimpleSQLiteQuery(
+            """INSERT INTO $AUTHORS_TABLE ( $LAST_NAME_COLUMN, $REMAINING_COLUMN, $AUTHORS_FLAGS )
+                | SELECT $LAST_NAME_COLUMN, $REMAINING_COLUMN, ${AuthorEntity.HIDDEN} FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = ?
+            """.trimMargin(),
+            arrayOf(authorId)
+        ))
     }
 
     /**
@@ -134,7 +161,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @param author The author entity
      */
     @Transaction
-    open suspend fun add(bookId: Long, author: AuthorEntity) {
+    open suspend fun addWithUndo(bookId: Long, author: AuthorEntity) {
         // Find the author
         author.lastName = author.lastName.trim { it <= ' ' }
         author.remainingName = author.remainingName.trim { it <= ' ' }
@@ -143,10 +170,15 @@ abstract class AuthorDao(private val db: BookDatabase) {
         author.id = if (list.isNotEmpty()) {
             list[0].id
         } else {
-            add(author)
+            author.id = 0
+            add(author).also {
+                if (it != 0L)
+                    UndoRedoDao.OperationType.ADD_AUTHOR.recordAdd(db.getUndoRedoDao(), it)
+            }
         }
         // Add the link
         add(BookAndAuthorEntity(0, author.id, bookId))
+        UndoRedoDao.OperationType.ADD_BOOK_AUTHOR_LINK.recordLink(db.getUndoRedoDao(), bookId, author.id)
     }
 
     /**
@@ -155,14 +187,21 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
     */
     @Transaction
-    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_AUTHORS_TABLE",
-            filter,
+    protected open suspend fun deleteBooksWithUndo(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, filter,
             BOOK_AUTHORS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
-            false))
+            false
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_AUTHOR_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_AUTHORS_TABLE${it.expression}",
+                        it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -180,7 +219,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
     private suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_AUTHORS_AUTHOR_ID_COLUMN FROM $BOOK_AUTHORS_TABLE",
-            filter,
+            null, 0, filter,
             BOOK_AUTHORS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
@@ -191,7 +230,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * Delete books for an author
      * @param authorId The id of the authors whose books are deleted
      */
-    @Query("DELETE FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = :authorId")
+    @Query("UPDATE $AUTHORS_TABLE SET $AUTHORS_FLAGS = ${AuthorEntity.HIDDEN} WHERE $AUTHORS_ID_COLUMN = :authorId AND ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun deleteAuthor(authorId: Long): Int
 
     /**
@@ -200,7 +239,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @param remaining The rest of the author name
      */
     @Query(value = "SELECT * FROM $AUTHORS_TABLE"
-        + " WHERE $LAST_NAME_COLUMN LIKE :last ESCAPE '\\' AND $REMAINING_COLUMN LIKE :remaining ESCAPE '\\'")
+        + " WHERE $LAST_NAME_COLUMN LIKE :last ESCAPE '\\' AND $REMAINING_COLUMN LIKE :remaining ESCAPE '\\' AND ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) = 0 )")
     abstract suspend fun doFindByName(last: String, remaining: String): List<AuthorEntity>
 
     /**
@@ -246,25 +285,28 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @return The number of book-author links deleted
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>?, deleteAuthors: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
+    open suspend fun deleteWithUndo(bookIds: Array<Any>?, deleteAuthors: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
         // Do we want to delete authors with no books?
         val count: Int
         if (deleteAuthors) {
             // Yes, get the ids of the authors that are affects
             val authors = queryBookIds(bookIds, filter)
             // Delete the authors
-            count = deleteBooks(bookIds, filter)
+            count = deleteBooksWithUndo(bookIds, filter)
             authors?.let {
                 // Delete authors with no books
                 for (author in it) {
                     val list: List<BookAndAuthorEntity> = findById(author, 1)
-                    if (list.isEmpty())
-                        deleteAuthor(author)
+                    if (list.isEmpty()) {
+                        UndoRedoDao.OperationType.DELETE_AUTHOR.recordDelete(db.getUndoRedoDao(), author) {
+                            deleteAuthor(author)
+                        }
+                    }
                 }
             }
         } else {
             // No, just delete the links
-            count = deleteBooks(bookIds, filter)
+            count = deleteBooksWithUndo(bookIds, filter)
         }
 
         return count

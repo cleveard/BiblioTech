@@ -359,35 +359,6 @@ class ExportImportFragment : Fragment() {
     }
 
     /**
-     * Execute a lambda for each object in a PagingSource
-     * @param callback The lambda to execute
-     */
-    private suspend fun <K: Any, D: Any> PagingSource<K, D>.forEach(callback: (D) -> Unit) {
-        suspend fun nextPage(params: PagingSource.LoadParams<K>): K? {
-            val result = this.load(params) as PagingSource.LoadResult.Page
-            for (data in result.data)
-                callback(data)
-            return result.nextKey
-        }
-        var key = nextPage(
-            PagingSource.LoadParams.Refresh(
-                key = null,
-                loadSize = 20,
-                placeholdersEnabled = false
-            )
-        )
-        while(key != null) {
-            key = nextPage(
-                PagingSource.LoadParams.Append(
-                    key = key,
-                    loadSize = 20,
-                    placeholdersEnabled = false
-                )
-            )
-        }
-    }
-
-    /**
      * Export books
      * @param path The path to the exported content
      */
@@ -396,7 +367,7 @@ class ExportImportFragment : Fragment() {
             // Get the book filter for the export
             val bookFilter = filter.name?.let { viewModel.repo.findViewByName(it) }?.filter
             // Get the PageSource for the books
-            val source = bookFilter?.let { viewModel.repo.getBooks(it, requireContext()) }?: viewModel.repo.getBooks()
+            val source = bookFilter?.let { viewModel.repo.getBookList(it, requireContext()) }?: viewModel.repo.getBookList()
             @Suppress("BlockingMethodInNonBlockingContext")
             // Start the export
             doExport(path) {stream ->
@@ -411,7 +382,7 @@ class ExportImportFragment : Fragment() {
 
                 var count = 0
                 // Output the data
-                source.forEach {b ->
+                source.getLive()?.forEach {b ->
                     ++count
                     // Output as many lines as needed to include
                     // all authors, tags and categories and the book

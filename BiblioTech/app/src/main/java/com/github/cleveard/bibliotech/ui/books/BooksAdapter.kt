@@ -235,8 +235,8 @@ internal open class BooksAdapter(
                 val token = edit.text.toString().trim { it <= ' ' }
                 // return the query string
                 return ColumnDataDescriptor.buildAutoCompleteCursor(
-                    BookRepository.repo, TAGS_ID_COLUMN,
-                    TAGS_NAME_COLUMN, TAGS_TABLE, token
+                    BookRepository.repo, BookDatabase.tagsTable,
+                    TAGS_NAME_COLUMN, token
                 )
             }
 

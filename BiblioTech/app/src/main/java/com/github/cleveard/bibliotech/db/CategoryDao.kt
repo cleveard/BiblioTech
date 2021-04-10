@@ -2,6 +2,7 @@ package com.github.cleveard.bibliotech.db
 
 import androidx.room.*
 import androidx.room.ForeignKey.CASCADE
+import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 
 // Categories table name and its column names
@@ -67,7 +68,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
     /**
      * Get the list of categories
      */
-    @Query(value = "SELECT * FROM $CATEGORIES_TABLE ORDER BY $CATEGORY_COLUMN")
+    @Query(value = "SELECT * FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) = 0 ) ORDER BY $CATEGORY_COLUMN")
     abstract suspend fun get(): List<CategoryEntity>?
 
     /**
@@ -88,17 +89,48 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * Add multiple categories for a book
      * @param bookId The id of the book
      * @param categories The list of categories to add
+     * @param deleteCategories True to delete unused categories
      */
     @Transaction
-    open suspend fun add(bookId: Long, categories: List<CategoryEntity>) {
-        deleteBooks(arrayOf(bookId), null)
-        for (cat in categories)
-            add(bookId, cat)
+    open suspend fun addWithUndo(bookId: Long, categories: List<CategoryEntity>, deleteCategories: Boolean = true) {
+        if (deleteCategories) {
+            // Yes, get the ids of the categories that are affects
+            val oldCategories = queryBookIds(arrayOf(bookId), null)
+            // Delete the categories
+            deleteBooksWithUndo(arrayOf(bookId), null)
+            // Add new categories
+            for (category in categories)
+                addWithUndo(bookId, category)
+            oldCategories?.let {
+                // Delete categories with no books
+                for (category in it) {
+                    if (categories.indexOfFirst { a -> a.id == category } < 0) {
+                        val list: List<BookAndCategoryEntity> = findById(category, 1)
+                        if (list.isEmpty()) {
+                            UndoRedoDao.OperationType.DELETE_CATEGORY.recordDelete(db.getUndoRedoDao(), category) {
+                                deleteCategory(category)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // No, just delete the links
+            deleteBooksWithUndo(arrayOf(bookId), null)
+            // Add new categories
+            for (category in categories)
+                addWithUndo(bookId, category)
+        }
     }
 
     @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
+    open suspend fun copy(categoryId: Long): Long {
+        return db.execInsert(SimpleSQLiteQuery(
+            """INSERT INTO $CATEGORIES_TABLE ( $CATEGORY_COLUMN, $CATEGORIES_FLAGS )
+                | SELECT $CATEGORY_COLUMN, ${AuthorEntity.HIDDEN} FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = ?
+            """.trimMargin(),
+            arrayOf(categoryId)
+        ))
     }
 
     /**
@@ -107,7 +139,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param category The category to add
      */
     @Transaction
-    open suspend fun add(bookId: Long, category: CategoryEntity) {
+    open suspend fun addWithUndo(bookId: Long, category: CategoryEntity) {
         // Find the category
         category.category = category.category.trim { it <= ' ' }
         val list: List<CategoryEntity> = findByName(category.category)
@@ -115,7 +147,11 @@ abstract class CategoryDao(private val db: BookDatabase) {
         category.id = if (list.isNotEmpty()) {
             list[0].id
         } else {
-            add(category)
+            category.id = 0L
+            add(category).also {
+                if (it != 0L)
+                    UndoRedoDao.OperationType.ADD_CATEGORY.recordAdd(db.getUndoRedoDao(), it)
+            }
         }
         // Add the link
         add(BookAndCategoryEntity(
@@ -123,6 +159,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
             categoryId = category.id,
             bookId = bookId
         ))
+        UndoRedoDao.OperationType.ADD_BOOK_CATEGORY_LINK.recordLink(db.getUndoRedoDao(), bookId, category.id)
     }
 
     /**
@@ -131,14 +168,21 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    protected open suspend fun deleteBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_CATEGORIES_TABLE",
-            filter,
+    protected open suspend fun deleteBooksWithUndo(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, filter,
             BOOK_CATEGORIES_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
-            false))
+            false
+        )?. let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_CATEGORY_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_CATEGORIES_TABLE${it.expression}",
+                        it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -156,7 +200,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
     private suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_CATEGORIES_CATEGORY_ID_COLUMN FROM $BOOK_CATEGORIES_TABLE",
-            filter,
+            null, 0, filter,
             BOOK_CATEGORIES_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
@@ -167,7 +211,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * Delete all books for a category
      * @param categoryId The id of the category
      */
-    @Query("DELETE FROM $CATEGORIES_TABLE WHERE $CATEGORIES_ID_COLUMN = :categoryId")
+    @Query("UPDATE $CATEGORIES_TABLE SET $CATEGORIES_FLAGS = ${CategoryEntity.HIDDEN} WHERE $CATEGORIES_ID_COLUMN = :categoryId AND ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun deleteCategory(categoryId: Long): Int
 
     /**
@@ -175,7 +219,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param category The name of the category
      */
     @Query(value = "SELECT * FROM $CATEGORIES_TABLE"
-            + " WHERE $CATEGORY_COLUMN LIKE :category ESCAPE '\\'")
+            + " WHERE $CATEGORY_COLUMN LIKE :category ESCAPE '\\' AND ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) = 0 )")
     abstract suspend fun doFindByName(category: String): List<CategoryEntity>
 
     /**
@@ -202,25 +246,28 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun delete(bookIds: Array<Any>?, deleteCategories: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
+    open suspend fun deleteWithUndo(bookIds: Array<Any>?, deleteCategories: Boolean = true, filter: BookFilter.BuiltFilter? = null): Int {
         val count: Int
         // Should we delete categories
         if (deleteCategories) {
             // Yes get the id of the categories affected
             val categories = queryBookIds(bookIds, filter)
             // Delete the book category links
-            count = deleteBooks(bookIds, filter)
+            count = deleteBooksWithUndo(bookIds, filter)
             categories?.let {
                 // Delete any empty categories
                 for (category in it) {
                     val list: List<BookAndCategoryEntity> = findById(category, 1)
-                    if (list.isEmpty())
-                        deleteCategory(category)
+                    if (list.isEmpty()) {
+                        UndoRedoDao.OperationType.DELETE_CATEGORY.recordDelete(db.getUndoRedoDao(), category) {
+                            deleteCategory(category)
+                        }
+                    }
                 }
             }
         } else {
             // No, just delete the book category links
-            count = deleteBooks(bookIds, filter)
+            count = deleteBooksWithUndo(bookIds, filter)
         }
 
         return count

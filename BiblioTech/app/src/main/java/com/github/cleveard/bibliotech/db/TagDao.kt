@@ -8,7 +8,11 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.idWithFilter
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectByFlagBits
+import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectVisible
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.flow.map
 import java.util.*
 import java.lang.StringBuilder
 import kotlin.collections.ArrayList
@@ -89,25 +93,25 @@ abstract class TagDao(private val db: BookDatabase) {
      * Get a tag using its incrementing id
      * @param tagId The id of the tag to retrieve
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId LIMIT 1")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
     abstract suspend fun get(tagId: Long): TagEntity?
 
     /**
-     * Get the list of all tags
+     * Get the paging source for all tags
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
     abstract fun get(): PagingSource<Int, TagEntity>
 
     /**
      * Get a LiveData of the list of tags ordered by name
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
     protected abstract fun doGetLive(): LiveData<List<TagEntity>>
 
     /**
      * Get a LiveData of the list of tags ordered by name
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( $TAGS_FLAGS & ${TagEntity.SELECTED} ) != 0 ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( $TAGS_FLAGS & ${TagEntity.SELECTED or TagEntity.HIDDEN} ) == ${TagEntity.SELECTED} ORDER BY $TAGS_NAME_COLUMN")
     protected abstract fun doGetSelectedLive(): LiveData<List<TagEntity>>
 
     /**
@@ -127,7 +131,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * Add a tag
      * @param tag The tag to be added
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     protected abstract suspend fun internalAdd(tag: TagEntity): Long
 
     /**
@@ -144,10 +148,10 @@ abstract class TagDao(private val db: BookDatabase) {
      * @param tagIds An optional list of tag ids. Null means to use the selected tags
      */
     @Transaction
-    open suspend fun add(bookId: Long, tags: List<TagEntity>, tagIds: Array<Any>?) {
+    open suspend fun addWithUndo(bookId: Long, tags: List<TagEntity>, tagIds: Array<Any>?) {
         // Add or find all of the tags
         for (tag in tags) {
-            tag.id = findByName(tag.name)?.id ?: add(tag)
+            tag.id = findByName(tag.name)?.id ?: addWithUndo(tag)
         }
 
         // Build a set of all tag ids for the book
@@ -159,11 +163,11 @@ abstract class TagDao(private val db: BookDatabase) {
         val list = set.toArray()
 
         // Delete the tags that we don't want to keep
-        db.getBookTagDao().deleteTagsForBooks(arrayOf(bookId), null, list, true)
+        db.getBookTagDao().deleteTagsForBooksWithUndo(arrayOf(bookId), null, list, true)
 
         // Add the tags that we want
         val tagList = db.getTagDao().queryTagIds(list)
-        db.getBookTagDao().addTagsToBook(bookId, tagList)
+        db.getBookTagDao().addTagsToBookWithUndo(bookId, tagList)
     }
 
     @Transaction
@@ -174,7 +178,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * This is also be used to rename existing tags. If the renamed tag conflicts with an
      * existing tag, then we will merge the books for the two tags into a single tag
      */
-    open suspend fun add(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
+    open suspend fun addWithUndo(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
         // Empty tag is not accepted
         tag.name = tag.name.trim { it <= ' ' }
         if (tag.name.isEmpty())
@@ -202,9 +206,9 @@ abstract class TagDao(private val db: BookDatabase) {
                     // Convert tag links to conflict
                     // First delete original links
                     if (tagCount > 0)
-                        db.getBookTagDao().deleteTagsForTags(arrayOf(tag.id))
+                        db.getBookTagDao().deleteTagsForTagsWithUndo(arrayOf(tag.id))
                     // Delete the original tag
-                    delete(tag.id)
+                    deleteWithUndo(tag.id)
                     // Set the tag id to the conflict id
                     tag.id = conflict.id
                     // Keep track of books conflict id is already used
@@ -214,9 +218,9 @@ abstract class TagDao(private val db: BookDatabase) {
                     addBooks = conflictBooks
                     // Delete the existing links for conflict
                     if (conflictCount > 0)
-                        db.getBookTagDao().deleteTagsForTags(arrayOf(conflict.id))
+                        db.getBookTagDao().deleteTagsForTagsWithUndo(arrayOf(conflict.id))
                     // Delete the conflicting tag
-                    delete(conflict.id)
+                    deleteWithUndo(conflict.id)
                     // Keep tack of book tag id is already used
                     tagBooks?.let {list -> set.addAll(list.map { it.bookId }) }
                 }
@@ -228,7 +232,7 @@ abstract class TagDao(private val db: BookDatabase) {
                         // If the book isn't already tagged, then tag it with the new id
                         if (!set.contains(book.bookId)) {
                             book.tagId = tag.id
-                            db.getBookTagDao().add(book)
+                            db.getBookTagDao().addTagToBookWithUndo(book.bookId, book.tagId)
                         } else {
                             // Delete this book-tag link
                             list.add(book.id)
@@ -237,22 +241,22 @@ abstract class TagDao(private val db: BookDatabase) {
 
                     // Delete all of the links we kept from above
                     if (list.isNotEmpty())
-                        db.getBookTagDao().deleteById(list.toArray())
+                        db.getBookTagDao().deleteByIdWithUndo(list.toArray())
                 }
             }
         }
 
         // Update or add the tag
-        if (tag.id == 0L)
+        if (tag.id == 0L) {
             tag.id = internalAdd(tag)
-        else if (internalUpdate(tag) <= 0)
+            if (tag.id != 0L)
+                UndoRedoDao.OperationType.ADD_TAG.recordAdd(db.getUndoRedoDao(), tag.id)
+        } else if (!UndoRedoDao.OperationType.CHANGE_TAG.recordUpdate(db.getUndoRedoDao(), tag.id) {
+            internalUpdate(tag) > 0
+        }) {
             tag.id = 0L
+        }
         return tag.id
-    }
-
-    @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
     }
 
     // Class used to query just the tag id for a tag
@@ -274,6 +278,7 @@ abstract class TagDao(private val db: BookDatabase) {
     suspend fun queryTagIds(tagIds: Array<Any>?): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE",  // SQLite command
+            TAGS_FLAGS, TagEntity.HIDDEN,                         // Select visible tags
             TAGS_ID_COLUMN,                                       // Column to query
             selectedIdSubQuery,                                   // Selected tag ids sub-query
             tagIds,                                               // Ids to query
@@ -292,8 +297,14 @@ abstract class TagDao(private val db: BookDatabase) {
      * Delete a tag using the tag id
      * @param tagId The tag id to delete
      */
-    @Query("DELETE FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId")
+    @Query("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ${TagEntity.HIDDEN} WHERE $TAGS_ID_COLUMN = :tagId AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 )")
     abstract suspend fun delete(tagId: Long): Int
+
+    suspend fun deleteWithUndo(tagId: Long): Int {
+        return UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), tagId) {
+            delete(tagId)
+        }
+    }
 
     /**
      * Query the number of tags
@@ -303,6 +314,7 @@ abstract class TagDao(private val db: BookDatabase) {
     open suspend fun querySelectedTagCount(): Int {
         return BookDatabase.buildQueryForIds(
             "SELECT COUNT($TAGS_ID_COLUMN) FROM $TAGS_TABLE",      // SQLite Command
+            TAGS_FLAGS, TagEntity.HIDDEN,             // Select visible tags
             TAGS_ID_COLUMN,                           // Column to query
             selectedIdSubQuery,                       // Selected tag ids sub-query
             null,                                     // Ids to delete
@@ -314,16 +326,20 @@ abstract class TagDao(private val db: BookDatabase) {
      * Delete multiple tags
      */
     @Transaction
-    open suspend fun deleteSelected(): Int {
-        db.getBookTagDao().deleteTagsForTags(null)
-        return db.execUpdateDelete(
-            BookDatabase.buildQueryForIds(
-            "DELETE FROM $TAGS_TABLE",      // SQLite Command
-                TAGS_ID_COLUMN,                           // Column to query
-                selectedIdSubQuery,                       // Selected tag ids sub-query
-                null,                                     // Ids to delete
-                false                                     // Delete ids or not ids
-            ))
+    open suspend fun deleteSelectedWithUndo(): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            TAGS_FLAGS, TagEntity.HIDDEN, null, // Select visible tags
+            TAGS_ID_COLUMN,                           // Column to query
+            selectedIdSubQuery,                       // Selected tag ids sub-query
+            null,                                     // Ids to delete
+            false                                     // Delete ids or not ids
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ${TagEntity.HIDDEN}${it.expression}", it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -332,7 +348,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * This uses a case insensitive compare
      */
     @Query(value = "SELECT * FROM $TAGS_TABLE"
-            + " WHERE $TAGS_NAME_COLUMN LIKE :name ESCAPE '\\' LIMIT 1")
+            + " WHERE $TAGS_NAME_COLUMN LIKE :name ESCAPE '\\' AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
     protected abstract suspend fun doFindByName(name: String): TagEntity?
 
     /**
@@ -367,6 +383,7 @@ abstract class TagDao(private val db: BookDatabase) {
     open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int? {
         // Build the selection from the bits
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
+            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
             .selectByFlagBits(bits, value, include, TAGS_FLAGS)
             .toString()
         // Return the query
@@ -388,6 +405,7 @@ abstract class TagDao(private val db: BookDatabase) {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             // Build the selection from the bits
             val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
+                .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
                 .selectByFlagBits(bits, value, include, TAGS_FLAGS)
                 .toString()
             // Return the query
@@ -401,6 +419,22 @@ abstract class TagDao(private val db: BookDatabase) {
 
     /**
      * Change bits in the flags column
+     * @param mask The bits to change
+     * @param value The value to set
+     * @param id The id of the tag to change. Null to change all
+     * @return The number of rows changed
+     */
+    @Transaction
+    open suspend fun changeBits(mask: Int, value: Int, id: Long?): Int? {
+        val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
+            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
+        // Only select the rows where the change will make a difference
+        condition.selectByFlagBits(mask, value, false, TAGS_FLAGS)
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ( $TAGS_FLAGS & ${mask.inv()} ) | $value$condition"))
+    }
+
+    /**
+     * Change bits in the flags column
      * @param operation The operation to perform. True to set, false to clear, null to toggle
      * @param mask The bits to change
      * @param id The id of the tag to change. Null to change all
@@ -409,6 +443,7 @@ abstract class TagDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int? {
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
+            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
         // Only select the rows where the change will make a difference
         if (operation == true)
             condition.selectByFlagBits(mask, mask, false, TAGS_FLAGS)
@@ -421,8 +456,8 @@ abstract class TagDao(private val db: BookDatabase) {
     companion object {
         /** Sub-query that returns the selected tag ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
-            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( " +
-            "( $TAGS_FLAGS & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
+            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 " +
+            "AND ( $TAGS_FLAGS & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
         }
     }
 }
@@ -444,18 +479,20 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param bookTagIds A list of ids for BookTagEntities.
      */
     @Transaction
-    open suspend fun deleteById(bookTagIds: Array<Any>): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_TAGS_TABLE",
+    open suspend fun deleteByIdWithUndo(bookTagIds: Array<Any>): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, null,
             BOOK_TAGS_ID_COLUMN,
             null,
             bookTagIds,
-            false))
-    }
-
-    @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
+            false
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -470,11 +507,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * all tags from the books identified by booksIds
      */
     @Transaction
-    open suspend fun deleteTagsForBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
+    open suspend fun deleteTagsForBooksWithUndo(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
                                                 tagIds: Array<Any>? = null, tagsInvert: Boolean = true): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_TAGS_TABLE",
-            filter,
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
@@ -482,7 +518,14 @@ abstract class BookTagDao(private val db:BookDatabase) {
             BOOK_TAGS_TAG_ID_COLUMN,
             null,
             tagIds,
-            tagsInvert))
+            tagsInvert
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -494,11 +537,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param invert True to remove the tags that match tagIds. False to remove the tags not matched by tagIds.
      */
     @Transaction
-    open suspend fun deleteSelectedTagsForBooks(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
-                                                tagIds: Array<Any>? = null, invert: Boolean = false): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_TAGS_TABLE",
-            filter,
+    open suspend fun deleteSelectedTagsForBooksWithUndo(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null,
+                                                        tagIds: Array<Any>? = null, invert: Boolean = false): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
@@ -506,7 +548,13 @@ abstract class BookTagDao(private val db:BookDatabase) {
             BOOK_TAGS_TAG_ID_COLUMN,
             TagDao.selectedIdSubQuery,
             tagIds,
-            invert))
+            invert)?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -514,13 +562,20 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param tagIds A list of tag ids. Null means selected.
      */
     @Transaction
-    open suspend fun deleteTagsForTags(tagIds: Array<Any>?): Int {
-        return db.execUpdateDelete(BookDatabase.buildQueryForIds(
-            "DELETE FROM $BOOK_TAGS_TABLE",
+    open suspend fun deleteTagsForTagsWithUndo(tagIds: Array<Any>?): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            null, 0, null,
             BOOK_TAGS_TAG_ID_COLUMN,
             TagDao.selectedIdSubQuery,
             tagIds,
-            false))
+            false
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(
+                    SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
+                )
+            }
+        }?: 0
     }
 
     /**
@@ -538,7 +593,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
     suspend fun queryBookIds(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter? = null): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $BOOK_TAGS_TAG_ID_COLUMN FROM $BOOK_TAGS_TABLE",
-            filter,
+            null, 0, filter,
             BOOK_TAGS_BOOK_ID_COLUMN,
             BookDao.selectedIdSubQuery,
             bookIds,
@@ -559,6 +614,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
     suspend fun queryTags(tagIds: Array<Any>): List<BookAndTagEntity>? {
         return BookDatabase.buildQueryForIds(
             "SELECT * FROM $BOOK_TAGS_TABLE",
+            null, 0,
             BOOK_TAGS_TAG_ID_COLUMN,
             null,
             tagIds,
@@ -576,36 +632,43 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * Add a single tag for a book
      * @param bookId The id of the book
      * @param tagId The id of the tag
+     * @return The id of the link
      */
     @Transaction
-    open suspend fun addTagToBook(bookId: Long, tagId: Long): Long {
-        return add(BookAndTagEntity(0, tagId, bookId))
+    open suspend fun addTagToBookWithUndo(bookId: Long, tagId: Long): Long {
+        return add(BookAndTagEntity(0, tagId, bookId)).let {
+            if (it != 0L && it != -1L) {
+                UndoRedoDao.OperationType.ADD_BOOK_TAG_LINK.recordLink(db.getUndoRedoDao(), bookId, tagId)
+                it
+            } else
+                0L
+        }
     }
 
     /**
      * Add multiple tags for a book
      * @param bookId The id of the book
      * @param tagIds List of ids for the tags
+     * @return The number of links added
      */
     @Transaction
-    open suspend fun addTagsToBook(bookId: Long, tagIds: List<Long>?) {
-        if (tagIds != null) {
-            for (tag in tagIds)
-                addTagToBook(bookId, tag)
-        }
+    open suspend fun addTagsToBookWithUndo(bookId: Long, tagIds: List<Long>?): Int {
+        return tagIds?.asFlow()?.map { tag ->
+            if (addTagToBookWithUndo(bookId, tag) != 0L) 1 else 0
+        }?.fold(0) { a, v -> a + v }?: 0
     }
 
     /**
      * Add multiple tags to multiple books
      * @param bookIds A list of ids for books
      * @param tagIds A list of id for tags
+     * @return The number of links added
      */
     @Transaction
-    open suspend fun addTagsToBooks(bookIds: List<Long>?, tagIds: List<Long>?) {
-        if (bookIds != null) {
-            for (book in bookIds)
-                addTagsToBook(book, tagIds)
-        }
+    open suspend fun addTagsToBooksWithUndo(bookIds: List<Long>?, tagIds: List<Long>?): Int {
+        return bookIds?.asFlow()?.map {book ->
+            addTagsToBookWithUndo(book, tagIds)
+        }?.fold(0) { a, v -> a + v }?: 0
     }
 
     /**
@@ -613,12 +676,13 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param bookIds A list of book ids. Null means use selected books.
      * @param tagIds A list of tag ids to be removed for the books. Null means use selected tags.
      * @param filter A filter to restrict the book ids
+     * @return The number of links added
      */
     @Transaction
-    open suspend fun addTagsToBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?) {
+    open suspend fun addTagsToBooksWithUndo(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?): Int {
         val bookList = db.getBookDao().queryBookIds(bookIds, filter)
         val tagList = db.getTagDao().queryTagIds(tagIds)
-        addTagsToBooks(bookList, tagList)
+        return addTagsToBooksWithUndo(bookList, tagList)
     }
 
     /**
@@ -629,25 +693,25 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param filter A filter to restrict the book ids
      */
     @Transaction
-    open suspend fun deleteSelectedBooks(bookIds: Array<Any>?, deleteTags: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
+    open suspend fun deleteSelectedBooksWithUndo(bookIds: Array<Any>?, deleteTags: Boolean = false, filter: BookFilter.BuiltFilter? = null): Int {
         val count: Int
         // Do we want to delete any books
         if (deleteTags) {
             // Yes, get the ids of tags that are affected
             val tags = queryBookIds(bookIds, filter)
             // Delete the book tag links
-            count = deleteTagsForBooks(bookIds, filter)
+            count = deleteTagsForBooksWithUndo(bookIds, filter)
             tags?.let {
                 // Check for empty tags and delete them
                 for (tag in it) {
                     val list: List<BookAndTagEntity> = findById(tag, 1)
                     if (list.isEmpty())
-                        db.getTagDao().delete(tag)
+                        db.getTagDao().deleteWithUndo(tag)
                 }
             }
         } else {
             // Don't delete tags, so just delete the links
-            count = deleteTagsForBooks(bookIds, filter)
+            count = deleteTagsForBooksWithUndo(bookIds, filter)
         }
 
         return count

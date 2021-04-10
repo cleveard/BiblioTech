@@ -2,6 +2,7 @@ package com.github.cleveard.bibliotech.db
 
 import androidx.lifecycle.LiveData
 import androidx.room.*
+import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.*
 import java.lang.Exception
 
@@ -60,7 +61,7 @@ abstract class ViewDao(private val db: BookDatabase) {
     /**
      * Get list of views
      */
-    @Query(value = "SELECT $VIEWS_NAME_COLUMN FROM $VIEWS_TABLE ORDER BY $VIEWS_NAME_COLUMN")
+    @Query(value = "SELECT $VIEWS_NAME_COLUMN FROM $VIEWS_TABLE WHERE ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 ) ORDER BY $VIEWS_NAME_COLUMN")
     abstract fun doGetViewNames(): LiveData<List<String>>
 
     /**
@@ -72,10 +73,11 @@ abstract class ViewDao(private val db: BookDatabase) {
         }
     }
 
-    @Transaction
-    open suspend fun copy(bookId: Long): Long {
-        return 0L
-    }
+    /**
+     * Get list of views
+     */
+    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 )")
+    suspend abstract fun getViews(): List<ViewEntity>
 
     /**
      * Add a view
@@ -99,16 +101,25 @@ abstract class ViewDao(private val db: BookDatabase) {
      * @return The number of views delete
      */
     @Transaction
-    @Query(value = "DELETE FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :viewName ESCAPE '\\'")
-    protected abstract suspend fun doDelete(viewName: String): Int
+    protected open suspend fun doDeleteWithUndo(viewName: String): Int {
+        val expression = WhereExpression(" WHERE $VIEWS_NAME_COLUMN LIKE ? ESCAPE '\\' AND ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0",
+            arrayOf(viewName))
+        return UndoRedoDao.OperationType.DELETE_VIEW.recordDelete(db.getUndoRedoDao(), expression) {
+            db.execUpdateDelete(
+                SimpleSQLiteQuery("UPDATE $VIEWS_TABLE SET $VIEWS_FLAGS = ${ViewEntity.HIDDEN}${it.expression}",
+                    it.args
+                )
+            )
+        }
+    }
 
     /**
      * Delete a view by name
      * @param viewName The name of the view. % and _ are escaped before deleting
      * @return The number of views delete
      */
-    suspend fun delete(viewName: String): Int {
-        return doDelete(PredicateDataDescription.escapeLikeWildCards(viewName))
+    open suspend fun deleteWithUndo(viewName: String): Int {
+        return doDeleteWithUndo(PredicateDataDescription.escapeLikeWildCards(viewName))
     }
 
     /**
@@ -118,7 +129,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      *                   true to accept the conflict or false to abort the add
      * @return The id of the view in the database, or 0L if the add was aborted
      */
-    suspend fun addOrUpdate(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)?): Long {
+    suspend fun addOrUpdateWithUndo(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)? = null): Long {
         // Look for a conflicting view
         view.name = view.name.trim { it <= ' ' }
         val conflict = findByName(view.name)
@@ -132,12 +143,17 @@ abstract class ViewDao(private val db: BookDatabase) {
                 view.id = conflict.id
             }
             // Update the view
-            if (doUpdate(view) != 1)
-                return 0L
+            if (!UndoRedoDao.OperationType.CHANGE_VIEW.recordUpdate(db.getUndoRedoDao(), view.id) {
+                doUpdate(view) > 0
+            }) {
+                view.id = 0L
+            }
         } else {
             // Add the new view
             view.id = 0L
             view.id = doAdd(view)
+            if (view.id != 0L)
+                UndoRedoDao.OperationType.ADD_VIEW.recordAdd(db.getUndoRedoDao(), view.id)
         }
         return view.id
     }
@@ -147,7 +163,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      * @param name The name of the view
      * @return The view or null if it wasn't found
      */
-    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '\\'")
+    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '\\' AND ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun doFindByName(name: String): ViewEntity?
 
     /**

@@ -469,8 +469,8 @@ class ScanFragment : Fragment() {
             val token = edit.text.toString().trim { it <= ' ' }
             // return the query string
             return ColumnDataDescriptor.buildAutoCompleteCursor(
-                tagViewModel.repo, TAGS_ID_COLUMN,
-                TAGS_NAME_COLUMN, TAGS_TABLE, token
+                tagViewModel.repo, BookDatabase.tagsTable,
+                TAGS_NAME_COLUMN, token
             )
         }
 
