@@ -9,9 +9,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.DisableOnAndroidDebug
 import com.github.cleveard.bibliotech.utils.getLive
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
-import com.github.cleveard.bibliotech.testutils.UndoTracker
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
+import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -23,17 +23,15 @@ import org.junit.runner.RunWith
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
-class BookRepositoryTest {
+class UndoRedoDaoTest {
     private lateinit var repo: BookRepository
     private lateinit var context: Context
-    private lateinit var undo: UndoTracker
 
     @Before
     fun startUp() {
         context = ApplicationProvider.getApplicationContext()
         BookRepository.initialize(context, true)
         repo = BookRepository.repo
-        undo = UndoTracker(BookDatabase.db.getUndoRedoDao())
     }
 
     @After
@@ -45,6 +43,7 @@ class BookRepositoryTest {
     val timeout = DisableOnAndroidDebug(Timeout(50L, TimeUnit.SECONDS))
 
     private suspend fun BookDbTracker.testBookFlags(message: String, bookFilter: BookFilter?) {
+        undoTracker.syncUndo(message)
         val bookFlags = repo.bookFlags
         val filter = bookFilter?.let { it.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true) }
 
@@ -62,7 +61,7 @@ class BookRepositoryTest {
         }
 
         suspend fun checkCount(bits: Int, value: Int, id: Long?) {
-            assertWithMessage("checkCount$message value: %s id: %s", value, id).apply {
+            assertWithMessage("checkCount$message value: value id: id").apply {
                 checkCountBits(bits, value, true, null)
                 checkCountBits(bits, value, false, null)
                 checkCountBits(bits, value, true, id)
@@ -112,6 +111,8 @@ class BookRepositoryTest {
         checkChange("all", null,  0b10011, null)
         checkChange("all", false, 0b01001, null)
         checkChange("all", true,  0b10010, null)
+
+        undoTracker.checkUndo(message)
     }
 
     @Test fun testBookFlags() {
@@ -123,13 +124,16 @@ class BookRepositoryTest {
 
     @Test fun testBookFlagsWithUndo() {
         runBlocking {
-            undo.record("TestBookFlagsWithUndo") { doTestBookFlags() }
+            doTestBookFlags()
         }
     }
 
     private suspend fun doTestBookFlags() {
         val expected = BookDbTracker.addBooks(repo, 552841129L, "Test Book Flags", 20)
+        expected.undoTracker.clearUndo("Book Flags")
         expected.testBookFlags("", null)
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
     @Test fun testBookFlagsFiltered() {
@@ -141,13 +145,32 @@ class BookRepositoryTest {
 
     @Test fun testBookFlagsFilteredWithUndo() {
         runBlocking {
-            undo.record("TestBookFlagsFilteredWithUndo") { doTestBookFlagsFiltered() }
+            doTestBookFlagsFiltered()
         }
     }
 
     private suspend fun doTestBookFlagsFiltered() {
         val expected = BookDbTracker.addBooks(repo, 1165478L, "Test Book Flags filtered", 20)
+        expected.undoTracker.clearUndo("Book Flags Filtered")
         expected.testBookFlags(" filtered", expected.makeFilter())
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
+    }
+
+    private suspend fun BookDbTracker.changeTagBits(message: String, operation: Boolean?, mask: Int, index: Int?, count: Int, filter: BookFilter.BuiltFilter?, vararg values: Int) {
+        val tag = index?.let { tables.tagEntities[index] }
+        val changed = repo.tagFlags.changeBits(operation, mask, tag?.id, filter)?: 0
+        assertWithMessage(message).that(changed).isEqualTo(count)
+        if (changed > 0) {
+            if (tag != null) {
+                tag.flags = values[0]
+            } else {
+                var i = 0
+                for (t in tables.tagEntities.entities)
+                    t.flags = values[i++]
+            }
+        }
+        checkDatabase(message)
     }
 
     @Test fun testTagFlags() {
@@ -159,104 +182,59 @@ class BookRepositoryTest {
 
     @Test fun testTagFlagsWithUndo() {
         runBlocking {
-            undo.record("TestTagFlagsWithUndo") { doTestTagFlags() }
+            doTestTagFlags()
         }
     }
 
     private suspend fun doTestTagFlags() {
-        // Add a couple of tags
-        val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0b01101),
-            TagEntity(0L, "tag2", "desc2", 0b10001),
-            TagEntity(0L, "tag3", "desc3", 0b11100),
-        )
+        val expected = BookDbTracker.addBooks(repo, 4455688L, "Test Tag Flags", 0)
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
 
-        // Check Add
-        val tagFlags = repo.tagFlags
-        for (t in tags) {
-            assertWithMessage("Add %s", t.name).apply {
-                repo.addOrUpdateTag(t)
-                that(t.id).isNotEqualTo(0L)
-                that(repo.getTag(t.id)).isEqualTo(t)
+        apply {
+            // Add a couple of tags
+            val tags = listOf(
+                TagEntity(0L, "tag1", "desc1", 0b01101),
+                TagEntity(0L, "tag2", "desc2", 0b10001),
+                TagEntity(0L, "tag3", "desc3", 0b11100),
+            )
+
+            // Check Add
+            for (t in tags) {
+                assertWithMessage("Add %s", t.name).apply {
+                    expected.addTag(t)
+                    that(t.id).isNotEqualTo(0L)
+                    that(repo.getTag(t.id)).isEqualTo(t)
+                    expected.undoAndCheck("Test Tag Flags Add ${t.name}")
+                    expected.redoAndCheck("Test Tag Flags Add ${t.name}")
+                }
             }
         }
 
         suspend fun checkCount(bits: Int, value: Int, id: Long?, expTrue: Int, expFalse: Int) {
-            assertWithMessage("checkCount value: %s id: %s", value, id).apply {
-                that(tagFlags.countBits(bits, value, true, id, null)).isEqualTo(expTrue)
-                that(tagFlags.countBits(bits, value, false, id, null)).isEqualTo(expFalse)
-                that(tagFlags.countBitsLive(bits, value, true, id, null).getLive()).isEqualTo(expTrue)
-                that(tagFlags.countBitsLive(bits, value, false, id, null).getLive()).isEqualTo(expFalse)
+            assertWithMessage("checkCount value: value id: id").apply {
+                that(repo.tagFlags.countBits(bits, value, true, id, null)).isEqualTo(expTrue)
+                that(repo.tagFlags.countBits(bits, value, false, id, null)).isEqualTo(expFalse)
+                that(repo.tagFlags.countBitsLive(bits, value, true, id, null).getLive()).isEqualTo(expTrue)
+                that(repo.tagFlags.countBitsLive(bits, value, false, id, null).getLive()).isEqualTo(expFalse)
             }
         }
         checkCount(0b101, 0b001, null, 1, 2)
         checkCount(0b101, 0b101, null, 1, 2)
-        checkCount(0b101, 0b101, tags[0].id, 1, 0)
-        checkCount(0b101, 0b001, tags[0].id, 0, 1)
+        checkCount(0b101, 0b101, expected.tables.tagEntities[0].id, 1, 0)
+        checkCount(0b101, 0b001, expected.tables.tagEntities[0].id, 0, 1)
 
-        var count: Int?
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", false, 0b101
-        ).apply {
-            count = tagFlags.changeBits(false, 0b101, tags[0].id)
-            that(count).isEqualTo(1)
-            that(repo.getTag(tags[0].id)?.flags).isEqualTo(0b01000)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", true, 0b10001
-        ).apply {
-            count = tagFlags.changeBits(true, 0b10001, tags[0].id)
-            that(count).isEqualTo(1)
-            that(repo.getTag(tags[0].id)?.flags).isEqualTo(0b11001)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", null, 0b10100
-        ).apply {
-            count = tagFlags.changeBits(null, 0b10100, tags[0].id)
-            that(count).isEqualTo(1)
-            that(repo.getTag(tags[0].id)?.flags).isEqualTo(0b01101)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", true, 0b01101
-        ).apply {
-            count = tagFlags.changeBits(true, 0b01101, tags[0].id)
-            that(count).isEqualTo(0)
-            that(repo.getTag(tags[0].id)?.flags).isEqualTo(0b01101)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", false, 0b10000
-        ).apply {
-            count = tagFlags.changeBits(false, 0b10000, tags[0].id)
-            that(count).isEqualTo(0)
-            that(repo.getTag(tags[0].id)?.flags).isEqualTo(0b01101)
-        }
+        expected.changeTagBits("changeBits single op: false, mask: 0b101", false, 0b101, 0, 1, null, 0b01000)
+        expected.changeTagBits("changeBits single op: true, mask: 0b10001", true, 0b10001, 0, 1, null, 0b11001)
+        expected.changeTagBits("changeBits single op: null, mask: 0b10100", null, 0b10100, 0, 1, null, 0b01101)
+        expected.changeTagBits("changeBits single op: true, mask: 0b01101", true, 0b01101, 0, 0, null, 0b01101)
+        expected.changeTagBits("changeBits single op: false, mask: 0b10000", false, 0b10000, 0, 0, null, 0b01101)
+        expected.changeTagBits("changeBits all op: false, mask: 0b00100", false, 0b00100, null, 2, null, 0b01001, 0b10001, 0b11000)
+        expected.changeTagBits("changeBits all op: true, mask: 0b10001", true, 0b10001, null, 2, null, 0b11001, 0b10001, 0b11001)
+        expected.changeTagBits("changeBits all op: null, mask: 0b10100", null, 0b10100, null, expected.tables.tagEntities.size, null, 0b01101, 0b00101, 0b01101)
 
-        suspend fun StandardSubjectBuilder.checkChange(vararg values: Int) {
-            for (i in tags.indices) {
-                that(repo.getTag(tags[i].id)?.flags).isEqualTo(values[i])
-            }
-        }
-        assertWithMessage(
-            "changeBits all op: %s, mask: %s", false, 0b00100
-        ).apply {
-            count = tagFlags.changeBits(false, 0b00100, null)
-            that(count).isEqualTo(2)
-            checkChange(0b01001, 0b10001, 0b11000)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", true, 0b10001
-        ).apply {
-            count = tagFlags.changeBits(true, 0b10001, null)
-            that(count).isEqualTo(2)
-            checkChange(0b11001, 0b10001, 0b11001)
-        }
-        assertWithMessage(
-            "changeBits single op: %s, mask: %s", null, 0b10100
-        ).apply {
-            count = tagFlags.changeBits(null, 0b10100, null)
-            that(count).isEqualTo(tags.size)
-            checkChange(0b01101, 0b00101, 0b01101)
-        }
+        expected.undoTracker.checkUndo("Test Tag Flags")
+        expected.testRandomUndo("Test Tag Flags Undo", 6)
     }
 
     @Test fun testGetBooks() {
@@ -268,7 +246,7 @@ class BookRepositoryTest {
 
     @Test fun testGetBooksWithUndo() {
         runBlocking {
-            undo.record("TestGetBooksWithUndo") { doTestGetBooks() }
+            doTestGetBooks()
         }
     }
 
@@ -289,6 +267,7 @@ class BookRepositoryTest {
             var i = 0
             for (book in result.data)
                 compareBooks(book, expected.tables.bookEntities[i++])
+            expected.undoTracker.clearUndo("GetBooks")
         }
     }
 
@@ -301,7 +280,7 @@ class BookRepositoryTest {
 
     @Test fun testGetBooksFilteredWithUndo() {
         runBlocking {
-            undo.record("TestGetBooksFilteredWithUndo") { doTestGetBooksFiltered() }
+            doTestGetBooksFiltered()
         }
     }
 
@@ -328,6 +307,7 @@ class BookRepositoryTest {
             var i = 0
             for (book in result.data)
                 compareBooks(book, books[i++])
+            expected.undoTracker.clearUndo("GetBooks")
         }
     }
 
@@ -340,7 +320,7 @@ class BookRepositoryTest {
 
     @Test fun testGetBookListWithUndo() {
         runBlocking {
-            undo.record("TestGetBookListWithUndo") { doTestGetBookList() }
+            doTestGetBookList()
         }
     }
 
@@ -366,7 +346,7 @@ class BookRepositoryTest {
 
     @Test fun testGetBookListFilteredWithUndo() {
         runBlocking {
-            undo.record("TestGetBookListFilteredWithUndo") { doTestGetBookListFiltered() }
+            doTestGetBookListFiltered()
         }
     }
 
@@ -392,45 +372,60 @@ class BookRepositoryTest {
     @Test fun testAddDeleteBookEntity() {
         runBlocking {
             repo.setMaxUndoLevels(0)
-            doTestAddDeleteBookEntity()
+            doTestAddDeleteBookEntity(BookDbTracker.addBooks(repo,2564621L, "AddBooks Delete", 20))
         }
     }
 
     @Test fun testAddDeleteBookEntityWithUndo() {
         runBlocking {
-            undo.record("TestAddDeleteBookEntityWithUndo") { doTestAddDeleteBookEntity() }
+            doTestAddDeleteBookEntity(BookDbTracker.addBooks(repo,2564621L, "AddBooks Delete", 20))
         }
     }
 
-    private suspend fun doTestAddDeleteBookEntity() {
-        val expected = BookDbTracker.addBooks(repo,2564621L, "AddBooks Delete", 20)
-
-        var count = 0
+    private suspend fun doTestAddDeleteBookEntity(expected: BookDbTracker) {
+        expected.undoTracker.syncUndo("Delete Books")
+        expected.undoStarted()
+        val deleted = ArrayList<BookAndAuthors>()
         for (b in ArrayList<BookAndAuthors>().apply {
             addAll(expected.tables.bookEntities.entities)
         }) {
             if (b.book.isSelected) {
                 expected.unlinkBook(b)
-                ++count
+                deleted.add(b)
             }
         }
-        assertWithMessage("Delete Selected").that(repo.deleteSelectedBooks(null,null)).isEqualTo(count)
-        expected.checkDatabase("Delete Selected")
+        assertWithMessage("Delete Selected").apply {
+            that(repo.deleteSelectedBooks(null, null).also {
+                expected.undoEnded("Delete Selected", it > 0)
+            }).isEqualTo(deleted.size)
+            expected.checkDatabase("Delete Selected")
+            expected.undoAndCheck("Delete Selected")
+            expected.redoAndCheck("Delete Selected")
+        }
 
+        var count: Int
         var occurrence = 0
         while (expected.tables.bookEntities.size > 0) {
             ++occurrence
             count = expected.random.nextInt(4).coerceAtMost(expected.tables.bookEntities.size)
             val bookIds = Array<Any>(count) { 0L }
+            expected.undoStarted()
             repeat (count) {
                 val i = expected.random.nextInt(expected.tables.bookEntities.size)
                 val book = expected.tables.bookEntities[i]
                 bookIds[it] = book.book.id
                 expected.unlinkBook(book)
             }
-            assertWithMessage("Deleted $occurrence").that(repo.deleteSelectedBooks(null, bookIds)).isEqualTo(bookIds.size)
-            expected.checkDatabase("Delete $occurrence")
+            assertWithMessage("Deleted $occurrence").apply {
+                that(repo.deleteSelectedBooks(null, bookIds).also {
+                    expected.undoEnded("Delete $occurrence", it > 0)
+                }).isEqualTo(bookIds.size)
+                expected.checkDatabase("Delete $occurrence")
+                expected.undoAndCheck("Delete $occurrence")
+                expected.redoAndCheck("Delete $occurrence")
+            }
         }
+        expected.testRandomUndo("Delete", 10)
     }
 
     @Test fun testAddDeleteBookEntityEmptyFilter() {
@@ -442,7 +437,7 @@ class BookRepositoryTest {
 
     @Test fun testAddDeleteBookEntityEmptyFilterWithUndo() {
         runBlocking {
-            undo.record("TestAddDeleteBookEntityEmptyFilterWithUndo") { doTestAddDeleteBookEntityEmptyFilter() }
+            doTestAddDeleteBookEntityEmptyFilter()
         }
     }
 
@@ -453,6 +448,7 @@ class BookRepositoryTest {
         )).buildFilter(context, arrayOf(BOOK_ID_COLUMN),true)
 
         var count = 0
+        expected.undoStarted()
         for (b in ArrayList<BookAndAuthors>().apply {
             addAll(expected.tables.bookEntities.entities)
         }) {
@@ -461,23 +457,33 @@ class BookRepositoryTest {
                 ++count
             }
         }
-        assertWithMessage("Delete Selected Empty Filter").that(repo.deleteSelectedBooks(filter,null)).isEqualTo(count)
+        assertWithMessage("Delete Selected Empty Filter").that(repo.deleteSelectedBooks(filter,null).also {
+            expected.undoEnded("Delete Selected Empty Filter", it > 0)
+        }).isEqualTo(count)
         expected.checkDatabase("Delete Selected Empty Filter")
+        expected.undoAndCheck("Delete Selected Empty Filter")
+        expected.redoAndCheck("Delete Selected Empty Filter")
 
         var occurrence = 0
         while (expected.tables.bookEntities.size > 0) {
             ++occurrence
             count = expected.random.nextInt(4).coerceAtMost(expected.tables.bookEntities.size)
             val bookIds = Array<Any>(count) { 0L }
+            expected.undoStarted()
             repeat (count) {
                 val i = expected.random.nextInt(expected.tables.bookEntities.size)
                 val book = expected.tables.bookEntities[i]
                 bookIds[it] = book.book.id
                 expected.unlinkBook(book)
             }
-            assertWithMessage("Deleted $occurrence Empty Filter").that(repo.deleteSelectedBooks(filter, bookIds)).isEqualTo(bookIds.size)
+            assertWithMessage("Deleted $occurrence Empty Filter").that(repo.deleteSelectedBooks(filter, bookIds).also {
+                expected.undoEnded("Delete Selected Empty Filter", it > 0)
+            }).isEqualTo(bookIds.size)
             expected.checkDatabase("Delete $occurrence Empty Filter")
+            expected.undoAndCheck("Delete $occurrence Empty Filter")
+            expected.redoAndCheck("Delete $occurrence Empty Filter")
         }
+        expected.testRandomUndo("Delete Empty Filter", 10)
     }
 
     @Test fun testAddDeleteBookEntityWithFilter() {
@@ -489,7 +495,7 @@ class BookRepositoryTest {
 
     @Test fun testAddDeleteBookEntityWithFilterWithUndo() {
         runBlocking {
-            undo.record("TestAddDeleteBookEntityWithFilterWithUndo") { doTestAddDeleteBookEntityWithFilter() }
+            doTestAddDeleteBookEntityWithFilter()
         }
     }
 
@@ -500,6 +506,7 @@ class BookRepositoryTest {
         val keptCount = expected.tables.bookEntities.size - bookFilter.filterList[0].values.size
 
         var count = 0
+        expected.undoStarted()
         for (b in ArrayList<BookAndAuthors>().apply {
             addAll(expected.tables.bookEntities.entities)
         }) {
@@ -508,8 +515,12 @@ class BookRepositoryTest {
                 ++count
             }
         }
-        assertWithMessage("Delete Selected Filtered").that(repo.deleteSelectedBooks(filter,null)).isEqualTo(count)
+        assertWithMessage("Delete Selected Filtered").that(repo.deleteSelectedBooks(filter,null).also {
+            expected.undoEnded("Delete Selected Filtered", it > 0)
+        }).isEqualTo(count)
         expected.checkDatabase("Delete Selected Filtered")
+        expected.undoAndCheck("Delete Selected Filtered")
+        expected.redoAndCheck("Delete Selected Filtered")
 
         var occurrence = 0
         while (expected.tables.bookEntities.size > keptCount) {
@@ -517,6 +528,7 @@ class BookRepositoryTest {
             count = expected.random.nextInt(4).coerceAtMost(expected.tables.bookEntities.size)
             val bookIds = Array<Any>(count) { 0L }
             var size = 0
+            expected.undoStarted()
             repeat (count) {
                 val i = expected.random.nextInt(expected.tables.bookEntities.size)
                 val book = expected.tables.bookEntities[i]
@@ -526,9 +538,14 @@ class BookRepositoryTest {
                     ++size
                 }
             }
-            assertWithMessage("Deleted $occurrence Filtered").that(repo.deleteSelectedBooks(filter, bookIds)).isEqualTo(size)
+            assertWithMessage("Deleted $occurrence Filtered").that(repo.deleteSelectedBooks(filter, bookIds).also {
+                expected.undoEnded("Delete Selected Filtered", it > 0)
+            }).isEqualTo(size)
             expected.checkDatabase("Delete $occurrence Filtered")
+            expected.undoAndCheck("Delete $occurrence Filtered")
+            expected.redoAndCheck("Delete $occurrence Filtered")
         }
+        expected.testRandomUndo("Delete Filtered", 10)
     }
 
     @Test fun testUpdateBookEntity() {
@@ -540,7 +557,7 @@ class BookRepositoryTest {
 
     @Test fun testUpdateBookEntityWithUndo() {
         runBlocking {
-            undo.record("TestUpdateBookEntityWithUndo") { doTestUpdateBookEntity() }
+            doTestUpdateBookEntity()
         }
     }
 
@@ -560,6 +577,7 @@ class BookRepositoryTest {
             }
             expected.addOneBook("Update ${new.book.title}", new, true)
         }
+        expected.testRandomUndo("AddBooks Update", 10)
     }
 
     @Test(expected = SQLiteConstraintException::class) fun testUpdateFails() {
@@ -571,18 +589,23 @@ class BookRepositoryTest {
 
     @Test(expected = SQLiteConstraintException::class) fun testUpdateFailsWithUndo() {
         runBlocking {
-            undo.record("testUpdateFailsWithUndo") { doTestUpdateFails() }
+            doTestUpdateFails()
         }
     }
 
     private suspend fun doTestUpdateFails() {
         // Updating a book that conflicts with two other books will fail
-        val expected = BookDbTracker.addBooks(repo,5668721L, "AddBooks Update", 20)
-        val book = expected.tables.bookEntities.new()
-        book.book.ISBN = expected.tables.bookEntities[3].book.ISBN
-        book.book.sourceId = expected.tables.bookEntities[11].book.sourceId
-        book.book.volumeId = expected.tables.bookEntities[11].book.volumeId
-        expected.addOneBook("Update Fail", book, true)
+        val expected = BookDbTracker.addBooks(repo, 5668721L, "AddBooks Update", 20)
+        expected.undoTracker.syncUndo("Update Fails")
+        try {
+            val book = expected.tables.bookEntities.new()
+            book.book.ISBN = expected.tables.bookEntities[3].book.ISBN
+            book.book.sourceId = expected.tables.bookEntities[11].book.sourceId
+            book.book.volumeId = expected.tables.bookEntities[11].book.volumeId
+            expected.addOneBook("Update Fail", book, true)
+        } finally {
+            expected.undoTracker.checkUndo("Update Fails")
+        }
     }
 
     @Test fun testGetTags() {
@@ -594,11 +617,15 @@ class BookRepositoryTest {
 
     @Test fun testGetTagsWithUndo() {
         runBlocking {
-            undo.record("TestGetTagsWithUndo") { doTestGetTags() }
+            doTestGetTags()
         }
     }
 
     private suspend fun doTestGetTags() {
+        val expected = BookDbTracker.addBooks(repo, 332974L, "Test Get Tags", 0)
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
+
         // Add a couple of tags
         val tags = listOf(
             TagEntity(0L, "tag1", "desc1", 0),
@@ -609,9 +636,11 @@ class BookRepositoryTest {
         // Check Add
         for (t in tags) {
             assertWithMessage("Add %s", t.name).apply {
-                repo.addOrUpdateTag(t)
+                expected.addTag(t)
                 that(t.id).isNotEqualTo(0L)
                 that(repo.getTag(t.id)).isEqualTo(t)
+                expected.undoAndCheck("Test Get Tags")
+                expected.redoAndCheck("Test Get Tags")
             }
         }
 
@@ -647,6 +676,8 @@ class BookRepositoryTest {
             that(tagList?.size).isEqualTo(1)
             that(tagList?.get(0)).isEqualTo(tags[1])
         }
+        expected.undoTracker.checkUndo("Test Get Tags")
+        expected.testRandomUndo("Test Get Tags", 6)
     }
 
     @Test fun testAddUpdateDelete() {
@@ -658,12 +689,16 @@ class BookRepositoryTest {
 
     @Test fun testAddUpdateDeleteWithUndo() {
         runBlocking {
-            undo.record("TestAddUpdateDeleteWithUndo") { doTestAddUpdateDelete() }
+            doTestAddUpdateDelete()
         }
     }
 
     private suspend fun doTestAddUpdateDelete()
     {
+        val expected = BookDbTracker.addBooks(repo, 4455688L, "Test Tag Update Delete", 0)
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
+
         // Add a couple of tags
         val tags = listOf(
             TagEntity(0L, "tag1", "desc1", 0),
@@ -674,44 +709,55 @@ class BookRepositoryTest {
         // Check Add
         for (t in tags) {
             assertWithMessage("Add %s", t.name).apply {
-                repo.addOrUpdateTag(t)
+                expected.addTag(t)
                 that(t.id).isNotEqualTo(0L)
                 that(repo.getTag(t.id)).isEqualTo(t)
+                expected.undoAndCheck("Test Tag Update Delete")
+                expected.redoAndCheck("Test Tag Update Delete")
             }
         }
 
         // Verify that we can update
-        val update = tags[2].copy(id = 0L)
+        var update = tags[2].copy(id = 0L)
         update.isSelected = true
         assertWithMessage("Update Succeeded %s", update.name).apply {
-            repo.addOrUpdateTag(update) { true }
+            expected.addTag(update) { true }
             that(update.id).isEqualTo(tags[2].id)
             that(repo.getTag(update.id)).isEqualTo(update)
             that(repo.findTagByName(update.name)).isEqualTo(update)
+            expected.undoAndCheck("Test Tag Update Succeeded")
+            expected.redoAndCheck("Test Tag Update Succeeded")
         }
 
         // Change the name
-        update.name = "tag%"
+        update = update.copy(name = "tag%")
         assertWithMessage("Name Change %s", update.name).apply {
-            repo.addOrUpdateTag(update)   // Don't expect a conflict
+            expected.addTag(update)
             that(update.id).isEqualTo(tags[2].id)
             that(repo.getTag(update.id)).isEqualTo(update)
             that(repo.findTagByName(update.name)).isEqualTo(update)
             that(repo.findTagByName(tags[2].name)).isNull()
+            expected.undoTracker.checkUndo("Test Tag Update Fail")
+            expected.checkDatabase("Test Tag Update Fail")
         }
 
         // Merge two tags
-        update.name = tags[1].name
+        update = update.copy(name = tags[1].name)
         assertWithMessage("Merge Tags %s", update.name).apply {
-            repo.addOrUpdateTag(update) { true }    // Don't expect a conflict
+            expected.addTag(update) { true }
             that(update.id).isAnyOf(tags[2].id, tags[1].id)
             that(repo.getTag(update.id)).isEqualTo(update)
             that(repo.findTagByName(update.name)).isEqualTo(update)
             that(repo.findTagByName("tag%")).isNull()
-            if (update.id == tags[2].id)
+            if (update.id == tags[2].id) {
+                expected.tables.tagEntities.merge(update, tags[1])
                 that(repo.getTag(tags[1].id)).isNull()
-            else
+            } else {
+                expected.tables.tagEntities.merge(update, tags[2])
                 that(repo.getTag(tags[2].id)).isNull()
+            }
+            expected.undoAndCheck("Test Tag Update Merge")
+            expected.redoAndCheck("Test Tag Update Merge")
         }
 
         // Delete selected
@@ -720,14 +766,26 @@ class BookRepositoryTest {
             tags[2].id = 0L
             tags[1].isSelected = true
             tags[1].id = 0L
-            repo.addOrUpdateTag(tags[2]) { true }
+            expected.addTag(tags[2]) { true }
             that(repo.getTag(tags[2].id)).isEqualTo(tags[2])
-            repo.addOrUpdateTag(tags[1]) { true }
+            expected.undoAndCheck("Test Tag Delete Selected Add 2")
+            expected.redoAndCheck("Test Tag Delete Selected Add 2")
+            expected.addTag(tags[1]) { true }
             that(repo.getTag(tags[1].id)).isEqualTo(tags[1])
-            repo.deleteSelectedTags()
+            expected.undoAndCheck("Test Tag Delete Selected Add 1")
+            expected.redoAndCheck("Test Tag Delete Selected Add 1")
+            expected.undoStarted()
+            repo.deleteSelectedTags().also {
+                expected.tables.tagEntities.unlinked(tags[2], true)
+                expected.tables.tagEntities.unlinked(tags[1], true)
+                expected.undoEnded("Test Tag Delete Selected", it > 0)
+            }
             that(repo.getTag(tags[2].id)).isNull()
             that(repo.getTag(tags[1].id)).isNull()
+            expected.undoAndCheck("Test Tag Delete Selected")
+            expected.redoAndCheck("Test Tag Delete Selected")
         }
+        expected.testRandomUndo("Random Undo Add Delete Update Tags", 12)
     }
 
     private suspend fun BookDbTracker.testAddRemoveTagsFromBooks(message: String, bookFilter: BookFilter?) {
@@ -794,37 +852,68 @@ class BookRepositoryTest {
         var tags: List<TagEntity>
         var books: List<BookAndAuthors>
 
+        undoStarted()
         updateAddBooks(selectedBooks(), selectedTags())
-        repo.addTagsToBooks(null, null, filter)
+        repo.addTagsToBooks(null, null, filter).also {
+            undoEnded("Add Selected Tags To Selected Books$message", it > 0)
+        }
         checkDatabase("Add Selected Tags To Selected Books$message")
+        undoAndCheck("Add Selected Tags To Selected Books$message")
+        redoAndCheck("Add Selected Tags To Selected Books$message")
 
         tags = randomTags()
+        undoStarted()
         updateAddBooks(selectedBooks(), tags)
-        repo.addTagsToBooks(null, Array(tags.size) { tags[it].id }, filter)
+        repo.addTagsToBooks(null, Array(tags.size) { tags[it].id }, filter).also {
+            undoEnded("Add Tags To Selected Books$message", it > 0)
+        }
         checkDatabase("Add Tags To Selected Books$message")
+        undoAndCheck("Add Tags To Selected Books$message")
+        redoAndCheck("Add Tags To Selected Books$message")
 
+        undoStarted()
         updateRemoveBooks(selectedBooks(), selectedTags(), false)
-        repo.removeTagsFromBooks(null, null, filter, false)
+        repo.removeTagsFromBooks(null, null, filter, false).also {
+            undoEnded("Remove Selected Tags From Selected Books$message", it > 0)
+        }
         checkDatabase("Remove Selected Tags From Selected Books$message")
+        undoAndCheck("Remove Selected Tags From Selected Books$message")
+        redoAndCheck("Remove Selected Tags From Selected Books$message")
 
         books = randomBooks()
+        undoStarted()
         updateAddBooks(books, selectedTags())
-        repo.addTagsToBooks(Array(books.size) { books[it].book.id }, null, filter)
+        repo.addTagsToBooks(Array(books.size) { books[it].book.id }, null, filter). also {
+            undoEnded("Add Selected Tags To Books$message", it > 0)
+        }
         checkDatabase("Add Selected Tags To Books$message")
+        undoAndCheck("Add Selected Tags To Books$message")
+        redoAndCheck("Add Selected Tags To Books$message")
 
         var invert = true
         repeat (5) {
             tags = randomTags()
             books = randomBooks()
+            undoStarted()
             updateAddBooks(books, tags)
-            repo.addTagsToBooks(Array(books.size) { books[it].book.id }, Array(tags.size) { tags[it].id }, filter)
+            repo.addTagsToBooks(Array(books.size) { books[it].book.id }, Array(tags.size) { tags[it].id }, filter).also {
+                undoEnded("Add Tags To Books$message", it > 0)
+            }
             checkDatabase("Add Tags To Books$message")
+            undoAndCheck("Add Tags To Books$message")
+            redoAndCheck("Add Tags To Books$message")
 
             invert = !invert
+            undoStarted()
             updateRemoveBooks(books, tags, invert)
-            repo.removeTagsFromBooks(Array(books.size) { books[it].book.id }, Array(tags.size) { tags[it].id }, filter, invert)
+            repo.removeTagsFromBooks(Array(books.size) { books[it].book.id }, Array(tags.size) { tags[it].id }, filter, invert).also {
+                undoEnded("Remove $invert Tags From Books$message", it > 0)
+            }
             checkDatabase("Remove $invert Tags From Books$message")
+            undoAndCheck("Remove $invert Tags From Books$message")
+            redoAndCheck("Remove $invert Tags From Books$message")
         }
+        testRandomUndo("Add/Remove Tags From Books", 10)
     }
 
     @Test fun testAddRemoveTagsFromBooks() {
@@ -836,7 +925,7 @@ class BookRepositoryTest {
 
     @Test fun testAddRemoveTagsFromBooksWithUndo() {
         runBlocking {
-            undo.record("TestAddRemoveTagsFromBooksWithUndo") { doTestAddRemoveTagsFromBooks() }
+            doTestAddRemoveTagsFromBooks()
         }
     }
 
@@ -854,7 +943,7 @@ class BookRepositoryTest {
 
     @Test fun testAddRemoveTagsFromBooksFilteredWithUndo() {
         runBlocking {
-            undo.record("TestAddRemoveTagsFromBooksFilteredWithUndo") { doTestAddRemoveTagsFromBooksFiltered() }
+            doTestAddRemoveTagsFromBooksFiltered()
         }
     }
 
@@ -872,12 +961,12 @@ class BookRepositoryTest {
 
     @Test fun testViewWithUndo() {
         runBlocking {
-            undo.record("TestViewWithUndo") { doTestView() }
+            doTestView()
         }
     }
 
     private suspend fun doTestView() {
-        //val viewDao = db.getViewDao()
+        val expected = BookDbTracker.addBooks(repo, 45666298L, "Test View", 0)
         // Make some views
         val views = arrayOf(
             ViewEntity(id = 0L, name = "view1", desc = "desc1"),
@@ -903,13 +992,15 @@ class BookRepositoryTest {
             // Save the name
             names[v.name] = v
             // Add the view
-            val id = repo.addOrUpdateView(v) { false }
+            val id = expected.addView(v) { false }
             // Check id and findByName
             assertWithMessage("Add View %s", v.name).apply {
                 that(id).isNotEqualTo(0L)
                 that(id).isEqualTo(v.id)
                 that(repo.findViewByName(v.name)).isEqualTo(v)
             }
+            expected.undoAndCheck("AddView %s", v.name)
+            expected.redoAndCheck("AddView %s", v.name)
         }
 
         suspend fun StandardSubjectBuilder.checkNames() {
@@ -930,28 +1021,102 @@ class BookRepositoryTest {
         val newView = views[0].copy(id = 0L, desc = "descNew", filter = BookFilter(emptyArray(), emptyArray()))
         // Fail to add a conflicting view
         assertWithMessage("Conflict Fail").apply {
-            that(repo.addOrUpdateView(newView) { false }).isEqualTo(0L)
+            that(expected.addView(newView) { false }).isEqualTo(0L)
             checkNames()
+            expected.undoAndCheck("View Conflict Fail")
+            expected.redoAndCheck("View Conflict Fail")
         }
 
         // Add a conflicting view
         assertWithMessage("Conflict Succeed").apply {
-            val id = repo.addOrUpdateView(newView) { true }
+            val id = expected.addView(newView) { true }
             that(id).isEqualTo(views[0].id)
             that(id).isEqualTo(newView.id)
             that(repo.findViewByName(newView.name)).isEqualTo(newView)
             names[newView.name] = newView
             checkNames()
+            expected.undoAndCheck("View Conflict Succeed")
+            expected.redoAndCheck("View Conflict Succeed")
         }
 
         // Delete the views one at a time and check the list
         for (i in views.size - 1 downTo 0) {
             assertWithMessage("Delete View %s", views[i].name).apply {
+                expected.undoStarted()
                 that(repo.removeView(views[i].name)).isEqualTo(1)
+                expected.tables.viewEntities.unlinked(views[i], true)
+                expected.undoEnded("View Delete ${views[i].name}", true)
                 that(repo.findViewByName(views[i].name)).isEqualTo(null)
                 names.remove(views[i].name)
                 checkNames()
+                expected.undoAndCheck("View Delete %s", views[i].name)
+                expected.redoAndCheck("View Delete %s", views[i].name)
             }
+        }
+        expected.testRandomUndo("Test Views", 6)
+    }
+
+    @Test fun testMiscUndoStuff() {
+        runBlocking {
+            val expected = BookDbTracker.addBooks(repo,4522998L, "Misc Undo Test", 20)
+            val dao = expected.db.getUndoRedoDao()
+
+            // First do some things to get a good undo set
+            doTestAddDeleteBookEntity(expected)
+
+            // Make sure we can undo everything
+            var count = 0
+            while (repo.canUndo()) {
+                expected.undoAndCheck("Check All Undoes %s", count++)
+            }
+            assertThat(count).isEqualTo(repo.maxUndoLevels)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(repo.maxUndoLevels)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+
+            // Make sure we can redo everything
+            while (count-- > 6) {
+                assertWithMessage("Can Redo %s", count).that(repo.canRedo()).isTrue()
+                expected.redoAndCheck("Check All Redoes %s", count)
+            }
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(repo.maxUndoLevels)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+
+            repo.setMaxUndoLevels(15)
+            assertThat(repo.maxUndoLevels).isEqualTo(15)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(15)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 15")
+            repo.setMaxUndoLevels(30)
+            assertThat(repo.maxUndoLevels).isEqualTo(30)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(15)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 30")
+            repo.setMaxUndoLevels(7)
+            assertThat(repo.maxUndoLevels).isEqualTo(7)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(7)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 7")
+            repo.setMaxUndoLevels(6)
+            assertThat(repo.maxUndoLevels).isEqualTo(6)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(6)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 6")
+            repo.setMaxUndoLevels(5)
+            assertThat(repo.maxUndoLevels).isEqualTo(5)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(5)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 5")
+            repo.setMaxUndoLevels(0)
+            assertThat(repo.maxUndoLevels).isEqualTo(0)
+            assertThat(dao.maxUndoId - dao.minUndoId + 1).isEqualTo(0)
+            assertThat(dao.undoId).isIn((dao.minUndoId - 1..dao.maxUndoId))
+            expected.undoLevelsChanged()
+            expected.undoTracker.checkUndo("Undo Levels Changed 0")
         }
     }
 }

@@ -5,14 +5,17 @@ import android.content.Context
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.rule.DisableOnAndroidDebug
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
+import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.junit.*
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import java.lang.Exception
 import java.lang.StringBuilder
@@ -20,6 +23,7 @@ import java.text.DateFormat
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.TimeUnit
 import kotlin.collections.ArrayList
 import kotlin.random.Random
 
@@ -44,10 +48,13 @@ class BookFilterTest {
 
     @After
     fun tearDown() {
-        BookRepository.close()
+        BookRepository.close(context)
     }
 
-    @Test(timeout = 5000L) fun testOrderField() {
+    @get:Rule
+    val timeout = DisableOnAndroidDebug(Timeout(25L, TimeUnit.SECONDS))
+
+    @Test fun testOrderField() {
         val o1 = OrderField(Column.SOURCE, Order.Descending, true)
         assertWithMessage("Order Field").apply {
             var o2 = o1.copy()
@@ -59,9 +66,11 @@ class BookFilterTest {
             o2 = o1.copy(headers = false)
             that(o1 == o2).isFalse()
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 5000L) fun testFilterField() {
+    @Test fun testFilterField() {
         val f1 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
         assertWithMessage("Order Field").apply {
             var o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
@@ -73,9 +82,11 @@ class BookFilterTest {
             o2 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkikx", "kkkok"))
             that(f1 == o2).isFalse()
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 5000L) fun testBookFilter() {
+    @Test fun testBookFilter() {
         val bf1 = BookFilter(
             arrayOf(
                 OrderField(Column.ISBN, Order.Ascending, false),
@@ -121,9 +132,11 @@ class BookFilterTest {
             )
             that(bf1 == bf2).isFalse()
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 5000L) fun testBookFilterSerialize() {
+    @Test fun testBookFilterSerialize() {
         runBlocking {
             val random = Random(419675L)
             val string = BookFilter.encodeToString(null)
@@ -167,9 +180,11 @@ class BookFilterTest {
                 }.testSerialize("Serialize $it")
             }
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 25000L) fun testEmptySingleFilterFieldNoOrder() {
+    @Test fun testEmptySingleFilterFieldNoOrder() {
         runBlocking {
             assertWithMessage("Test Empty").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty Filters", 40)
@@ -180,9 +195,11 @@ class BookFilterTest {
                 }
             }
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 25000L) fun testSingleFilterFieldNoOrder() {
+    @Test fun testSingleFilterFieldNoOrder() {
         runBlocking {
             assertWithMessage("Test Random").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty", 40)
@@ -206,9 +223,11 @@ class BookFilterTest {
                 }
             }
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 25000L) fun testSingleOrderFieldNoFilter() {
+    @Test fun testSingleOrderFieldNoFilter() {
         runBlocking {
             assertWithMessage("Test Random").that(contents.size).isGreaterThan(39)
             for (c in ColumnValue.values()) {
@@ -218,9 +237,11 @@ class BookFilterTest {
                 }
             }
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
-    @Test(timeout = 25000L) fun testMultipleOrderMultipleFilter() {
+    @Test fun testMultipleOrderMultipleFilter() {
         runBlocking {
             assertWithMessage("Test Multiple").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty", 40)
@@ -264,6 +285,8 @@ class BookFilterTest {
                 }.test(this@BookFilterTest, "Multiple Random $it", contents.asSequence())
             }
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
     //@Test
@@ -289,6 +312,8 @@ class BookFilterTest {
             )
             test.test(this@BookFilterTest, "Debug Test", contents.asSequence())
         }
+        assertThat(repo.canUndo()).isFalse()
+        assertThat(repo.canRedo()).isFalse()
     }
 
     @Serializable
@@ -316,16 +341,24 @@ class BookFilterTest {
             val filterList = ArrayList<FilterField>()
             val orderList = ArrayList<OrderField>()
             val sortOrder = ArrayList<BookAndAuthors.(BookAndAuthors) -> Int>()
+            val sorted = HashSet<ColumnValue>()
             var sequence = seq
             for (o in order) {
                 message.append("${o.first.column}, ${o.second}, ")
                 orderList.add(OrderField(o.first.column, o.second, false))
-                sortOrder.add(if (o.second == Order.Ascending)
-                    o.first.orderCompare
-                else {
-                    { -o.first.orderCompare.invoke(this, it) }
-                })
-                sequence = o.first.orderSequence.invoke(sequence)
+                if (!sorted.contains(o.first)) {
+                    sortOrder.add(if (o.second == Order.Ascending)
+                        o.first.orderCompare
+                    else {
+                        { -o.first.orderCompare.invoke(this, it) }
+                    })
+                    sequence = o.first.orderSequence.invoke(sequence)
+                    sorted.add(o.first)
+                    if (o.first == ColumnValue.FIRST_NAME)
+                        sorted.add(ColumnValue.LAST_NAME)
+                    else if (o.first == ColumnValue.LAST_NAME)
+                        sorted.add(ColumnValue.FIRST_NAME)
+                }
             }
 
             for (f in filter) {
