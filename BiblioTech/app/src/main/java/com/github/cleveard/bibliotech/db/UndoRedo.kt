@@ -1,16 +1,17 @@
 package com.github.cleveard.bibliotech.db
 
-import android.util.Log
 import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
 import java.lang.IllegalStateException
 
+// Names for the undo transaction table
 const val UNDO_TABLE = "undo_table"
 const val TRANSACTION_ID_COLUMN = "transaction_id"
 const val TRANSACTION_UNDO_ID_COLUMN = "transaction_undo_id"
 const val TRANSACTION_DESC_COLUMN = "transaction_desc"
 const val TRANSACTION_FLAGS_COLUMN = "transaction_flags"
 
+// Names for the undo operation table
 const val OPERATION_TABLE = "operation_table"
 const val OPERATION_ID_COLUMN = "operation_id"
 const val OPERATION_UNDO_ID_COLUMN = "operation_undo_id"
@@ -19,6 +20,11 @@ const val OPERATION_TYPE_COLUMN = "operation_type"
 const val OPERATION_CUR_ID_COLUMN = "operation_cur_id"
 const val OPERATION_OLD_ID_COLUMN = "operation_old_id"
 
+/**
+ * Holder for a WHERE clause with arguments
+ * @param expression The clause with leading ' WHERE ', if it isn't empty
+ * @param args Arguments for the WHERE clause
+ */
 data class WhereExpression(val expression: String, val args: Array<Any>) {
     /** @inheritDoc */
     override fun hashCode(): Int {
@@ -38,7 +44,7 @@ data class WhereExpression(val expression: String, val args: Array<Any>) {
     }
 }
 
-// Type convert to convert between filters and strings
+/** Type convert to convert between UndoRedoDao.OperationType and integers */
 class EnumConverters {
     @TypeConverter
     fun operationFromInt(value: Int): UndoRedoDao.OperationType {
@@ -51,6 +57,7 @@ class EnumConverters {
     }
 }
 
+/** UndoRedoOperationEntity for the operation table */
 @TypeConverters(EnumConverters::class)
 @Entity(tableName = OPERATION_TABLE,
     indices = [
@@ -66,6 +73,7 @@ data class UndoRedoOperationEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = OPERATION_ID_COLUMN) var id: Long = 0L
 )
 
+/** UndoRedoTransactionEntity for the undo table */
 @Entity(tableName = UNDO_TABLE,
     indices = [
         Index(value = [TRANSACTION_ID_COLUMN],unique = true),
@@ -93,19 +101,57 @@ data class UndoTransactionEntity(
 
 @Dao
 abstract class UndoRedoDao(private val db: BookDatabase) {
+    /**
+     * Operation Type enum for undo operations
+     * @param desc Descriptor of the operation. This object has the methods to
+     *             record, undo, redo, discard undo and discard redo for an operation
+     */
     enum class OperationType(val desc: OperationDescriptor) {
-        ADD_BOOK(AddDataDescriptor(BookDatabase.bookTable)) {
+        /** Add a BookEntity operation */
+        ADD_BOOK(object: AddDataDescriptor(BookDatabase.bookTable) {
+            override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.undo(dao, op)
+            }
+
+            override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.redo(dao, op)
+            }
+        }) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
-        DELETE_BOOK(DeleteDataDescriptor(BookDatabase.bookTable)) {
+        /** Delete BookEntities operation */
+        DELETE_BOOK(object: DeleteDataDescriptor(BookDatabase.bookTable) {
+            override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.undo(dao, op)
+            }
+
+            override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.redo(dao, op)
+            }
+        }) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
-        CHANGE_BOOK(ChangeDataDescriptor(BookDatabase.bookTable) {
+        /** Update a BookEntity operation */
+        CHANGE_BOOK(object: ChangeDataDescriptor(BookDatabase.bookTable, {
             swapBook(it.curId, it.oldId)
+        }) {
+            override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.undo(dao, op)
+            }
+
+            override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+                dao.db.getBookDao().invalidateThumbnails(op.curId)
+                super.redo(dao, op)
+            }
         }) {
             override suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
                 if (dao.started > 0)
@@ -113,40 +159,55 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 return update()
             }
         },
+        /** Add an AuthorEntity operation */
         ADD_AUTHOR(AddDataDescriptor(BookDatabase.authorsTable)) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
+        /** Delete an AuthorEntity operation */
         DELETE_AUTHOR(DeleteDataDescriptor(BookDatabase.authorsTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend (Long) -> Int): Int {
                 return dao.recordDelete(this, curId, delete)
             }
         },
+        /** Add a CategoryEntity operation */
         ADD_CATEGORY(AddDataDescriptor(BookDatabase.categoriesTable)) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
+        /** Delete a CategoryEntity operation */
         DELETE_CATEGORY(DeleteDataDescriptor(BookDatabase.categoriesTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend suspend (Long) -> Int): Int {
                 return dao.recordDelete(this, curId, delete)
             }
         },
+        /** Add a TagEntity operation */
         ADD_TAG(AddDataDescriptor(BookDatabase.tagsTable)) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
+        /** Delete TagEntities operation */
         DELETE_TAG(DeleteDataDescriptor(BookDatabase.tagsTable)) {
+            /**
+             * @inheritDoc
+             * Delete one tag entity
+             */
             override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend (Long) -> Int): Int {
                 return dao.recordDelete(this, curId, delete)
             }
 
+            /**
+             * @inheritDoc
+             * Delete multiple tag entities
+             */
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
+        /** Update a TagEntity operation */
         CHANGE_TAG(ChangeDataDescriptor(BookDatabase.tagsTable) {
             swapTag(it.curId, it.oldId)
         }) {
@@ -156,16 +217,19 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 return update()
             }
         },
+        /** Add a ViewEntity operation */
         ADD_VIEW(AddDataDescriptor(BookDatabase.viewsTable)) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
+        /** Delete ViewEntities operation */
         DELETE_VIEW(DeleteDataDescriptor(BookDatabase.viewsTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
+        /** Update a ViewEntity operation */
         CHANGE_VIEW(ChangeDataDescriptor(BookDatabase.viewsTable) {
             swapView(it.curId, it.oldId)
         }) {
@@ -175,81 +239,135 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 return update()
             }
         },
+        /** Add a BookAuthorEntity operation */
         ADD_BOOK_AUTHOR_LINK(AddLinkDescriptor(BookDatabase.bookAuthorsTable)) {
             override suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
                 dao.record(this, bookId, linkId)
             }
         },
+        /** Delete BookAuthorEntities operation */
         DELETE_BOOK_AUTHOR_LINK(DeleteLinkDescriptor(BookDatabase.bookAuthorsTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
+        /** Add a BookCategoryEntity operation */
         ADD_BOOK_CATEGORY_LINK(AddLinkDescriptor(BookDatabase.bookCategoriesTable)) {
             override suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
                 dao.record(this, bookId, linkId)
             }
         },
+        /** Delete BookCategoryEntities operation */
         DELETE_BOOK_CATEGORY_LINK(DeleteLinkDescriptor(BookDatabase.bookCategoriesTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
+        /** Add a BookTagEntity operation */
         ADD_BOOK_TAG_LINK(AddLinkDescriptor(BookDatabase.bookTagsTable)) {
             override suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
                 dao.record(this, bookId, linkId)
             }
         },
+        /** Delete BookTagEntities operation */
         DELETE_BOOK_TAG_LINK(DeleteLinkDescriptor(BookDatabase.bookTagsTable)) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         };
 
+        /**
+         * Record an add entity operation
+         * @param dao The UndoRedoDao
+         * @param id The id of the entity. 0 if the add failed
+         */
         open suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
             throw IllegalRecordingException("RecordAdd not implemented for ${desc.table.name}")
         }
+
+        /**
+         * Record an update entity operation
+         * @param dao The UndoRedoDao
+         * @param id The id of the entity being updated.
+         * @param update A lambda used to update the entity. It should return true if the
+         *               update is successful and false if it is not.
+         */
         open suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
             throw IllegalRecordingException("RecordUpdate not implemented for ${desc.table.name}")
         }
+
+        /**
+         * Record a delete entity operation
+         * @param dao The UndoRedoDao
+         * @param curId The id of the entity being deleted.
+         * @param delete A lambda used to delete the entity. It should return the number of entities deleted.
+         */
         open suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend (Long) -> Int): Int {
             throw IllegalRecordingException("RecordDelete not implemented for ${desc.table.name}")
         }
+
+        /**
+         * Record a delete entities operation
+         * @param dao The UndoRedoDao
+         * @param expression A WHERE clause used to select the entities deleted
+         * @param delete A lambda used to delete the entity. It should return the number of entities deleted.
+         */
         open suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
             throw IllegalRecordingException("RecordDelete not implemented for ${desc.table.name}")
         }
+
+        /**
+         * Record an add link entity operation
+         * @param dao The UndoRedoDao
+         * @param bookId The id of the book in the link entity
+         * @param linkId The id of the linked entity in the link entity
+         */
         open suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
             throw IllegalRecordingException("RecordUpdate not implemented for ${desc.table.name}")
         }
     }
 
+    /** Exception used to signal when recording an operation had an error */
     class IllegalRecordingException(message: String): IllegalStateException(message)
+    /** Exception used to signal when executing an undo is illegal */
     class IllegalUndoException(message: String): IllegalStateException(message)
+    /** Exception used to signal when executing a redo is illegal */
     class IllegalRedoException(message: String): IllegalStateException(message)
+    /** Exception used to signal when starting an undo recording is illegal */
     class UndoStartException(message: String): Exception(message)
 
+    /** Number of times nested withUndo() calls were made */
     private var started = 0
+    /** Flag to remember when exceptions happen while recording undo */
     private var errorInUndo = false
+    /** Is undo recording now */
     val isRecording: Boolean
         get() = started > 0
+    /** Oldest undo recording */
     var minUndoId: Int = -1
         private set
+    /** Last or current undo recording */
     var undoId: Int = -1
         private set
+    /** Newest undo recording */
     var maxUndoId: Int = -1
         private set
+    /** Maximum number of undo levels we keep in the database */
     var maxUndoLevels = 20
         private set
-    var resetUndoAt = 30
+    /** Undo id that triggers resetting undo ids in the database */
+    var resetUndoAt = Int.MAX_VALUE - 10
         private set
+    /** The operation count in the current undo transaction */
     private var operationCount = 0
 
     /** Initialize the undo from the database */
     private suspend fun initUndo() {
+        // Return if already called
         if (undoId >= 0)
             return
 
-        // Get the next undo and last redo transaction
+        // Get the undo and redo transactions
         var error = false
         val transactions = getTransactions()
         if (transactions.isNullOrEmpty()) {
@@ -282,18 +400,23 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
 
             // If something was wrong, throw out all of the undoes
             if (error) {
+                // Discard the undoes and redoes in batches of consecutive undo or redo transactions
                 var first = transactions.first()
                 var last = first
-                // Discard the undoes and redoes
                 for (t in transactions.drop(1)) {
+                    // Break consecutive batch
                     if (t.isRedo != first.isRedo) {
+                        // Yes, discard the transactions
                         discard(first.isRedo, first.undoId, last.undoId)
+                        // Start next batch
                         first = t
                     }
+                    // track the last transaction in the batch
                     last = t
                 }
-                // Get the last one
+                // Get the last batch
                 discard(first.isRedo, first.undoId, last.undoId)
+                // Reset the max, min and undo ids
                 undoId = 0
                 maxUndoId = 0
                 minUndoId = 1
@@ -301,7 +424,15 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Record an operation
+     * @param type The operation type
+     * @param curId The id of the entity
+     * @param oldId The id of the related entity. For updates, this is the id of the copy
+     *              For links it is the id of the linked entity
+     */
     private suspend fun record(type: OperationType, curId: Long, oldId: Long = 0L) {
+        // Only record if recording is turned on
         if (started > 0) {
             val op = UndoRedoOperationEntity(
                 id = 0L,
@@ -311,6 +442,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 curId = curId,
                 oldId = oldId
             )
+            // Add the operation to the database and update the operation count
             addOperation(op).also {
                 if (it == 0L)
                     throw IllegalRecordingException("Unexpected error recording an operation")
@@ -319,43 +451,78 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Record a delete operation
+     * @param type The operation type
+     * @param id The id of the entity
+     * @param delete Lambda to perform the delete operation. It returns the number of entities deleted
+     * @return The number of entities deleted
+     */
     private suspend fun recordDelete(type: OperationType, id: Long, delete: suspend (Long) -> Int): Int {
         return if (started > 0) {
+            // If we are recording, then call delete to delete the entity
             delete(id).also {
+                // Record the operation if something was delete
                 if (it != 0)
                     record(type, id)
             }
         } else {
+            // Not recording, just delete the entity
             db.execUpdateDelete(SimpleSQLiteQuery(
                 "DELETE FROM ${type.desc.table.name} WHERE ${type.desc.table.idColumn} = ? AND ( ( ${type.desc.table.flagColumn} & ${type.desc.table.flagValue} ) = 0 )", arrayOf(id)
             ))
         }
     }
 
+    /**
+     * Record a delete operation
+     * @param type The operation type
+     * @param expression A WHERE clause to select the entities to delete
+     * @param delete Lambda to perform the delete operation. It returns the number of entities deleted
+     * @return The number of entities deleted
+     */
     private fun recordDelete(type: OperationType, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
         if (started <= 0) {
+            // If we are not recording, use the WHERE clause to directly delete the entities
             return db.execUpdateDelete(SimpleSQLiteQuery(
                 "DELETE FROM ${type.desc.table.name}${expression.expression}", expression.args
             ))
         }
 
+        // Use an INSERT command to add operation entities for each entity deleted
+        // Since this command uses the same WHERE clause as the delete, we won't insert anything
+        // if nothing is deleted.
         db.execUpdateDelete(SimpleSQLiteQuery(
             """INSERT OR ABORT INTO $OPERATION_TABLE ( $OPERATION_ID_COLUMN, $OPERATION_UNDO_ID_COLUMN, $OPERATION_OPERATION_ID_COLUMN, $OPERATION_TYPE_COLUMN, $OPERATION_CUR_ID_COLUMN )
             | SELECT null, $undoId, $operationCount, ${type.ordinal}, ${type.desc.table.idColumn} FROM ${type.desc.table.name}${expression.expression}
         """.trimMargin(),
             expression.args
         )).also {
+            // Only bump the operation count if something was inserted
             if (it != 0)
                 ++operationCount
         }
+        // Actually delete the entities
         return delete(expression)
     }
 
+
+    /**
+     * Record an update operation
+     * @param type The operation type
+     * @param id The id of the entity being updated
+     * @param copyId the id of the copy of the entity
+     * @param update Lambad used to update the entity
+     * @return True if the update succeeded
+     */
     private suspend fun recordUpdate(type: OperationType, id: Long, copyId: Long, update: suspend () -> Boolean): Boolean {
+        // Do the update
         val updated = update()
+        // Record the update if it succeeded
         if (updated)
             record(type, id,  copyId)
          else {
+             // Delete the copy if it didn't succeed
              db.execUpdateDelete(SimpleSQLiteQuery(
                  "DELETE FROM ${type.desc.table.name} WHERE ${type.desc.table.idColumn} = ?"
                  , arrayOf(copyId)
@@ -365,18 +532,30 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
 
     }
 
+    /**
+     * Record a delete link operation
+     * @param type The operation type
+     * @param expression A WHERE clause to select the links to delete
+     * @param delete Lambda to perform the delete operation. It returns the number of entities deleted
+     * @return The number of entities deleted
+     */
     private fun recordDeleteLinks(type: OperationType, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
         if (started > 0) {
+            // We recording, so insert operations to record all of the links deleted
+            // Since this command uses the same WHERE clause as the delete, we won't insert anything
+            // if nothing is deleted.
             db.execUpdateDelete(SimpleSQLiteQuery(
                 """INSERT OR ABORT INTO $OPERATION_TABLE ( $OPERATION_ID_COLUMN, $OPERATION_UNDO_ID_COLUMN, $OPERATION_OPERATION_ID_COLUMN, $OPERATION_TYPE_COLUMN, $OPERATION_CUR_ID_COLUMN, $OPERATION_OLD_ID_COLUMN )
                     | SELECT null, $undoId, $operationCount, ${type.ordinal}, ${type.desc.table.bookIdColumn}, ${type.desc.table.linkIdColumn} FROM ${type.desc.table.name}${expression.expression}
                 """.trimMargin(),
                 expression.args
             )).also {
+                // Only bump the operation count if something was inserted
                 if (it != 0)
                     ++operationCount
             }
         }
+        // Actually delete the links
         return delete(expression)
     }
 
@@ -468,114 +647,174 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Undo the next undo
+     */
     suspend fun undo(): Boolean {
         if (db.inTransaction())
             throw IllegalUndoException("Undoing during transaction is not allowed")
+        // Start a transaction to handle multi-threading issues
         return db.withTransaction {
+            // Make sure undo is initialized
             initUndo()
+            // Do we have something to undo
             if (undoId >= minUndoId) {
+                // Yes, make sure we aren't recording
                 if (started > 0)
                     throw IllegalUndoException("Undoing during started transaction is not allowed")
+                // Get the next transaction
                 getNextUndo()?.let { undo ->
+                    // Get the list of operations and undo all of them
+                    // We undo them backward from the order they are recorded
                     getOperationsDesc(undo.undoId, undo.undoId)?.let {
                         for (op in it) {
                             op.type.desc.undo(this, op)
                         }
                     }
+                    // Mark the undo transaction as a redo transaction and update it
                     undo.isRedo = true
                     update(undo)
+                    // Update the undo id
                     undoId = undo.undoId - 1
                     true
-                } == true
+                } == true // Only successful if we found an undo transaction
             } else
                 false
         }
     }
 
+    /**
+     * Redo the next reod
+     */
     suspend fun redo(): Boolean {
         if (db.inTransaction())
             throw IllegalRedoException("Redoing during transaction is not allowed")
+        // Start a transaction to handle multi-threading issues
         return db.withTransaction {
+            // Make sure undo is initialized
             initUndo()
+            // Do we have something to redo
             if (undoId < maxUndoId) {
+                // Yes, make sure we aren't recording
                 if (started > 0)
-                    throw IllegalUndoException("Redoing during started transaction is not allowed")
+                    throw IllegalRedoException("Redoing during started transaction is not allowed")
+                // Get the next transaction
                 getNextRedo()?.let { redo ->
+                    // Get the list of operations and redo all of them
+                    // We redo them in the order they are recorded
                     getOperationsAsc(redo.undoId, redo.undoId)?.let {
                         for (op in it) {
                             op.type.desc.redo(this, op)
                         }
                     }
+                    // Mark the undo transaction as an undo transaction and update it
                     redo.isRedo = false
                     update(redo)
+                    // Update the undo id
                     undoId = redo.undoId
                     true
-                } == true
+                } == true // Only successful if we found a redo transaction
             } else
                 false
         }
     }
 
+    /**
+     * Set the maximum undo levels kept in the database
+     * @param maxLevels The new maximum
+     * @param resetThreshold The threshold to reset undo ids
+     */
     suspend fun setMaxUndoLevels(maxLevels: Int, resetThreshold: Int = 0) {
+        // Start a transaction to handle multi-threading issues
         db.withTransaction {
+            // Yes, make sure we aren't recording
             if (started > 0)
                 throw IllegalStateException("Cannot set undo levels while recording")
+            // Make sure undo is initialized
             initUndo()
             if (maxLevels != maxUndoLevels) {
+                // We are changing the number of levels
                 maxUndoLevels = maxLevels
+                // First delete undoes from oldest to newest to satisfy the number of levels
                 val deleteUndo = maxUndoId - maxUndoLevels
                 if (deleteUndo >= minUndoId) {
+                    // Need to delete some levels, but not beyond undoId
                     val limit = deleteUndo.coerceAtMost(undoId)
                     if (limit >= minUndoId) {
+                        // Delete the levels and reset the minUndoId
                         discard(false, minUndoId, limit)
                         minUndoId = limit + 1
                     }
                 }
+
+                // Next delete the redoes from newest to oldest to satisfy the number of levels
                 val deleteRedo = minUndoId + maxUndoLevels
                 if (deleteRedo <= maxUndoId) {
+                    // Delete the newer redoes
                     discard(true, deleteRedo, maxUndoId)
                     maxUndoId = deleteRedo - 1
                 }
+                // If we delete everything, then reset the min, max and undo id
                 if (maxUndoId < minUndoId) {
                     minUndoId = 1
                     maxUndoId = 0
                     undoId = 0
                 }
             }
+            // Set the reset threshold if it isn't 0
             if (resetThreshold != 0)
                 resetUndoAt = resetThreshold
-            // Check for numeric overflow and set a big value
+            // If the reset threshold is too small, set a big value
             if (resetUndoAt <= maxUndoLevels)
                 resetUndoAt = Int.MAX_VALUE - 10
         }
     }
 
+    /**
+     * Discard undo transactions
+     * @param redo True if the transactions are redoes
+     * @param min Id of first transaction
+     * @param max Id of last transaction
+     * All transaction from min through max inclusive are discarded. Should only be called
+     * within a database transaction
+     */
     private suspend fun discard(redo: Boolean, min: Int, max: Int) {
+        // Make sure there is something do discard
         if (min <= max) {
+            // Function used to get the operations
             val get = if (redo) this::getOperationsAsc else this::getOperationsDesc
+            // Function used to discard each operation
             val dis = if (redo) OperationDescriptor::discardRedo else OperationDescriptor::discardUndo
+            // Get the operations
             get(min, max)?.let {
+                // And discard each one
                 for (op in it) {
                     dis.invoke(op.type.desc, this, op)
                 }
             }
+            // Delete the operations and transactions
             delete(min, max)
         }
     }
 
-    @Transaction
+    /**
+     * Reset all undo ids using an offset
+     * @param offset The amount subtracted from each undo id
+     */
     private suspend fun resetUndo(offset: Int) {
-        Log.d("UNDO_REDO", "resetUndo: offset=$offset, minUndoId=$minUndoId, undoId=$undoId, maxUndoId=$maxUndoId")
         if (offset != 0) {
             db.withTransaction {
+                // Update the operations
                 transactionQuery(
                     "UPDATE $OPERATION_TABLE SET $OPERATION_UNDO_ID_COLUMN = $OPERATION_UNDO_ID_COLUMN - ?",
                     offset
                 )
+                // Update the transactions
                 transactionQuery(
                     "UPDATE $UNDO_TABLE SET $TRANSACTION_UNDO_ID_COLUMN = $TRANSACTION_UNDO_ID_COLUMN - ?",
                     offset
                 )
+                // Update the min, max and undo ids
                 minUndoId -= offset
                 undoId -= offset
                 maxUndoId -= offset
@@ -583,128 +822,176 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Add an operation to the operation table
+     * @param op The operation
+     */
     @Insert
     protected abstract suspend fun addOperation(op: UndoRedoOperationEntity): Long
 
+    /**
+     * Add a transaction to the transaction table
+     * @param transaction The transaction
+     */
     @Insert
     protected abstract suspend fun addUndoTransaction(transaction: UndoTransactionEntity): Long
 
+    /**
+     * Update a transaction in the transaction table
+     * @param transaction The transaction
+     */
     @Update
     protected abstract suspend fun update(transaction: UndoTransactionEntity): Int
 
+    /**
+     * Get a list of all transactions
+     */
     @Query("SELECT * FROM $UNDO_TABLE ORDER BY $TRANSACTION_UNDO_ID_COLUMN ASC")
     abstract suspend fun getTransactions(): List<UndoTransactionEntity>?
 
+    /**
+     * Get the next undo transaction
+     */
     @Query("SELECT * FROM $UNDO_TABLE WHERE ( ( $TRANSACTION_FLAGS_COLUMN & ${UndoTransactionEntity.IS_REDO} ) = 0) ORDER BY $TRANSACTION_UNDO_ID_COLUMN DESC LIMIT 1")
     abstract suspend fun getNextUndo(): UndoTransactionEntity?
 
+    /**
+     * Get the next redo transaction
+     */
     @Query("SELECT * FROM $UNDO_TABLE WHERE ( ( $TRANSACTION_FLAGS_COLUMN & ${UndoTransactionEntity.IS_REDO} ) != 0) ORDER BY $TRANSACTION_UNDO_ID_COLUMN ASC LIMIT 1")
     abstract suspend fun getNextRedo(): UndoTransactionEntity?
 
+    /**
+     * Get a list of operations in a range of undo ids in ascending undo id, operation order
+     * @param min The inclusive min undo id in the range
+     * @param max The inclusive max undo id in the range
+     */
     @Query("SELECT * FROM $OPERATION_TABLE WHERE $OPERATION_UNDO_ID_COLUMN BETWEEN :min and :max ORDER BY $OPERATION_UNDO_ID_COLUMN ASC, $OPERATION_OPERATION_ID_COLUMN ASC")
     abstract suspend fun getOperationsAsc(min: Int, max: Int): List<UndoRedoOperationEntity>?
 
+    /**
+     * Get a list of operations in a range of undo ids in descending undo id, operation order
+     * @param min The inclusive min undo id in the range
+     * @param max The inclusive max undo id in the range
+     */
     @Query("SELECT * FROM $OPERATION_TABLE WHERE $OPERATION_UNDO_ID_COLUMN BETWEEN :min and :max ORDER BY $OPERATION_UNDO_ID_COLUMN DESC, $OPERATION_OPERATION_ID_COLUMN DESC")
     abstract suspend fun getOperationsDesc(min: Int, max: Int): List<UndoRedoOperationEntity>?
 
-    @Delete
-    protected abstract fun delete(transaction: UndoTransactionEntity): Int
-
+    /**
+     * Run an update/delete SQLite command
+     * @param query The SQLite command
+     * @param args The command arguments
+     */
     @Transaction
     protected open fun transactionQuery(query: String, vararg args: Any): Int {
         return db.execUpdateDelete(SimpleSQLiteQuery(query, args))
     }
 
-    @Query("SELECT * FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN IN ( :id1, :id2 )")
+    /**
+     * Swap a book entity with its copy
+     * @param list The list of the two entities
+     * @param curIndex Index of the current entity
+     * @param swap Lambda to swap flags and ids. This is the current entity and it is the copy
+     * @return The list of entities, or null if it couldn't swap
+     */
+    fun <T> swapEntity(list: List<T>, curIndex: Int, swap: T.(T) -> Unit): List<T>? {
+        return if (list.size == 2) {
+            list[curIndex].swap(list[1 - curIndex])
+            return list
+        } else
+            null
+    }
+
+    /**
+     * Get a book entity and its copy
+     */
+    @Query("SELECT * FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $BOOK_ID_COLUMN")
     protected abstract suspend fun queryBook(id1: Long, id2: Long): List<BookEntity>
+    /**
+     * Update a book entity
+     */
     @Update
     protected abstract suspend fun updateBook(entity: BookEntity): Int
+    /**
+     * Swap a book entity with its copy
+     */
     @Transaction
     protected open suspend fun swapBook(curId: Long, copyId: Long): Int {
-        fun swap(entity1: BookEntity, entity2: BookEntity): Boolean {
-            if (entity2.id != copyId)
-                return false
-            entity2.flags = entity1.flags
-            entity1.flags = BookEntity.HIDDEN
-            entity1.id = entity2.id.also { entity2.id = entity1.id }
-            return true
-        }
-
-        val list = queryBook(curId, copyId)
-        if (list.size == 2) {
-            if (list[0].id == curId) {
-                if (!swap(list[0], list[1]))
-                    return 0
-            } else if (list[1].id == curId) {
-                if (!swap(list[1], list[0]))
-                    return 0
-            } else
-                return 0
-            return updateBook(list[0]) + updateBook(list[1])
-        }
-        return 0
+        return swapEntity(queryBook(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
+            // Copy flags from current to copy
+            copy.flags = flags
+            // Hide current
+            flags = BookEntity.HIDDEN
+            // Swap ids
+            id = copy.id.also {copy.id = id }
+        }?.let {
+            // Update the books
+            updateBook(it[0]) + updateBook(it[1])
+        }?: 0
     }
 
-    @Query("SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN IN ( :id1, :id2 )")
+    /**
+     * Get a tag entity and its copy
+     */
+    @Query("SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $TAGS_ID_COLUMN")
     protected abstract suspend fun queryTag(id1: Long, id2: Long): List<TagEntity>
+    /**
+     * Update a tag entity
+     */
     @Update
     protected abstract suspend fun updateTag(entity: TagEntity): Int
+    /**
+     * Swap a tag entity with its copy
+     */
     @Transaction
     protected open suspend fun swapTag(curId: Long, copyId: Long): Int {
-        fun swap(entity1: TagEntity, entity2: TagEntity): Boolean {
-            if (entity2.id != copyId)
-                return false
-            entity2.flags = entity1.flags
-            entity1.flags = TagEntity.HIDDEN
-            entity1.id = entity2.id.also { entity2.id = entity1.id }
-            return true
-        }
-
-        val list = queryTag(curId, copyId)
-        if (list.size == 2) {
-            if (list[0].id == curId) {
-                if (!swap(list[0], list[1]))
-                    return 0
-            } else if (list[1].id == curId) {
-                if (!swap(list[1], list[0]))
-                    return 0
-            } else
-                return 0
-            return updateTag(list[0]) + updateTag(list[1])
-        }
-        return 0
+        return swapEntity(queryTag(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
+            // Copy flags from current to copy
+            copy.flags = flags
+            // Hide current
+            flags = TagEntity.HIDDEN
+            // Swap ids
+            id = copy.id.also {copy.id = id }
+        }?.let {
+            // Update the tags
+            updateTag(it[0]) + updateTag(it[1])
+        }?: 0
     }
 
-    @Query("SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_ID_COLUMN IN ( :id1, :id2 )")
+    /**
+     * Get a view entity and its copy
+     */
+    @Query("SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $VIEWS_ID_COLUMN")
     protected abstract suspend fun queryView(id1: Long, id2: Long): List<ViewEntity>
+    /**
+     * Update a view entity
+     */
     @Update
     protected abstract suspend fun updateView(entity: ViewEntity): Int
+    /**
+     * Swap a view entity with its copy
+     */
     @Transaction
     protected open suspend fun swapView(curId: Long, copyId: Long): Int {
-        fun swap(entity1: ViewEntity, entity2: ViewEntity): Boolean {
-            if (entity2.id != copyId)
-                return false
-            entity2.flags = entity1.flags
-            entity1.flags = ViewEntity.HIDDEN
-            entity1.id = entity2.id.also { entity2.id = entity1.id }
-            return true
-        }
-
-        val list = queryView(curId, copyId)
-        if (list.size == 2) {
-            if (list[0].id == curId) {
-                if (!swap(list[0], list[1]))
-                    return 0
-            } else if (list[1].id == curId) {
-                if (!swap(list[1], list[0]))
-                    return 0
-            } else
-                return 0
-            return updateView(list[0]) + updateView(list[1])
-        }
-        return 0
+        return swapEntity(queryView(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
+            // Copy flags from current to copy
+            copy.flags = flags
+            // Hide current
+            flags = ViewEntity.HIDDEN
+            // Swap ids
+            id = copy.id.also {copy.id = id }
+        }?.let {
+            // Update the views
+            updateView(it[0]) + updateView(it[1])
+        }?: 0
     }
 
+    /**
+     * Delete a range of transactions and operations
+     * @param min The inclusive min undo id in the range
+     * @param max The inclusive max undo id in the range
+     * @return the number of transactions and operations deleted
+     */
     protected open suspend fun delete(min: Int, max: Int): Int {
         return transactionQuery(
             "DELETE FROM $OPERATION_TABLE WHERE $OPERATION_UNDO_ID_COLUMN BETWEEN ? and ?",
@@ -716,6 +1003,11 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         )
     }
 
+    /**
+     * Make a copy of a book entity
+     * @param bookId The id of the book entity
+     * @return The id of the copy
+     */
     @Transaction
     protected open suspend fun copyForBookUndo(bookId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
@@ -726,6 +1018,11 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         ))
     }
 
+    /**
+     * Make a copy of a tag entity
+     * @param bookId The id of the tag entity
+     * @return The id of the copy
+     */
     @Transaction
     protected open suspend fun copyForTagUndo(tagId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
@@ -736,6 +1033,11 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         ))
     }
 
+    /**
+     * Make a copy of a view entity
+     * @param bookId The id of the view entity
+     * @return The id of the copy
+     */
     @Transaction
     protected open suspend fun copyForViewUndo(bookId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
@@ -746,35 +1048,73 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         ))
     }
 
+    /**
+     * Interface for an operation
+     */
     interface OperationDescriptor {
+        /** The table the operation record */
         val table: BookDatabase.TableDescription
 
+        /**
+         * Undo the operation
+         * @param dao The UndoRedoDao
+         * @param op The operation entity to be undone
+         */
         suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity)
+
+        /**
+         * Discard an undo the operation
+         * @param dao The UndoRedoDao
+         * @param op The operation entity to be discarded
+         */
         suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity)
+
+        /**
+         * Redo the operation
+         * @param dao The UndoRedoDao
+         * @param op The operation entity to be redone
+         */
         suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity)
+
+        /**
+         * Discard a redo the operation
+         * @param dao The UndoRedoDao
+         * @param op The operation entity to be discarded
+         */
         suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity)
     }
 
-    private class AddDataDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+    /**
+     * Descriptor for add operations
+     * @param table The table the operation applies to
+     */
+    private open class AddDataDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
         override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To undo an add set the hidden flag
             dao.transactionQuery(
                 "UPDATE ${table.name} SET ${table.flagColumn} = ${table.flagColumn} | ${table.flagValue} WHERE ${table.idColumn} = ?",
                 op.curId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }
 
+        /** @inheritDoc */
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To redo an add clear the hidden flag
             dao.transactionQuery(
                 "UPDATE ${table.name} SET ${table.flagColumn} = ${table.flagColumn} & ~${table.flagValue} WHERE ${table.idColumn} = ?",
                 op.curId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Delete the hidden entity
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.idColumn} = ?",
                 op.curId
@@ -782,46 +1122,67 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Descriptor for delete operations
+     * @param table The table the operation applies to
+     */
     private open class DeleteDataDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
         override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To undo a delete clear the hidden flag
             dao.transactionQuery(
                 "UPDATE ${table.name} SET ${table.flagColumn} = ${table.flagColumn} & ~${table.flagValue} WHERE ${table.idColumn} = ?",
                 op.curId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Delete the hidden entity
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.idColumn} = ?",
                 op.curId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To undo an add set the hidden flag
             dao.transactionQuery(
                 "UPDATE ${table.name} SET ${table.flagColumn} = ${table.flagColumn} | ${table.flagValue} WHERE ${table.idColumn} = ?",
                 op.curId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }
     }
 
-    private class ChangeDataDescriptor(
+    /**
+     * Descriptor for update operations
+     * @param table The table the operation applies to
+     * @param swap Lambda to swap the current and copy entities
+     */
+    private open class ChangeDataDescriptor(
         override val table: BookDatabase.TableDescription,
         val swap: suspend UndoRedoDao.(op: UndoRedoOperationEntity) -> Unit
     ): OperationDescriptor {
+        /** @inheritDoc */
         override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) = swap(dao, op)
 
+        /** @inheritDoc */
         override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) = discard(dao, op)
 
+        /** @inheritDoc */
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) = swap(dao, op)
 
+        /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) = discard(dao, op)
 
         private fun discard(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To discard undo or redo, delete the copied entity
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.idColumn} = ?",
                 op.oldId
@@ -829,49 +1190,69 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }
     }
 
+    /**
+     * Descriptor for add link operations
+     * @param table The table the operation applies to
+     */
     private class AddLinkDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
         override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To undo adding a link, delete the link
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
                 op.curId, op.oldId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }
 
+        /** @inheritDoc */
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To redo adding a link, add the link
             dao.transactionQuery(
                 "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ? )",
                 op.curId, op.oldId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }
     }
 
+    /**
+     * Descriptor for delete link operations
+     * @param table The table the operation applies to
+     */
     private class DeleteLinkDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
         override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To undo deleting a link. add the link
             dao.transactionQuery(
                 "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ? )",
                 op.curId, op.oldId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }
 
+        /** @inheritDoc */
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // To redo deleting a link, delete the link
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
                 op.curId, op.oldId
             )
         }
 
+        /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
         }

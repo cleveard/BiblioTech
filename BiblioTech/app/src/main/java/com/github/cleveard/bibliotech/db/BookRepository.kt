@@ -272,7 +272,7 @@ class BookRepository private constructor() {
     }
 
     /**
-     * Delete tag
+     * Delete selected tags
      */
     suspend fun deleteSelectedTags(): Int {
         return withUndo("Delete Tags") {
@@ -369,30 +369,54 @@ class BookRepository private constructor() {
         }
     }
 
+    /** The current maximum undo levels kept in the database */
     val maxUndoLevels
         get() = db.getUndoRedoDao().maxUndoLevels
+
+    /**
+     * Set the maximum undo levels kept in the data base
+     * @param level The new maximum
+     */
     suspend fun setMaxUndoLevels(level: Int) =
         db.getUndoRedoDao().setMaxUndoLevels(level)
 
+    /**
+     * Start recording undo
+     * @param desc A localized description of the operation for the UI
+     * @param operation The operation to run while recording undo
+     * WithUndo can be nested. Recording stops when the outermost call returns.
+     */
     suspend fun <T> withUndo(desc: String, operation: suspend () -> T): T {
         return db.getUndoRedoDao().withUndo(desc, null, operation)
     }
 
+    /** Is there an undo recorded that can be undone */
     fun canUndo(): Boolean = db.getUndoRedoDao().canUndo()
+    /** Is there an undo recorded that can be redone */
     fun canRedo(): Boolean = db.getUndoRedoDao().canRedo()
 
+    /** Get description of the next recorded undo */
     suspend fun getNextUndo(): String? {
         return db.getUndoRedoDao().getNextUndo()?.desc
     }
 
+    /** Get description of the next recorded redo */
     suspend fun getNextRedo(): String? {
         return db.getUndoRedoDao().getNextRedo()?.desc
     }
 
+    /**
+     * Undo a recording
+     * @return True if there was a recording that could be undone
+     */
     suspend fun undo(): Boolean {
         return db.getUndoRedoDao().undo()
     }
 
+    /**
+     * Redo a recording
+     * @return True if there was a recording that could be redone
+     */
     suspend fun redo(): Boolean {
         return db.getUndoRedoDao().redo()
     }

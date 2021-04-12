@@ -123,16 +123,6 @@ abstract class CategoryDao(private val db: BookDatabase) {
         }
     }
 
-    @Transaction
-    open suspend fun copy(categoryId: Long): Long {
-        return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $CATEGORIES_TABLE ( $CATEGORY_COLUMN, $CATEGORIES_FLAGS )
-                | SELECT $CATEGORY_COLUMN, ${AuthorEntity.HIDDEN} FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = ?
-            """.trimMargin(),
-            arrayOf(categoryId)
-        ))
-    }
-
     /**
      * Add a single category for a book
      * @param bookId The id o the book

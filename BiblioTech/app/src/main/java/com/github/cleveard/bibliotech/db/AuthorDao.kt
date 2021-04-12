@@ -37,10 +37,19 @@ data class AuthorEntity(
         const val HIDDEN = 1
     }
 
+    /**
+     * Construct entity from name
+     * @param id The row id of the entity
+     * @param in_name The name of the author
+     */
     constructor(id: Long, in_name: String): this(id, "", "") {
         name = in_name
     }
 
+    /**
+     * The name of the author
+     * Combines and separates the name into last and remaining
+     */
     var name: String
         get() { return "$remainingName $lastName".trim { it <= ' ' } }
         set(in_name) {
@@ -143,16 +152,6 @@ abstract class AuthorDao(private val db: BookDatabase) {
             for (author in authors)
                 addWithUndo(bookId, author)
         }
-    }
-
-    @Transaction
-    open suspend fun copy(authorId: Long): Long {
-        return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $AUTHORS_TABLE ( $LAST_NAME_COLUMN, $REMAINING_COLUMN, $AUTHORS_FLAGS )
-                | SELECT $LAST_NAME_COLUMN, $REMAINING_COLUMN, ${AuthorEntity.HIDDEN} FROM $AUTHORS_TABLE WHERE $AUTHORS_ID_COLUMN = ?
-            """.trimMargin(),
-            arrayOf(authorId)
-        ))
     }
 
     /**

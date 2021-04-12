@@ -61,6 +61,15 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getViewDao(): ViewDao
     abstract fun getUndoRedoDao(): UndoRedoDao
 
+    /**
+     * Descriptor for tables in the book database
+     * @param name The name of the table
+     * @param idColumn The name of the row id column for the table
+     * @param flagColumn The name of the flags column for the table
+     * @param flagValue The value of the HIDDEN flag for the table
+     * @param bookIdColumn The name of the book id column in a link table
+     * @param linkIdColumn The name of the link id column in a link table
+     */
     data class TableDescription(
         val name: String,
         val idColumn: String,
@@ -69,6 +78,11 @@ abstract class BookDatabase : RoomDatabase() {
         val bookIdColumn: String?,
         val linkIdColumn: String?
     ) {
+        /**
+         * Return the SQLite expression that filters by the hidden flag
+         * @param hidden True to filter hidden rows. False to filter visible rows
+         * @return The expression as a string
+         */
         fun getVisibleExpression(hidden: Boolean = false): String {
             if (flagColumn.isNullOrEmpty())
                 return ""
@@ -136,13 +150,21 @@ abstract class BookDatabase : RoomDatabase() {
     }
 
     companion object {
+        /** The book table descriptor */
         val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, null, null)
+        /** The authors table descriptor */
         val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, null, null)
+        /** The categories table descriptor */
         val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, null, null)
+        /** The tags table descriptor */
         val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, null, null)
+        /** The views table descriptor */
         val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, null, null)
+        /** The book_authors link table descriptor */
         val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+        /** The book_categories link table descriptor */
         val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
+        /** The book_tags link table descriptor */
         val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
 
         /**

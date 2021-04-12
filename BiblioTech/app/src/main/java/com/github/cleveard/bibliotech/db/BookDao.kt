@@ -522,8 +522,7 @@ abstract class BookDao(private val db: BookDatabase) {
 
         if (id != 0L) {
             // Delete existing thumbnails, if any
-            thumbnails.deleteThumbFile(book.book.id, true)
-            thumbnails.deleteThumbFile(book.book.id, false)
+            invalidateThumbnails(book.book.id)
 
             // Add categories
             db.getCategoryDao().addWithUndo(book.book.id, book.categories)
@@ -553,8 +552,7 @@ abstract class BookDao(private val db: BookDatabase) {
         // Delete all thumbnails
         queryBookIds(bookIds, filter)?.let {
             for (book in it) {
-                thumbnails.deleteThumbFile(book, true)
-                thumbnails.deleteThumbFile(book, false)
+                invalidateThumbnails(book)
             }
         }
 
@@ -736,6 +734,15 @@ abstract class BookDao(private val db: BookDatabase) {
             condition.selectByFlagBits(mask, 0, false, BOOK_FLAGS)
         val bits = BookDatabase.changeBits(operation, BOOK_FLAGS, mask)
         return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOK_TABLE $bits$condition", filter?.args))
+    }
+
+    /**
+     * Invalidate the thumbnails for a book
+     * @param bookId The id of the book
+     */
+    suspend fun invalidateThumbnails(bookId: Long) {
+        thumbnails.deleteThumbFile(bookId, true)
+        thumbnails.deleteThumbFile(bookId, false)
     }
 
     companion object {
