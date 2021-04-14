@@ -44,35 +44,48 @@ class BookRepositoryTest {
     @get:Rule
     val timeout = DisableOnAndroidDebug(Timeout(50L, TimeUnit.SECONDS))
 
+    /**
+     * Test bit changes - filtered or not
+     * @param message A message for assertion failures
+     * @param bookFilter An optional filter to use for the test
+     */
     private suspend fun BookDbTracker.testBookFlags(message: String, bookFilter: BookFilter?) {
+        // Get the book do and build the filter
         val bookFlags = repo.bookFlags
         val filter = bookFilter?.let { it.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true) }
 
+        // Make sure we can count bit patterns
         suspend fun StandardSubjectBuilder.checkCountBits(bits: Int, value: Int, include: Boolean, id: Long?) {
+            // Get the sequence of books
             var s = tables.bookEntities.entities
+            // Filter the ones using the filter
             if (bookFilter != null)
                 s = s.filter { bookFilter.filterList[0].values.contains(it.book.title) }
+            // Filter by id, if not null
             if (id != null)
                 s = s.filter { it.book.id == id }
+            // Filter by include or exclude the bit pattern
             s = if (include)
                 s.filter { (it.book.flags and bits) == value }
             else
                 s.filter { (it.book.flags and bits) != value }
+            // Make sure the counts match
             that(bookFlags.countBits(bits, value, include, id, filter)).isEqualTo(s.count())
         }
 
+        // Check counts, include/exclude for an id
         suspend fun checkCount(bits: Int, value: Int, id: Long?) {
             assertWithMessage("checkCount$message value: %s id: %s", value, id).apply {
-                checkCountBits(bits, value, true, null)
-                checkCountBits(bits, value, false, null)
                 checkCountBits(bits, value, true, id)
                 checkCountBits(bits, value, false, id)
             }
         }
 
+        // Check null ids first
         checkCount(0b11, 0b01, null)
         checkCount(0b11, 0b11, null)
 
+        // Now check other ids
         fun nextBook(): BookAndAuthors {
             return tables.bookEntities[random.nextInt(tables.bookEntities.size)]
         }
@@ -81,34 +94,44 @@ class BookRepositoryTest {
             checkCount(0b11, 0b01, nextBook().book.id)
         }
 
+        // Check that we can change bits - set, clear or invert
         suspend fun checkChange(all: String, operation: Boolean?, mask: Int, book: BookAndAuthors?) {
             assertWithMessage(
                 "changeBits$message %s %s op: %s, mask: %s", book?.book?.flags, all, operation, mask
             ).apply {
+                // Get the sequence of books
                 var s = tables.bookEntities.entities
+                // Filter if needed
                 if (bookFilter != null)
                     s = s.filter { bookFilter.filterList[0].values.contains(it.book.title) }
+                // Restrict to a single id
                 if (book != null)
                     s = s.filter { it.book.id == book.book.id }
+                // Do the operation and update the expected books in place in the map {} lambda
                 when (operation) {
                     true -> { s = s.filter { (it.book.flags and mask) != mask }.map { it.book.flags = it.book.flags or mask; it } }
                     false -> { s = s.filter { (it.book.flags and mask) != 0 }.map { it.book.flags = it.book.flags and mask.inv(); it } }
                     else -> { s = s.map { it.book.flags = it.book.flags xor mask; it } }
                 }
+                // Run the sequence once - count and update the books
                 val expCount = s.count()
+                // Make sure the count is right
                 val count = bookFlags.changeBits(operation, mask, book?.book?.id, filter)
                 that(count).isEqualTo(expCount)
+                // Make sure the bits got changed
                 checkDatabase("changeBits$message $all op: $operation, mask: $mask")
             }
         }
 
 
+        // Change bits for random books
         repeat( 10) {
             checkChange("single $it", true,  0b11000, nextBook())
             checkChange("single $it", false, 0b01000, nextBook())
             checkChange("single $it", null,  0b10010, nextBook())
         }
 
+        // Change all bits
         checkChange("all", null,  0b10011, null)
         checkChange("all", false, 0b01001, null)
         checkChange("all", true,  0b10010, null)
