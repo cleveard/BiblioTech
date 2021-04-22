@@ -83,12 +83,12 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /**
          * The count of all items
          */
-        val itemCount: LiveData<Int?>
+        val itemCount: LiveData<Int>
 
         /**
          * LiveData holding the selected item count
          */
-        val selectedCount: LiveData<Int?>
+        val selectedCount: LiveData<Int>
 
         /**
          * Lister for selection changed
@@ -205,11 +205,11 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
             set(f) {
                 field = f
                 scope.launch {
-                    selectedCount as CascadeLiveData<Int?>
+                    selectedCount as CascadeLiveData<Int>
                     selectedCount.sourceValue = flags.countBitsLive(
                         mask, mask, true, null, f
                     ).distinctUntilChanged()
-                    itemCount as CascadeLiveData<Int?>
+                    itemCount as CascadeLiveData<Int>
                     itemCount.sourceValue = flags.countBitsLive(
                         0, 0, true, null, f
                     ).distinctUntilChanged()
@@ -217,10 +217,10 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
             }
 
         /** @inheritDoc **/
-        override val selectedCount: LiveData<Int?> = CascadeLiveData()
+        override val selectedCount: LiveData<Int> = CascadeLiveData()
 
         /** @inheritDoc **/
-        override val itemCount: LiveData<Int?> = CascadeLiveData()
+        override val itemCount: LiveData<Int> = CascadeLiveData()
 
         /** @inheritDoc **/
         override fun selectAllAsync(select: Boolean) {
@@ -282,7 +282,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
 
         /** @inheritDoc **/
         override suspend fun isSelected(id: Long): Boolean {
-            return (flags.countBits(mask, mask, true, id, filter)?: 0) > 0
+            return (flags.countBits(mask, mask, true, id, filter)) > 0
         }
     }
 

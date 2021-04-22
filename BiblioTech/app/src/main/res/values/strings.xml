@@ -190,4 +190,5 @@
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="undo_levels">Undo Levels</string>
     <string name="undo_level_summary">Current Levels: %1$d</string>
+    <string name="import_undo_desc">Import</string>
 </resources>

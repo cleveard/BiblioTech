@@ -591,7 +591,9 @@ class ExportImportFragment : Fragment() {
                     // Start a transaction, so we can abort the whole import if needed
                     BookDatabase.db.withTransaction {
                         // Import the data
-                        import(stream)
+                        viewModel.repo.withUndo(requireContext().resources.getString(R.string.import_undo_desc)) {
+                            import(stream)
+                        }
                         // Close the stream. Done hear so an exception will abort the transaction
                         stream.close()
                     }
