@@ -5,13 +5,15 @@ import android.database.Cursor
 import android.graphics.Bitmap
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
+import com.github.cleveard.bibliotech.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.*
 
 /**
  * Application interface to the book database
  */
-class BookRepository private constructor() {
+class BookRepository private constructor(context: Context) {
     /**
      * Interface to deal with flags in database
      */
@@ -24,7 +26,7 @@ class BookRepository private constructor() {
          * @param filter A filter to restrict the rows
          * @return The number of rows changed
          */
-        suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter? = null): Int?
+        suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?, filter: BookFilter.BuiltFilter? = null): Int
         /**
          * Count bits in the flag column
          * @param bits The bits to count
@@ -34,7 +36,7 @@ class BookRepository private constructor() {
          * @param filter A filter to restrict the rows
          * @return The number of rows matched
          */
-        suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int?
+        suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int
         /**
          * Count bits in the flag column
          * @param bits The bits to count
@@ -44,7 +46,7 @@ class BookRepository private constructor() {
          * @param filter A filter to restrict the rows
          * @return The number of rows changed in a LiveData
          */
-        suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int?>
+        suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
     }
 
     companion object {
@@ -69,7 +71,7 @@ class BookRepository private constructor() {
                 // Initialize the database
                 BookDatabase.initialize(context, testing, name)
                 // Create the repository
-                mRepo = BookRepository()
+                mRepo = BookRepository(context)
             }
         }
 
@@ -103,7 +105,7 @@ class BookRepository private constructor() {
             mask: Int,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): Int? {
+        ): Int {
             return db.getBookDao().changeBits(operation, mask, id, filter)
         }
 
@@ -114,7 +116,7 @@ class BookRepository private constructor() {
             include: Boolean,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): Int? {
+        ): Int {
             return db.getBookDao().countBits(bits, value, include, id, filter)
         }
 
@@ -125,7 +127,7 @@ class BookRepository private constructor() {
             include: Boolean,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): LiveData<Int?> {
+        ): LiveData<Int> {
             return db.getBookDao().countBitsLive(bits, value, include, id, filter)
         }
     }
@@ -140,7 +142,7 @@ class BookRepository private constructor() {
             mask: Int,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): Int? {
+        ): Int {
             return db.getTagDao().changeBits(operation, mask, id)
         }
 
@@ -151,7 +153,7 @@ class BookRepository private constructor() {
             include: Boolean,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): Int? {
+        ): Int {
             return db.getTagDao().countBits(bits, value, include, id)
         }
 
@@ -162,9 +164,25 @@ class BookRepository private constructor() {
             include: Boolean,
             id: Long?,
             filter: BookFilter.BuiltFilter?
-        ): LiveData<Int?> {
+        ): LiveData<Int> {
             return db.getTagDao().countBitsLive(bits, value, include, id)
         }
+    }
+
+    // Undo description strings
+    private val addBook = context.resources.getString(R.string.addBookUndo)
+    private val deleteBooks = context.resources.getString(R.string.deleteBooksUndo)
+    private val addTag = context.resources.getString(R.string.addTagUndo)
+    private val deleteTags = context.resources.getString(R.string.deleteTagsUndo)
+    private val tagBooks = context.resources.getString(R.string.tagBooksUndo)
+    @Suppress("SpellCheckingInspection")
+    private val untagBooks = context.resources.getString(R.string.untagBooksUndo)
+    private val addView = context.resources.getString(R.string.addViewUndo)
+    private val deleteView = context.resources.getString(R.string.deleteViewUndo)
+    private val locale = context.resources.configuration.locales[0]
+
+    private fun format(format: String, vararg args: Any): String {
+        return Formatter(locale).format(format, *args).toString()
     }
 
     /**
@@ -208,7 +226,7 @@ class BookRepository private constructor() {
      * The book is added and selected tags
      */
     suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
-        return withUndo("Add Book") {
+        return withUndo(format(addBook, book.book.title)) {
             db.getBookDao().addOrUpdateWithUndo(book, null, callback)
         }
     }
@@ -218,7 +236,7 @@ class BookRepository private constructor() {
      * @param filter The current filter
      */
     suspend fun deleteSelectedBooks(filter: BookFilter.BuiltFilter?, bookIds: Array<Any>? = null): Int {
-        return withUndo("Deleted Books") {
+        return withUndo(deleteBooks) {
             db.getBookDao().deleteSelectedWithUndo(filter, bookIds)
         }
     }
@@ -266,7 +284,7 @@ class BookRepository private constructor() {
      * merge two tags into one, when you edit an existing tag and rename it to another existing tag.
      */
     suspend fun addOrUpdateTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
-        return withUndo("Update Tag") {
+        return withUndo(format(addTag, tag.name)) {
             db.getTagDao().addWithUndo(tag, callback)
         }
     }
@@ -275,7 +293,7 @@ class BookRepository private constructor() {
      * Delete selected tags
      */
     suspend fun deleteSelectedTags(): Int {
-        return withUndo("Delete Tags") {
+        return withUndo(deleteTags) {
             db.getTagDao().deleteSelectedWithUndo()
         }
     }
@@ -287,7 +305,7 @@ class BookRepository private constructor() {
      * @return The number of links added
      */
     suspend fun addTagsToBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?): Int {
-        return withUndo("Add Tags To Books") {
+        return withUndo(tagBooks) {
             db.getBookTagDao().addTagsToBooksWithUndo(bookIds, tagIds, filter)
         }
     }
@@ -300,7 +318,7 @@ class BookRepository private constructor() {
      * @return The number of links removed
      */
     suspend fun removeTagsFromBooks(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?, invert: Boolean = false): Int {
-        return withUndo("Remove Tags From Books") {
+        return withUndo(untagBooks) {
             db.getBookTagDao().deleteSelectedTagsForBooksWithUndo(bookIds, filter, tagIds, invert)
         }
     }
@@ -344,7 +362,7 @@ class BookRepository private constructor() {
      * @return The id of the view in the database, or 0L if the add was aborted
      */
     suspend fun addOrUpdateView(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)? = null): Long {
-        return withUndo("Update View") {
+        return withUndo(format(addView, view.name)) {
             db.getViewDao().addOrUpdateWithUndo(view, onConflict)
         }
     }
@@ -364,7 +382,7 @@ class BookRepository private constructor() {
      * @return The number of views deleted
      */
     suspend fun removeView(name: String): Int {
-        return withUndo("Remove View") {
+        return withUndo(deleteView) {
             db.getViewDao().deleteWithUndo(name)
         }
     }
@@ -386,6 +404,7 @@ class BookRepository private constructor() {
      * @param operation The operation to run while recording undo
      * WithUndo can be nested. Recording stops when the outermost call returns.
      */
+    @Suppress("MemberVisibilityCanBePrivate")
     suspend fun <T> withUndo(desc: String, operation: suspend () -> T): T {
         return db.getUndoRedoDao().withUndo(desc, null, operation)
     }
@@ -395,14 +414,9 @@ class BookRepository private constructor() {
     /** Is there an undo recorded that can be redone */
     fun canRedo(): Boolean = db.getUndoRedoDao().canRedo()
 
-    /** Get description of the next recorded undo */
-    suspend fun getNextUndo(): String? {
-        return db.getUndoRedoDao().getNextUndo()?.desc
-    }
-
-    /** Get description of the next recorded redo */
-    suspend fun getNextRedo(): String? {
-        return db.getUndoRedoDao().getNextRedo()?.desc
+    /** Get the list of undo transaction */
+    fun getUndoList(): LiveData<List<UndoTransactionEntity>> {
+        return db.getUndoRedoDao().getTransactionsLive()
     }
 
     /**

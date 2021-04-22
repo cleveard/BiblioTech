@@ -16,6 +16,10 @@
             android:id="@+id/action_nav_books_to_exportImportFragment"
             android:icon="@drawable/ic_menu_import_export"
             android:title="@string/menu_export_import" />
+        <item
+            android:id="@+id/action_to_settingsFragment"
+            android:icon="@android:drawable/ic_menu_preferences"
+            android:title="@string/action_settings" />
     </group>
 
     <item

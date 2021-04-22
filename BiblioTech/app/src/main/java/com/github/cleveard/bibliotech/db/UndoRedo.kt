@@ -1,5 +1,6 @@
 package com.github.cleveard.bibliotech.db
 
+import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
 import java.lang.IllegalStateException
@@ -512,7 +513,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param type The operation type
      * @param id The id of the entity being updated
      * @param copyId the id of the copy of the entity
-     * @param update Lambad used to update the entity
+     * @param update Lambda used to update the entity
      * @return True if the update succeeded
      */
     private suspend fun recordUpdate(type: OperationType, id: Long, copyId: Long, update: suspend () -> Boolean): Boolean {
@@ -566,7 +567,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
 
     /** Can we redo */
     fun canRedo(): Boolean {
-        return undoId >= 0 && undoId < maxUndoId
+        return undoId in 0 until maxUndoId
     }
 
     /**
@@ -684,7 +685,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
-     * Redo the next reod
+     * Redo the next redo
      */
     suspend fun redo(): Boolean {
         if (db.inTransaction())
@@ -850,6 +851,12 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     abstract suspend fun getTransactions(): List<UndoTransactionEntity>?
 
     /**
+     * Get a list of all transactions
+     */
+    @Query("SELECT * FROM $UNDO_TABLE ORDER BY $TRANSACTION_UNDO_ID_COLUMN ASC")
+    abstract fun getTransactionsLive(): LiveData<List<UndoTransactionEntity>>
+
+    /**
      * Get the next undo transaction
      */
     @Query("SELECT * FROM $UNDO_TABLE WHERE ( ( $TRANSACTION_FLAGS_COLUMN & ${UndoTransactionEntity.IS_REDO} ) = 0) ORDER BY $TRANSACTION_UNDO_ID_COLUMN DESC LIMIT 1")
@@ -894,7 +901,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param swap Lambda to swap flags and ids. This is the current entity and it is the copy
      * @return The list of entities, or null if it couldn't swap
      */
-    fun <T> swapEntity(list: List<T>, curIndex: Int, swap: T.(T) -> Unit): List<T>? {
+    private fun <T> swapEntity(list: List<T>, curIndex: Int, swap: T.(T) -> Unit): List<T>? {
         return if (list.size == 2) {
             list[curIndex].swap(list[1 - curIndex])
             return list
@@ -1020,7 +1027,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
 
     /**
      * Make a copy of a tag entity
-     * @param bookId The id of the tag entity
+     * @param tagId The id of the tag entity
      * @return The id of the copy
      */
     @Transaction

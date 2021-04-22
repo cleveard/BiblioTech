@@ -651,13 +651,13 @@ abstract class BookDao(private val db: BookDatabase) {
      * Query to count bits in the flags column
      */
     @RawQuery(observedEntities = [BookEntity::class])
-    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int?
+    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int
 
     /**
      * Query to count bits in the flags column
      */
     @RawQuery(observedEntities = [BookEntity::class])
-    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int?>
+    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int>
 
     /**
      * Query to count bits in the flags column
@@ -668,7 +668,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the rows
      * @return The count
      */
-    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int? {
+    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): Int {
         val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
             .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
             .selectByFlagBits(bits, value, include, BOOK_FLAGS)
@@ -687,7 +687,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the rows
      * @return The count in a LiveData
      */
-    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int?> {
+    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int> {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
                 .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)

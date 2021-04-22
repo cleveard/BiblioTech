@@ -26,6 +26,7 @@ import androidx.navigation.fragment.NavHostFragment
 import java.io.File
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
+import com.github.cleveard.bibliotech.ui.scan.ScanFragmentDirections
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
@@ -133,6 +134,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
             lastNavFilter = arguments?.getString("filterName")?: ""
             navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
                 lastNavId == R.id.nav_books
+            navView.menu.findItem(R.id.action_to_settingsFragment).isEnabled =
+                lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan
         }
 
         // Passing each menu ID as a set of Ids because each
@@ -159,6 +162,13 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                     if (lastNavId != R.id.nav_books)
                         return@setNavigationItemSelectedListener false
                     BooksFragmentDirections.actionNavBooksToExportImportFragment(lastNavFilter)
+                }
+                R.id.action_to_settingsFragment -> {
+                    when (lastNavId) {
+                        R.id.nav_books -> BooksFragmentDirections.actionNavBooksToSettingsFragment()
+                        R.id.nav_scan -> ScanFragmentDirections.actionNavScanToSettingsFragment()
+                        else -> return@setNavigationItemSelectedListener false
+                    }
                 }
                 else -> return@setNavigationItemSelectedListener false
             }

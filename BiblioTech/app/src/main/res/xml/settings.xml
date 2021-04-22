@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="@string/undo">
+
+        <com.github.cleveard.bibliotech.ui.settings.NumberPickerPreference
+            android:key="undo_levels"
+            android:title="@string/undo_levels"
+            android:defaultValue="20"/>
+
+    </PreferenceCategory>
+</PreferenceScreen>

@@ -27,6 +27,7 @@ import com.github.cleveard.bibliotech.ManageNavigation
 import com.github.cleveard.bibliotech.MobileNavigationDirections
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookFilter
+import com.github.cleveard.bibliotech.db.UndoTransactionEntity
 import com.github.cleveard.bibliotech.db.ViewEntity
 import com.github.cleveard.bibliotech.ui.filter.FilterTable
 import com.github.cleveard.bibliotech.ui.filter.OrderTable
@@ -150,6 +151,11 @@ class BooksFragment : Fragment() {
     }
 
     /**
+     * Observer for the undoList
+     */
+    private val undoListObserver = Observer<List<UndoTransactionEntity>> { }
+
+    /**
      * Set onClickListener for clickable views contained in view
      * @param view The parent of the views to be set
      */
@@ -180,6 +186,7 @@ class BooksFragment : Fragment() {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
             it.filterView.observe(viewLifecycleOwner, filterViewObserver)
+            it.undoList.observe(viewLifecycleOwner, undoListObserver)
         }
         tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java).also {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
@@ -363,6 +370,7 @@ class BooksFragment : Fragment() {
         booksViewModel.selection.selectedCount.removeObserver(selectionObserver)
         booksViewModel.selection.itemCount.removeObserver(selectionObserver)
         booksViewModel.filterView.removeObserver(filterViewObserver)
+        booksViewModel.undoList.removeObserver(undoListObserver)
         tagViewModel.selection.selectedCount.removeObserver(selectionObserver)
         tagViewModel.selection.itemCount.removeObserver(selectionObserver)
         // Let filter UI cleanup
@@ -384,6 +392,26 @@ class BooksFragment : Fragment() {
         selectNone = menu.findItem(R.id.action_select_none)
         super.onCreateOptionsMenu(menu, inflater)
         updateMenuAndButtons()
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onPrepareOptionsMenu(menu: Menu) {
+        super.onPrepareOptionsMenu(menu)
+        fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
+            menu.findItem(id)?.let {item ->
+                item.isEnabled = desc != null
+                item.title = if (desc.isNullOrEmpty())
+                    requireContext().getString(undoId)
+                else
+                    requireContext().getString(undoNameId, desc)
+            }
+        }
+        update(R.id.action_undo, booksViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
+            R.string.undo, R.string.undoName)
+        update(R.id.action_redo, booksViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
+            R.string.redo, R.string.redoName)
     }
 
     /**
@@ -423,6 +451,21 @@ class BooksFragment : Fragment() {
             }
             R.id.action_remove_filter -> {
                 removeFilter()
+            }
+            R.id.action_undo -> {
+                booksViewModel.viewModelScope.launch {
+                    booksViewModel.repo.undo()
+                }
+            }
+            R.id.action_redo -> {
+                booksViewModel.viewModelScope.launch {
+                    booksViewModel.repo.redo()
+                }
+            }
+            R.id.action_to_settingsFragment -> {
+                (activity as? ManageNavigation)?.navigate(
+                    BooksFragmentDirections.actionNavBooksToSettingsFragment()
+                )
             }
             else -> return false
         }

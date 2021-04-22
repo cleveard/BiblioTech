@@ -163,4 +163,31 @@
     <string name="ask_replace_message_filters">Select Existing Views to Import</string>
     <string name="export_complete">Export Complete</string>
     <string name="import_complete">Import Complete</string>
+    <string name="addBookUndo">Add/Update Book %1$s</string>
+    <string name="deleteBooksUndo">Delete Books</string>
+    <string name="addTagUndo">Add/Update Tag %1$s</string>
+    <string name="deleteTagsUndo">Delete Tags</string>
+    <string name="tagBooksUndo">Tag Books</string>
+    <string name="untagBooksUndo">Untag Books</string>
+    <string name="addViewUndo">Add/Update View %1$s</string>
+    <string name="deleteViewUndo">Delete View</string>
+    <string name="undo">Undo</string>
+    <string name="undoName">Undo: %1$s</string>
+    <string name="redo">Redo</string>
+    <string name="redoName">Redo: %1$s</string>
+    <!-- Preference Titles -->
+    <string name="messages_header">Messages</string>
+    <string name="sync_header">Sync</string>
+
+    <!-- Messages Preferences -->
+    <string name="signature_title">Your signature</string>
+    <string name="reply_title">Default reply action</string>
+
+    <!-- Sync Preferences -->
+    <string name="sync_title">Sync email periodically</string>
+    <string name="attachment_title">Download incoming attachments</string>
+    <string name="attachment_summary_on">Automatically download attachments for incoming emails</string>
+    <string name="attachment_summary_off">Only download attachments when manually requested</string>
+    <string name="undo_levels">Undo Levels</string>
+    <string name="undo_level_summary">Current Levels: %1$d</string>
 </resources>

@@ -8,6 +8,7 @@ import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
 import android.util.SparseArray
 import android.view.LayoutInflater
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
@@ -34,6 +35,11 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * The book database repository
      */
     val repo: BookRepository = BookRepository.repo
+
+    /**
+     * Undo list
+     */
+    val undoList: LiveData<List<UndoTransactionEntity>> = repo.getUndoList()
 
     /**
      * Selection set for books

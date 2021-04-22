@@ -364,13 +364,13 @@ abstract class TagDao(private val db: BookDatabase) {
      * Query to count bits in the flags column
      */
     @RawQuery(observedEntities = [TagEntity::class])
-    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int?
+    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int
 
     /**
      * Query to count bits in the flags column
      */
     @RawQuery(observedEntities = [TagEntity::class])
-    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int?>
+    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int>
 
     /**
      * Query to count bits in the flags column
@@ -380,7 +380,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * @param id A tag id to count
      * @return The count in a LiveData
      */
-    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int? {
+    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int {
         // Build the selection from the bits
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
             .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
@@ -400,7 +400,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * @param id A tag id to count
      * @return The count in a LiveData
      */
-    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int?> {
+    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
         // Run query on query thread
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
             // Build the selection from the bits
@@ -441,7 +441,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * @return The number of rows changed
      */
     @Transaction
-    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int? {
+    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int {
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
             .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
         // Only select the rows where the change will make a difference

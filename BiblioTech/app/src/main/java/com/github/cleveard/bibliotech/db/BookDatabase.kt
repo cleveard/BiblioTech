@@ -1,6 +1,8 @@
 package com.github.cleveard.bibliotech.db
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.preference.PreferenceManager
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
@@ -167,6 +169,23 @@ abstract class BookDatabase : RoomDatabase() {
         /** The book_tags link table descriptor */
         val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
 
+        /** Undo levels preference key */
+        const val UNDO_LEVEL_KEY = "undo_levels"
+        /** Undo levels preference initial value */
+        const val UNDO_LEVEL_INITIAL = 20
+        /** Undo levels preference minimum value */
+        const val UNDO_LEVEL_MIN = 0
+        /** Undo levels preference maximum value */
+        const val UNDO_LEVEL_MAX = 100
+        private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            when (key) {
+                UNDO_LEVEL_KEY -> MainScope().launch {
+                    db.getUndoRedoDao().setMaxUndoLevels(sharedPreferences.getInt(UNDO_LEVEL_KEY, UNDO_LEVEL_INITIAL))
+                }
+                else -> {}
+            }
+        }
+
         /**
          * The name of the books database
          */
@@ -237,6 +256,10 @@ abstract class BookDatabase : RoomDatabase() {
             db.initWritableQueries()
             if (testing)
                 db.deleteOnCloseName = name
+
+            val pref = PreferenceManager.getDefaultSharedPreferences(context)
+            pref.registerOnSharedPreferenceChangeListener(preferenceListener)
+            preferenceListener.onSharedPreferenceChanged(pref, UNDO_LEVEL_KEY)
             return db
         }
 
@@ -475,12 +498,12 @@ abstract class BookDatabase : RoomDatabase() {
             object: Migration(4, 5) {
                 override fun migrate(database: SupportSQLiteDatabase) {
                     // Add tables for the undo and redo
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)");
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)");
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`, `$OPERATION_OPERATION_ID_COLUMN`)");
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL, `$TRANSACTION_FLAGS_COLUMN` INTEGER NOT NULL)");
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)");
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)");
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`, `$OPERATION_OPERATION_ID_COLUMN`)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL, `$TRANSACTION_FLAGS_COLUMN` INTEGER NOT NULL)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
                     // Add flags to authors, categories and views tables
                     database.execSQL("ALTER TABLE $AUTHORS_TABLE ADD COLUMN `$AUTHORS_FLAGS` INTEGER NOT NULL DEFAULT 0")
                     database.execSQL("ALTER TABLE $CATEGORIES_TABLE ADD COLUMN `$CATEGORIES_FLAGS` INTEGER NOT NULL DEFAULT 0")
