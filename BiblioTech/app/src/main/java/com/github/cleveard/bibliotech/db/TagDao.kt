@@ -400,21 +400,18 @@ abstract class TagDao(private val db: BookDatabase) {
      * @param id A tag id to count
      * @return The count in a LiveData
      */
-    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
-        // Run query on query thread
-        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            // Build the selection from the bits
-            val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
-                .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
-                .selectByFlagBits(bits, value, include, TAGS_FLAGS)
-                .toString()
-            // Return the query
-            countBitsLive(
-                SimpleSQLiteQuery(
-                    "SELECT COUNT($TAGS_ID_COLUMN) FROM $TAGS_TABLE$condition"
-                )
+    open fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
+        // Build the selection from the bits
+        val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
+            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, TAGS_FLAGS)
+            .toString()
+        // Return the query
+        return countBitsLive(
+            SimpleSQLiteQuery(
+                "SELECT COUNT($TAGS_ID_COLUMN) FROM $TAGS_TABLE$condition"
             )
-        }
+        )
     }
 
     /**

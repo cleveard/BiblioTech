@@ -137,6 +137,8 @@ abstract class BookDatabase : RoomDatabase() {
      * @param context The context for testing to use to delete the database
      */
     fun close(context: Context) {
+        val pref = PreferenceManager.getDefaultSharedPreferences(context)
+        pref.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         close()
         deleteOnCloseName?.let { context.deleteDatabase(it) }
     }
@@ -207,6 +209,9 @@ abstract class BookDatabase : RoomDatabase() {
         fun initialize(context: Context, testing: Boolean = false, name: String? = null) {
             if (mDb == null) {
                 mDb = create(context, testing, name)
+                val pref = PreferenceManager.getDefaultSharedPreferences(context)
+                pref.registerOnSharedPreferenceChangeListener(preferenceListener)
+                preferenceListener.onSharedPreferenceChanged(pref, UNDO_LEVEL_KEY)
             }
         }
 
@@ -257,9 +262,6 @@ abstract class BookDatabase : RoomDatabase() {
             if (testing)
                 db.deleteOnCloseName = name
 
-            val pref = PreferenceManager.getDefaultSharedPreferences(context)
-            pref.registerOnSharedPreferenceChangeListener(preferenceListener)
-            preferenceListener.onSharedPreferenceChanged(pref, UNDO_LEVEL_KEY)
             return db
         }
 

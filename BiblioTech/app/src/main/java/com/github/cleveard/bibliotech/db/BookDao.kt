@@ -687,16 +687,14 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param filter A filter to restrict the rows
      * @return The count in a LiveData
      */
-    open suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int> {
-        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
-                .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
-                .selectByFlagBits(bits, value, include, BOOK_FLAGS)
-                .toString()
-            countBitsLive(SimpleSQLiteQuery(
-                "SELECT COUNT($BOOK_ID_COLUMN) FROM $BOOK_TABLE$condition", filter?.args
-            ))
-        }
+    open fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int> {
+        val condition = StringBuilder().idWithFilter(id, filter, BOOK_ID_COLUMN)
+            .selectVisible(BOOK_FLAGS, BookEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, BOOK_FLAGS)
+            .toString()
+        return countBitsLive(SimpleSQLiteQuery(
+            "SELECT COUNT($BOOK_ID_COLUMN) FROM $BOOK_TABLE$condition", filter?.args
+        ))
     }
 
     /**

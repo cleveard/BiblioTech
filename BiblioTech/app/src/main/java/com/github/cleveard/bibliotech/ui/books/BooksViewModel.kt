@@ -8,10 +8,7 @@ import android.text.SpannableStringBuilder
 import android.text.style.TextAppearanceSpan
 import android.util.SparseArray
 import android.view.LayoutInflater
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Observer
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import androidx.paging.*
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -119,7 +116,18 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             selection.filter = idFilter
         }
     }
-    val filterView: MutableLiveData<ViewEntity?> = MutableLiveData(null)
+
+    private val _filterName = MutableLiveData<String?>(null)
+    val filterView: LiveData<ViewEntity?> = _filterName.switchMap {name ->
+        if (name == null)
+            MutableLiveData(null)
+        else
+            repo.findViewByNameLive(name).map { if (it.isNullOrEmpty()) null else it[0] }
+    }
+    var filterName: String?
+        get() = _filterName.value
+        set(v) { _filterName.value = v }
+
 
     /**
      * The built filter to get the ids for the current filter
@@ -200,7 +208,6 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             return false
         }
 
-        filterView.value = view
         return true
     }
 
@@ -222,9 +229,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @param viewName The name of the view
      */
     fun applyView(viewName: String?) {
-        viewModelScope.launch {
-            filterView.value = repo.findViewByName(viewName ?: "") ?: ViewEntity(0, "", "")
-        }
+        filterName = viewName ?: ""
     }
 
     /**

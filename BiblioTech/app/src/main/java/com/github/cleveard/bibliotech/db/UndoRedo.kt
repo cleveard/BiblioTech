@@ -728,12 +728,13 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     suspend fun setMaxUndoLevels(maxLevels: Int, resetThreshold: Int = 0) {
         // Start a transaction to handle multi-threading issues
         db.withTransaction {
-            // Yes, make sure we aren't recording
-            if (started > 0)
-                throw IllegalStateException("Cannot set undo levels while recording")
             // Make sure undo is initialized
             initUndo()
+            // Did levels change
             if (maxLevels != maxUndoLevels) {
+                // Yes, make sure we aren't recording
+                if (started > 0)
+                    throw IllegalStateException("Cannot set undo levels while recording")
                 // We are changing the number of levels
                 maxUndoLevels = maxLevels
                 // First delete undoes from oldest to newest to satisfy the number of levels
@@ -1048,8 +1049,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     @Transaction
     protected open suspend fun copyForViewUndo(bookId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $VIEWS_TABLE ( $VIEWS_ID_COLUMN, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FLAGS )
-                | SELECT NULL, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FLAGS | ${ViewEntity.HIDDEN} FROM $VIEWS_TABLE WHERE $VIEWS_ID_COLUMN = ?
+            """INSERT INTO $VIEWS_TABLE ( $VIEWS_ID_COLUMN, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FILTER_COLUMN, $VIEWS_FLAGS )
+                | SELECT NULL, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FILTER_COLUMN, $VIEWS_FLAGS | ${ViewEntity.HIDDEN} FROM $VIEWS_TABLE WHERE $VIEWS_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(bookId)
         ))

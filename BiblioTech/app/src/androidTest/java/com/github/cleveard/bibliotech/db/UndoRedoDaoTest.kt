@@ -1018,7 +1018,7 @@ class UndoRedoDaoTest {
         // Get the names an makes sure they are all there
         assertWithMessage("All Views").checkNames()
 
-        val newView = views[0].copy(id = 0L, desc = "descNew", filter = BookFilter(emptyArray(), emptyArray()))
+        val newView = views[1].copy(id = 0L, desc = "descNew", filter = BookFilter(emptyArray(), emptyArray()))
         // Fail to add a conflicting view
         assertWithMessage("Conflict Fail").apply {
             that(expected.addView(newView) { false }).isEqualTo(0L)
@@ -1030,7 +1030,7 @@ class UndoRedoDaoTest {
         // Add a conflicting view
         assertWithMessage("Conflict Succeed").apply {
             val id = expected.addView(newView) { true }
-            that(id).isEqualTo(views[0].id)
+            that(id).isEqualTo(views[1].id)
             that(id).isEqualTo(newView.id)
             that(repo.findViewByName(newView.name)).isEqualTo(newView)
             names[newView.name] = newView

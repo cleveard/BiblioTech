@@ -180,13 +180,11 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         }
 
         // Get the saved filter list and observe changes to it
-        MainScope().launch {
-            viewNames = BookRepository.repo.getViewNames()
-            viewNames.value?.let { updateViews(it) }
-            // Update the views in the navigation drawer when it changes
-            viewNames.observe(this@MainActivity) {
-                updateViews(it)
-            }
+        viewNames = BookRepository.repo.getViewNames()
+        viewNames.value?.let { updateViews(it) }
+        // Update the views in the navigation drawer when it changes
+        viewNames.observe(this@MainActivity) {
+            updateViews(it)
         }
     }
 

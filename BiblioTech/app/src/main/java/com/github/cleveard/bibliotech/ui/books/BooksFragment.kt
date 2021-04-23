@@ -153,7 +153,10 @@ class BooksFragment : Fragment() {
     /**
      * Observer for the undoList
      */
-    private val undoListObserver = Observer<List<UndoTransactionEntity>> { }
+    @Suppress("ObjectLiteralToLambda")  // Kotlin messes up if this is a lambda
+    private val undoListObserver = object: Observer<List<UndoTransactionEntity>> {
+        override fun onChanged(t: List<UndoTransactionEntity>?) { }
+    }
 
     /**
      * Set onClickListener for clickable views contained in view

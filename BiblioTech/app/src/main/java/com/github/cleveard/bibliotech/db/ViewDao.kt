@@ -62,16 +62,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      * Get list of views
      */
     @Query(value = "SELECT $VIEWS_NAME_COLUMN FROM $VIEWS_TABLE WHERE ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 ) ORDER BY $VIEWS_NAME_COLUMN")
-    abstract fun doGetViewNames(): LiveData<List<String>>
-
-    /**
-     * Get list of views
-     */
-    suspend fun getViewNames(): LiveData<List<String>> {
-        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            doGetViewNames()
-        }
-    }
+    abstract fun getViewNames(): LiveData<List<String>>
 
     /**
      * Get list of views
@@ -173,5 +164,22 @@ abstract class ViewDao(private val db: BookDatabase) {
      */
     suspend fun findByName(name: String): ViewEntity? {
         return doFindByName(PredicateDataDescription.escapeLikeWildCards(name))
+    }
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return The view or null if it wasn't found
+     */
+    @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE $VIEWS_NAME_COLUMN LIKE :name ESCAPE '\\' AND ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 )")
+    protected abstract fun doFindByNameLive(name: String): LiveData<List<ViewEntity>>
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return The view or null if it wasn't found
+     */
+    fun findByNameLive(name: String): LiveData<List<ViewEntity>> {
+        return doFindByNameLive(PredicateDataDescription.escapeLikeWildCards(name))
     }
 }

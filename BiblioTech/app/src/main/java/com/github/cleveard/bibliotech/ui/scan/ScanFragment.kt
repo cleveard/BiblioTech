@@ -383,7 +383,7 @@ class ScanFragment : Fragment() {
         displayManager.registerDisplayListener(displayListener, null)
 
         // Clear filter from books view model
-        booksViewModel.filterView.value = null
+        booksViewModel.filterName = null
         activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
         updateBookStats()
 

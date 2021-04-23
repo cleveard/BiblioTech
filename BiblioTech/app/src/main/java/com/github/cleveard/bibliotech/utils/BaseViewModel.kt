@@ -201,26 +201,20 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         private val mask: Int,
         private val scope: CoroutineScope
     ): LastSelection() {
-        var filter: BookFilter.BuiltFilter? = null
-            set(f) {
-                field = f
-                scope.launch {
-                    selectedCount as CascadeLiveData<Int>
-                    selectedCount.sourceValue = flags.countBitsLive(
-                        mask, mask, true, null, f
-                    ).distinctUntilChanged()
-                    itemCount as CascadeLiveData<Int>
-                    itemCount.sourceValue = flags.countBitsLive(
-                        0, 0, true, null, f
-                    ).distinctUntilChanged()
-                }
-            }
+        private var _filter = MutableLiveData<BookFilter.BuiltFilter?>(null)
+        var filter: BookFilter.BuiltFilter?
+            get() = _filter.value
+            set(f) { _filter.value = f }
 
         /** @inheritDoc **/
-        override val selectedCount: LiveData<Int> = CascadeLiveData()
+        override val selectedCount: LiveData<Int> = _filter.switchMap {
+            flags.countBitsLive(mask, mask, true, null, it).distinctUntilChanged()
+        }
 
         /** @inheritDoc **/
-        override val itemCount: LiveData<Int> = CascadeLiveData()
+        override val itemCount: LiveData<Int> = _filter.switchMap {
+            flags.countBitsLive(0, 0, true, null, it).distinctUntilChanged()
+        }
 
         /** @inheritDoc **/
         override fun selectAllAsync(select: Boolean) {

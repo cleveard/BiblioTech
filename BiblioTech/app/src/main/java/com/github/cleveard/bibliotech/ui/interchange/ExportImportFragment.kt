@@ -221,47 +221,46 @@ class ExportImportFragment : Fragment() {
         // Create the view model
         viewModel = ViewModelProvider(this).get(ExportImportViewModel::class.java)
         // Launch a coroutine to finish the initialization
-        viewModel.viewModelScope.launch {
-            // Create the ViewName for the filter from the arguments
-            filter = ViewName.makeDisplay(args.filterName, requireContext().resources)
-            // Get the Spinner for the filters
-            val viewSpinner = view.findViewById<Spinner>(R.id.select_filter)
-            // Listen for selections
-            viewSpinner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    // Set the filter to the selected filter
-                    filter = (parent?.getItemAtPosition(position) as? ViewName)?: ViewName(null, "")
-                }
 
-                override fun onNothingSelected(parent: AdapterView<*>?) {
-                    // Set the filter to the first filter
-                    filter = (parent?.getItemAtPosition(0) as? ViewName)?: ViewName(null, "")
-                }
+        // Create the ViewName for the filter from the arguments
+        filter = ViewName.makeDisplay(args.filterName, requireContext().resources)
+        // Get the Spinner for the filters
+        val viewSpinner = view.findViewById<Spinner>(R.id.select_filter)
+        // Listen for selections
+        viewSpinner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // Set the filter to the selected filter
+                filter = (parent?.getItemAtPosition(position) as? ViewName)?: ViewName(null, "")
             }
-            // Create the adaptor for the spinner and set it
-            val adapter = ArrayAdapter<ViewName>(view.context, android.R.layout.simple_spinner_item).also {
-                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                // Set the filter to the first filter
+                filter = (parent?.getItemAtPosition(0) as? ViewName)?: ViewName(null, "")
             }
-            viewSpinner.adapter = adapter
-            // Add the view names to the spinner
-            viewModel.repo.getViewNames().also {live ->
-                // Observe the view names for changes
-                live.observe(viewLifecycleOwner) {list ->
-                    // Set the current set of view names
-                    adapter.clear()
-                    list?.let {
-                        val resources = requireContext().resources
-                        adapter.add(ViewName.makeDisplay(null, resources))
-                        adapter.add(ViewName.makeDisplay("", resources))
-                        for (s in it) {
-                            // Don't add the empty name again
-                            if (s.isNotEmpty())
-                                adapter.add(ViewName.makeDisplay(s, resources))
-                        }
-                        adapter.notifyDataSetChanged()
-                        val pos = adapter.getPosition(filter).coerceAtLeast(0)
-                        viewSpinner.setSelection(pos)
+        }
+        // Create the adaptor for the spinner and set it
+        val adapter = ArrayAdapter<ViewName>(view.context, android.R.layout.simple_spinner_item).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        viewSpinner.adapter = adapter
+        // Add the view names to the spinner
+        viewModel.repo.getViewNames().also {live ->
+            // Observe the view names for changes
+            live.observe(viewLifecycleOwner) {list ->
+                // Set the current set of view names
+                adapter.clear()
+                list?.let {
+                    val resources = requireContext().resources
+                    adapter.add(ViewName.makeDisplay(null, resources))
+                    adapter.add(ViewName.makeDisplay("", resources))
+                    for (s in it) {
+                        // Don't add the empty name again
+                        if (s.isNotEmpty())
+                            adapter.add(ViewName.makeDisplay(s, resources))
                     }
+                    adapter.notifyDataSetChanged()
+                    val pos = adapter.getPosition(filter).coerceAtLeast(0)
+                    viewSpinner.setSelection(pos)
                 }
             }
         }

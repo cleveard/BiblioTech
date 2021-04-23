@@ -46,7 +46,7 @@ class BookRepository private constructor(context: Context) {
          * @param filter A filter to restrict the rows
          * @return The number of rows changed in a LiveData
          */
-        suspend fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
+        fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
     }
 
     companion object {
@@ -121,7 +121,7 @@ class BookRepository private constructor(context: Context) {
         }
 
         /** inheritDoc **/
-        override suspend fun countBitsLive(
+        override fun countBitsLive(
             bits: Int,
             value: Int,
             include: Boolean,
@@ -158,7 +158,7 @@ class BookRepository private constructor(context: Context) {
         }
 
         /** inheritDoc **/
-        override suspend fun countBitsLive(
+        override fun countBitsLive(
             bits: Int,
             value: Int,
             include: Boolean,
@@ -350,7 +350,7 @@ class BookRepository private constructor(context: Context) {
     /**
      * Get the list of views from the database
      */
-    suspend fun getViewNames(): LiveData<List<String>> {
+    fun getViewNames(): LiveData<List<String>> {
         return db.getViewDao().getViewNames()
     }
 
@@ -374,6 +374,15 @@ class BookRepository private constructor(context: Context) {
      */
     suspend fun findViewByName(name: String): ViewEntity? {
         return db.getViewDao().findByName(name)
+    }
+
+    /**
+     * Find a view by name
+     * @param name The name of the view
+     * @return LiveData of a list containint the view
+     */
+    fun findViewByNameLive(name: String): LiveData<List<ViewEntity>> {
+        return db.getViewDao().findByNameLive(name)
     }
 
     /**
