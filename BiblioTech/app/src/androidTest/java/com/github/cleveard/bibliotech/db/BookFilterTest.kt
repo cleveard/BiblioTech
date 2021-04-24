@@ -44,6 +44,9 @@ class BookFilterTest {
         dayFormat = DateFormat.getDateInstance(DateFormat.SHORT, locale)
         monthFormat = SimpleDateFormat(context.resources.getString(R.string.month_year_pattern), locale)
         yearFormat = SimpleDateFormat("y", locale)
+        runBlocking {
+            repo.clearUndo()
+        }
     }
 
     @After

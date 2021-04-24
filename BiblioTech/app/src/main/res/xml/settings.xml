@@ -8,5 +8,10 @@
             android:title="@string/undo_levels"
             android:defaultValue="20"/>
 
+        <com.github.cleveard.bibliotech.ui.settings.ButtonPreference
+            android:key="undo_clear"
+            android:title="@string/undo_clear"
+            android:defaultValue="0"/>
+
     </PreferenceCategory>
 </PreferenceScreen>

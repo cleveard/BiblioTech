@@ -354,7 +354,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     var maxUndoId: Int = -1
         private set
     /** Maximum number of undo levels we keep in the database */
-    var maxUndoLevels = 20
+    var maxUndoLevels = BookDatabase.UNDO_LEVEL_INITIAL
         private set
     /** Undo id that triggers resetting undo ids in the database */
     var resetUndoAt = Int.MAX_VALUE - 10
@@ -725,51 +725,122 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param maxLevels The new maximum
      * @param resetThreshold The threshold to reset undo ids
      */
-    suspend fun setMaxUndoLevels(maxLevels: Int, resetThreshold: Int = 0) {
-        // Start a transaction to handle multi-threading issues
-        db.withTransaction {
-            // Make sure undo is initialized
-            initUndo()
-            // Did levels change
-            if (maxLevels != maxUndoLevels) {
-                // Yes, make sure we aren't recording
-                if (started > 0)
-                    throw IllegalStateException("Cannot set undo levels while recording")
-                // We are changing the number of levels
-                maxUndoLevels = maxLevels
-                // First delete undoes from oldest to newest to satisfy the number of levels
-                val deleteUndo = maxUndoId - maxUndoLevels
-                if (deleteUndo >= minUndoId) {
-                    // Need to delete some levels, but not beyond undoId
-                    val limit = deleteUndo.coerceAtMost(undoId)
-                    if (limit >= minUndoId) {
-                        // Delete the levels and reset the minUndoId
-                        discard(false, minUndoId, limit)
-                        minUndoId = limit + 1
-                    }
-                }
-
-                // Next delete the redoes from newest to oldest to satisfy the number of levels
-                val deleteRedo = minUndoId + maxUndoLevels
-                if (deleteRedo <= maxUndoId) {
-                    // Delete the newer redoes
-                    discard(true, deleteRedo, maxUndoId)
-                    maxUndoId = deleteRedo - 1
-                }
-                // If we delete everything, then reset the min, max and undo id
-                if (maxUndoId < minUndoId) {
-                    minUndoId = 1
-                    maxUndoId = 0
-                    undoId = 0
+    @Transaction
+    open suspend fun setMaxUndoLevels(maxLevels: Int, resetThreshold: Int = 0) {
+        // Make sure undo is initialized
+        initUndo()
+        // Did levels change
+        if (maxLevels != maxUndoLevels) {
+            // Yes, make sure we aren't recording
+            if (started > 0)
+                throw IllegalStateException("Cannot set undo levels while recording")
+            // We are changing the number of levels
+            maxUndoLevels = maxLevels
+            // First delete undoes from oldest to newest to satisfy the number of levels
+            val deleteUndo = maxUndoId - maxUndoLevels
+            if (deleteUndo >= minUndoId) {
+                // Need to delete some levels, but not beyond undoId
+                val limit = deleteUndo.coerceAtMost(undoId)
+                if (limit >= minUndoId) {
+                    // Delete the levels and reset the minUndoId
+                    discard(false, minUndoId, limit)
+                    minUndoId = limit + 1
                 }
             }
-            // Set the reset threshold if it isn't 0
-            if (resetThreshold != 0)
-                resetUndoAt = resetThreshold
-            // If the reset threshold is too small, set a big value
-            if (resetUndoAt <= maxUndoLevels)
-                resetUndoAt = Int.MAX_VALUE - 10
+
+            // Next delete the redoes from newest to oldest to satisfy the number of levels
+            val deleteRedo = minUndoId + maxUndoLevels
+            if (deleteRedo <= maxUndoId) {
+                // Delete the newer redoes
+                discard(true, deleteRedo, maxUndoId)
+                maxUndoId = deleteRedo - 1
+            }
+            // If we delete everything, then reset the min, max and undo id
+            if (maxUndoId < minUndoId) {
+                minUndoId = 1
+                maxUndoId = 0
+                undoId = 0
+            }
         }
+        // Set the reset threshold if it isn't 0
+        if (resetThreshold != 0)
+            resetUndoAt = resetThreshold
+        // If the reset threshold is too small, set a big value
+        if (resetUndoAt <= maxUndoLevels)
+            resetUndoAt = Int.MAX_VALUE - 10
+    }
+
+    /**
+     * Clear all of the undo info in the database
+     */
+    @Transaction
+    open suspend fun clear() {
+        // We clear without assuming the undo data is consistent.
+        // We delete all of the undo transactions and operations
+        // Then clear all of the links that mistakenly linked to
+        // hidden entities. Then clear all of the hidden entities
+
+        // Delete all of the undo info
+        delete(Int.MIN_VALUE, Int.MAX_VALUE)
+
+        // Delete author links for hidden books
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_BOOK_ID_COLUMN IN (
+            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete tag links for hidden books
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_BOOK_ID_COLUMN IN (
+            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete category links for hidden books
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_BOOK_ID_COLUMN IN (
+            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete author links for hidden authors
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN IN (
+            | SELECT $AUTHORS_ID_COLUMN FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete tag links for hidden tags
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN IN (
+            | SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete category links for hidden categories
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN IN (
+            | SELECT $CATEGORIES_ID_COLUMN FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+
+        // Delete hidden books
+        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )"))
+
+        // Delete hidden authors
+        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) != 0 )"))
+
+        // Delete hidden tags
+        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) != 0 )"))
+
+        // Delete hidden categories
+        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) != 0 )"))
+
+        // Reset the undo ids
+        minUndoId = 1
+        maxUndoId = 0
+        undoId = 0
     }
 
     /**

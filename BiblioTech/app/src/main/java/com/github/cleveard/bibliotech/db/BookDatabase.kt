@@ -179,6 +179,8 @@ abstract class BookDatabase : RoomDatabase() {
         const val UNDO_LEVEL_MIN = 0
         /** Undo levels preference maximum value */
         const val UNDO_LEVEL_MAX = 100
+        /** Clear Undo preference key */
+        const val UNDO_CLEAR_KEY = "undo_clear"
         private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
             when (key) {
                 UNDO_LEVEL_KEY -> MainScope().launch {

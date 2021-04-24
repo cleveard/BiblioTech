@@ -124,6 +124,7 @@ class UndoRedoDaoTest {
 
     @Test fun testBookFlagsWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestBookFlags()
         }
     }
@@ -145,6 +146,7 @@ class UndoRedoDaoTest {
 
     @Test fun testBookFlagsFilteredWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestBookFlagsFiltered()
         }
     }
@@ -159,7 +161,7 @@ class UndoRedoDaoTest {
 
     private suspend fun BookDbTracker.changeTagBits(message: String, operation: Boolean?, mask: Int, index: Int?, count: Int, filter: BookFilter.BuiltFilter?, vararg values: Int) {
         val tag = index?.let { tables.tagEntities[index] }
-        val changed = repo.tagFlags.changeBits(operation, mask, tag?.id, filter)?: 0
+        val changed = repo.tagFlags.changeBits(operation, mask, tag?.id, filter)
         assertWithMessage(message).that(changed).isEqualTo(count)
         if (changed > 0) {
             if (tag != null) {
@@ -182,6 +184,7 @@ class UndoRedoDaoTest {
 
     @Test fun testTagFlagsWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestTagFlags()
         }
     }
@@ -246,6 +249,7 @@ class UndoRedoDaoTest {
 
     @Test fun testGetBooksWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestGetBooks()
         }
     }
@@ -280,6 +284,7 @@ class UndoRedoDaoTest {
 
     @Test fun testGetBooksFilteredWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestGetBooksFiltered()
         }
     }
@@ -320,6 +325,7 @@ class UndoRedoDaoTest {
 
     @Test fun testGetBookListWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestGetBookList()
         }
     }
@@ -346,6 +352,7 @@ class UndoRedoDaoTest {
 
     @Test fun testGetBookListFilteredWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestGetBookListFiltered()
         }
     }
@@ -378,6 +385,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddDeleteBookEntityWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddDeleteBookEntity(BookDbTracker.addBooks(repo,2564621L, "AddBooks Delete", 20))
         }
     }
@@ -437,6 +445,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddDeleteBookEntityEmptyFilterWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddDeleteBookEntityEmptyFilter()
         }
     }
@@ -495,6 +504,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddDeleteBookEntityWithFilterWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddDeleteBookEntityWithFilter()
         }
     }
@@ -557,6 +567,7 @@ class UndoRedoDaoTest {
 
     @Test fun testUpdateBookEntityWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestUpdateBookEntity()
         }
     }
@@ -589,6 +600,7 @@ class UndoRedoDaoTest {
 
     @Test(expected = SQLiteConstraintException::class) fun testUpdateFailsWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestUpdateFails()
         }
     }
@@ -617,6 +629,7 @@ class UndoRedoDaoTest {
 
     @Test fun testGetTagsWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestGetTags()
         }
     }
@@ -689,6 +702,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddUpdateDeleteWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddUpdateDelete()
         }
     }
@@ -925,6 +939,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddRemoveTagsFromBooksWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddRemoveTagsFromBooks()
         }
     }
@@ -943,6 +958,7 @@ class UndoRedoDaoTest {
 
     @Test fun testAddRemoveTagsFromBooksFilteredWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestAddRemoveTagsFromBooksFiltered()
         }
     }
@@ -961,6 +977,7 @@ class UndoRedoDaoTest {
 
     @Test fun testViewWithUndo() {
         runBlocking {
+            repo.setMaxUndoLevels(20, 25)
             doTestView()
         }
     }

@@ -132,9 +132,7 @@ class UndoTracker(
      */
     suspend fun clearUndo(message: String) {
         // Clear the transactions by setting the max levels to 0 and then back to what it was before
-        val l = dao.maxUndoLevels
-        dao.setMaxUndoLevels(0)
-        dao.setMaxUndoLevels(l)
+        dao.clear()
         // Clear the tracked list
         transactions.clear()
         assertWithMessage("Clear Undo %s", message).apply {

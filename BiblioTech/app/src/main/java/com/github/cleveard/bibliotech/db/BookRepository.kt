@@ -403,9 +403,10 @@ class BookRepository private constructor(context: Context) {
     /**
      * Set the maximum undo levels kept in the data base
      * @param level The new maximum
+     * @param reset Undo id where ids are reset to start at 1
      */
-    suspend fun setMaxUndoLevels(level: Int) =
-        db.getUndoRedoDao().setMaxUndoLevels(level)
+    suspend fun setMaxUndoLevels(level: Int, reset:Int = 0) =
+        db.getUndoRedoDao().setMaxUndoLevels(level, reset)
 
     /**
      * Start recording undo
@@ -426,6 +427,11 @@ class BookRepository private constructor(context: Context) {
     /** Get the list of undo transaction */
     fun getUndoList(): LiveData<List<UndoTransactionEntity>> {
         return db.getUndoRedoDao().getTransactionsLive()
+    }
+
+    /** Clear all undo */
+    suspend fun clearUndo() {
+        db.getUndoRedoDao().clear()
     }
 
     /**

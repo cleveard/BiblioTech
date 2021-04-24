@@ -190,5 +190,8 @@
     <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="undo_levels">Undo Levels</string>
     <string name="undo_level_summary">Current Levels: %1$d</string>
+    <string name="undo_clear">Clear Undo</string>
     <string name="import_undo_desc">Import</string>
+    <string name="can_clear_undo">\nIs it OK to clear all undo information?</string>
+    <string name="undo_clear_summary">Press to clear all undo information.</string>
 </resources>
