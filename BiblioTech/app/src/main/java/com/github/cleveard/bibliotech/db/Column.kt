@@ -338,7 +338,7 @@ abstract class ColumnDataDescriptor(
         ): Cursor {
             val hasConstraint = !constraint.isNullOrEmpty()
             val where = if (!table.flagColumn.isNullOrEmpty() || hasConstraint) " WHERE" else ""
-            val flag = if (!table.flagColumn.isNullOrEmpty()) " ( ( ${table.flagColumn} ) & ${table.flagValue} ) = 0" else ""
+            val flag = if (!table.flagColumn.isNullOrEmpty()) " ( ( ${table.flagColumn} ) & ${table.flagValue} ) = 0${if (hasConstraint) " AND" else ""}" else ""
             val filter = if (hasConstraint) " _result LIKE ? ESCAPE '\\'" else ""
             val groupBy = if (group) " GROUP BY _result" else ""
             val query = "SELECT ${table.idColumn} as _id, $resultName AS _result FROM ${table.name}$where$flag$filter$groupBy ORDER BY _result"
