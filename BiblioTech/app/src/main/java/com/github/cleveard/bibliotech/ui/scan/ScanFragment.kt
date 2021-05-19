@@ -465,8 +465,8 @@ class ScanFragment : Fragment() {
          */
         fun getQuery(): Cursor {
             // Extract the token at the end of the selection
-            val edit = box.textView
-            val token = edit.text.toString().trim { it <= ' ' }
+            val edit = box.chipInput
+            val token = edit.value.trim { it <= ' ' }
             // return the query string
             return ColumnDataDescriptor.buildAutoCompleteCursor(
                 tagViewModel.repo, BookDatabase.tagsTable,
@@ -543,14 +543,12 @@ class ScanFragment : Fragment() {
             }
         }
 
-        (box.textView as AutoCompleteTextView).let {
-            it.threshold = 1
-            // If the view is an AutoComplete view, then add a chip when an item is selected
-            it.onItemClickListener =
-                AdapterView.OnItemClickListener { _, _, _, _ ->
-                    box.onCreateChipAction()
-                }
-        }
+        box.chipInput.autoCompleteThreshold = 1
+        // If the view is an AutoComplete view, then add a chip when an item is selected
+        box.chipInput.autoCompleteClickListener =
+            AdapterView.OnItemClickListener { _, _, _, _ ->
+                box.onCreateChipAction()
+            }
 
         scanViewModel.viewModelScope.launch {
             tags = tagViewModel.repo.getTagsLive().also {

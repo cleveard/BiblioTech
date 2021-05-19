@@ -11,8 +11,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.EditText
-import android.widget.TextView
+import android.widget.*
 import androidx.core.view.children
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -134,6 +133,211 @@ open class ChipBox: FlexboxLayout {
     }
 
     /**
+     * Adapter used to get input for a chip value
+     * @param view The input view
+     */
+    open class InputAdapter(val view: View? = null) {
+        /** The current input value */
+        open var value: String = ""
+
+        /** Threshold for an auto complete edit text */
+        open var autoCompleteThreshold: Int = 1
+
+        /** Initialize the adapter */
+        open fun initialize() {}
+
+        /** Listener for an auto complete edit text */
+        @Suppress("UNUSED_PARAMETER")
+        open var autoCompleteClickListener: AdapterView.OnItemClickListener?
+            get() = null
+            set(v) {}
+
+        /** Adapter for an auto complete edit text */
+        open val autoCompleteAdapter: ListAdapter?
+            get() = null
+
+        /**
+         * Set the auto complete adapter
+         */
+        open fun <T> setAutoCompleteAdapter(adapter: T?)
+            where T: ListAdapter, T: Filterable {}
+
+        /**
+         * Set the action of an edit text
+         * This sets the action to imeAction and saves the
+         * previous action. When the imeAction is handled
+         * the action is reset to the saved action
+         */
+        open fun setIMEAction() {}
+
+        /**
+         * Show a close icon for the input
+         * @param show True to show the icon. False to hide it
+         */
+        open fun showCloseIcon(show: Boolean) {}
+
+        /**
+         * Request focus for the input
+         */
+        open fun requestFocus() {}
+
+        /**
+         * Does the input have focus
+         */
+        open fun hasFocus(): Boolean = view?.hasFocus() == true
+
+        /**
+         * Select all of the input in the view
+         */
+        open fun selectAll() {}
+    }
+
+    /**
+     * Set the action of an edit text
+     * @param textView The edit text for the adapter
+     * This sets the action to imeAction and saves the
+     * previous action. When the imeAction is handled
+     * the action is reset to the saved action
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private open inner class EditTextAdapter(val textView: EditText): InputAdapter(textView) {
+        /**
+         * The Main Action assigned to the edit text
+         */
+        private var mainAction: Int = 0
+
+        /**
+         * True if the edit text action is the main action
+         */
+        private var isMainAction: Boolean = true
+
+        /**
+         * Listener for text changes on the EditText
+         * This listener changes the IME action of the EditText when the contents is not empty
+         */
+        private var textWatcher: TextWatcher = object: TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+            }
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+            }
+
+            override fun afterTextChanged(s: Editable?) {
+                setIMEAction()
+            }
+        }
+
+        override fun initialize() {
+            // Set a focus listener to change the soft keyboard action
+            textView.setOnFocusChangeListener { view, hasFocus ->
+                if (hasFocus)
+                    setIMEAction()
+                else
+                    cancelEdit()
+                delegate.onEditorFocusChange(this@ChipBox, view, hasFocus)
+            }
+            textView.setOnTouchListener { _, e ->
+                if (editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
+                    if (textView.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
+                        cancelEdit()
+                        return@setOnTouchListener true
+                    }
+                }
+                false
+            }
+            // Don't allow the edit text to use InputType null
+            if (textView.inputType == InputType.TYPE_NULL)
+                textView.inputType = InputType.TYPE_CLASS_TEXT
+            textView.addTextChangedListener(textWatcher)
+            // Set the Editable for the EditText
+            textView.text = SpannableStringBuilder()
+            // Set the action listener for the edit text
+            textView.setOnEditorActionListener { v, action, keyEvent ->
+                // If the action is the create chip action, and the text is not empty
+                // create a chip, otherwise call the client action listener
+                if (action == imeAction) {
+                    if (value.trim { it <= ' ' }.isNotEmpty())
+                        return@setOnEditorActionListener onCreateChipAction()
+                    else if (cancelEdit())
+                        return@setOnEditorActionListener true
+                }
+                delegate.onEditorAction(this@ChipBox, v, action, keyEvent)
+            }
+        }
+
+        /** @inheritDoc */
+        override var value: String
+            get() = textView.text.toString()
+            set(v) {
+                textView.text.clear()
+                textView.text.append(v)
+            }
+
+        /** @inheritDoc */
+        override fun setIMEAction() {
+            // Set the action for the edit text. If the text
+            val options = textView.imeOptions
+            var newOptions = options
+            if (isMainAction)
+                mainAction = newOptions and EditorInfo.IME_MASK_ACTION
+            newOptions = newOptions and EditorInfo.IME_MASK_ACTION.inv()
+            if (textView.text.toString().isEmpty() && editingChip == null) {
+                newOptions += mainAction
+                isMainAction = true
+            } else {
+                newOptions += imeAction
+                isMainAction = false
+            }
+
+            if (options != newOptions) {
+                val inputType = textView.inputType
+                textView.inputType = InputType.TYPE_NULL
+                textView.imeOptions = newOptions
+                textView.inputType = inputType
+            }
+        }
+
+        /** @inheritDoc */
+        override fun showCloseIcon(show: Boolean) {
+            if (show)
+                textView.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.ic_menu_close_clear_cancel, 0, 0, 0)
+            else
+                textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+        }
+
+        /** @inheritDoc */
+        override fun requestFocus() {
+            textView.requestFocus()
+        }
+
+        /** @inheritDoc */
+        override fun selectAll() {
+            textView.selectAll()
+        }
+    }
+
+    private open inner class AutoCompleteAdapter(val auto: AutoCompleteTextView): EditTextAdapter(auto) {
+        /** @inheritDoc */
+        override var autoCompleteThreshold: Int
+            get() = auto.threshold
+            set(value) { auto.threshold = value }
+
+        /** @inheritDoc */
+        override var autoCompleteClickListener: AdapterView.OnItemClickListener?
+            get() = auto.onItemClickListener
+            set(value) { auto.onItemClickListener = value }
+
+        /** @inheritDoc */
+        override val autoCompleteAdapter: ListAdapter?
+            get() = auto.adapter
+
+        /** @inheritDoc */
+        override fun <T> setAutoCompleteAdapter(adapter: T?) where T : ListAdapter, T : Filterable {
+            auto.setAdapter(adapter)
+        }
+    }
+
+    /**
      * @inheritDoc
      */
     constructor(context: Context) :
@@ -158,28 +362,28 @@ open class ChipBox: FlexboxLayout {
     /**
      * The edit text
      */
-    private lateinit var _textView: EditText
-    val textView: EditText
+    private var _chipInput: InputAdapter? = null
+    var chipInput: InputAdapter
         get() {
-            if (this::_textView.isInitialized)
-                return _textView
-            return setupChipBox()
+            return _chipInput?: setupChipBox()
         }
-
-    /**
-     * The Main Action assigned to the edit text
-     */
-    private var mainAction: Int = 0
+        set(v) {
+            // Get previous edit position
+            val index = indexOfChild(_chipInput?.view).let { if (it < 0) childCount else it }
+            // Remove the previous edit view
+            _chipInput?.view?.let { removeView(it) }
+            // Set the new input adapter
+            _chipInput = v
+            // Position the new view
+            moveView(v.view, index)
+            // Set the action for the edit text
+            v.setIMEAction()
+        }
 
     /**
      * The action used to trigger a new chip
      */
     private var imeAction: Int = EditorInfo.IME_ACTION_DONE
-
-    /**
-     * True if the edit text action is the main action
-     */
-    private var isMainAction: Boolean = true
 
     /**
      * True to make the chip box keep text in chips unique
@@ -253,8 +457,7 @@ open class ChipBox: FlexboxLayout {
 
     init {
         delegate.scope.launch {
-            if (!this@ChipBox::_textView.isInitialized)
-                setupChipBox()
+            chipInput = setupChipBox()
         }
     }
 
@@ -267,22 +470,6 @@ open class ChipBox: FlexboxLayout {
                 if (v is Chip)
                     yield(v.text.toString())
             }
-        }
-    }
-
-    /**
-     * Listener for text changes on the EditText
-     * This listener changes the IME action of the EditText when the contents is not empty
-     */
-    private var textWatcher: TextWatcher = object: TextWatcher {
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-        }
-
-        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-        }
-
-        override fun afterTextChanged(s: Editable?) {
-            setAction(textView)
         }
     }
 
@@ -310,58 +497,26 @@ open class ChipBox: FlexboxLayout {
      * Setup and return the edit text
      */
     @SuppressLint("ClickableViewAccessibility")
-    private fun setupChipBox(): EditText {
+    private fun setupChipBox(): InputAdapter {
         // Find an edit text in the flex box if there is one
         // Pick the last one
-        var edit: EditText? = null
+        var edit: View? = null
         for (v in children) {
             if (v is EditText)
                 edit = v
-        }
-        // Create an edit text if we didn't find one
-        edit = edit ?: EditText(context)
-        _textView = edit
-        // Set a focus listener to change the soft keyboard action
-        edit.setOnFocusChangeListener { view, hasFocus ->
-            if (hasFocus)
-                setAction(view as EditText)
-            else
-                cancelEdit()
-            delegate.onEditorFocusChange(this, view, hasFocus)
-        }
-        edit.setOnTouchListener {_, e ->
-            if (editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
-                if (edit.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
-                    cancelEdit()
-                    return@setOnTouchListener true
-                }
-            }
-            false
-        }
-        // Don't allow the edit text to use InputType null
-        if (edit.inputType == InputType.TYPE_NULL)
-            edit.inputType = InputType.TYPE_CLASS_TEXT
-        // Move the edit text to the end of the chip box
-        moveView(edit)
-        edit.addTextChangedListener(textWatcher)
-        // Set the Editable for the EditText
-        edit.text = SpannableStringBuilder()
-        // Set the action for the edit text
-        setAction(edit)
-        // Set the action listener for the edit text
-        edit.setOnEditorActionListener { v, action, keyEvent ->
-            // If the action is the create chip action, and the text is not empty
-            // create a chip, otherwise call the client action listener
-            if (action == imeAction) {
-                if (textView.text.toString().trim { it <= ' ' }.isNotEmpty())
-                    return@setOnEditorActionListener onCreateChipAction()
-                else if (cancelEdit())
-                    return@setOnEditorActionListener true
-            }
-            delegate.onEditorAction(this, v, action, keyEvent)
+            else if (v is AutoCompleteTextView)
+                edit = v
         }
 
-        return edit
+        // Create input for the view we found or didn't find
+        return when {
+            edit == null -> InputAdapter()
+            edit is AutoCompleteTextView -> AutoCompleteAdapter(edit)
+            else -> EditTextAdapter(edit as EditText)
+        }.apply {
+            chipInput = this
+            initialize()
+        }
     }
 
     /**
@@ -369,12 +524,10 @@ open class ChipBox: FlexboxLayout {
      */
     fun onCreateChipAction(): Boolean {
         delegate.scope.launch {
-            val text = textView.text.toString()
+            val text = chipInput.value
             val trim = text.trim { it <= ' ' }
             if (text != trim) {
-                textView.text.clear()
-                @Suppress("BlockingMethodInNonBlockingContext")
-                textView.text.append(trim)
+                chipInput.value = trim
             }
             editingChip?.let {
                 if (it.text == trim || trim.isEmpty()) {
@@ -389,42 +542,12 @@ open class ChipBox: FlexboxLayout {
             editingChip = null
             createChip(this, trim)?.let {newChip ->
                 chip?.let {oldChip ->
-                    textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+                    chipInput.showCloseIcon(false)
                     delegate.onChipReplaced(this@ChipBox, newChip, oldChip, this)
                 }?: delegate.onChipAdded(this@ChipBox, newChip, this)
             }
         }
         return true
-    }
-
-    /**
-     * Set the action of an edit text
-     * @param edit The edit text that is changed
-     * This sets the action to imeAction and saves the
-     * previous action. When the imeAction is handled
-     * the action is reset to the saved action
-     */
-    private fun setAction(edit: EditText) {
-        // Set the action for the edit text. If the text
-        val options = edit.imeOptions
-        var newOptions = options
-        if (isMainAction)
-            mainAction = newOptions and EditorInfo.IME_MASK_ACTION
-        newOptions = newOptions and EditorInfo.IME_MASK_ACTION.inv()
-        if (edit.text.toString().isEmpty() && editingChip == null) {
-            newOptions += mainAction
-            isMainAction = true
-        } else {
-            newOptions += imeAction
-            isMainAction = false
-        }
-
-        if (options != newOptions) {
-            val inputType = edit.inputType
-            edit.inputType = InputType.TYPE_NULL
-            edit.imeOptions = newOptions
-            edit.inputType = inputType
-        }
     }
 
     /**
@@ -434,7 +557,8 @@ open class ChipBox: FlexboxLayout {
      * @param inPos The new position. If inPos is < 0 or > childCount, the
      *              view is moved/added to the end position
      */
-    protected open fun moveView(view: View, inPos: Int = -1) {
+    protected open fun moveView(view: View?, inPos: Int = -1) {
+        view?: return
         // Get the current position
         val pos = indexOfChild(view)
         // Get the new position
@@ -500,7 +624,7 @@ open class ChipBox: FlexboxLayout {
             chip.setOnClickListener(onChipClickListener)
 
             // Add the chip where the edit text is
-            var index = indexOfChild(textView)
+            var index = indexOfChild(chipInput.view)
             if (index < 0)
                 index = childCount
             // Last check that the chip index is unique
@@ -517,9 +641,9 @@ open class ChipBox: FlexboxLayout {
             addView(chip, index)
             // Move the edit text back to the end of the chip box
             // and clear its text
-            moveView(textView)
-            textView.text.clear()
-            textView.requestFocus()
+            moveView(chipInput.view)
+            chipInput.value = ""
+            chipInput.requestFocus()
             if (!isBatched)
                 setValueSequence()
             // We processed the chip
@@ -542,14 +666,13 @@ open class ChipBox: FlexboxLayout {
             return false
 
         // Move the edit text after the chip
-        moveView(textView, index + 1)
-        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.ic_menu_close_clear_cancel, 0, 0, 0)
+        moveView(chipInput.view, index + 1)
+        chipInput.showCloseIcon(true)
         // Set the edit text to the chip text
-        textView.text.clear()
-        textView.text.append(chip.text)
-        setAction(textView)
-        textView.requestFocus()
-        textView.selectAll()
+        chipInput.value = chip.text.toString()
+        chipInput.setIMEAction()
+        chipInput.requestFocus()
+        chipInput.selectAll()
         // Remove the chip
         removeViewAt(index)
         editingChip = chip
@@ -566,15 +689,15 @@ open class ChipBox: FlexboxLayout {
         editingChip = null
 
         // Put the old chip where the EditText is
-        var index = indexOfChild(textView)
+        var index = indexOfChild(chipInput.view)
         if (index < 0)
             index = childCount
         addView(oldChip, index)
         // Move the EditText to the end
-        moveView(textView)
-        textView.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+        moveView(chipInput.view)
+        chipInput.showCloseIcon(false)
         // Clear the text
-        textView.text.clear()
+        chipInput.value = ""
         return true
     }
 

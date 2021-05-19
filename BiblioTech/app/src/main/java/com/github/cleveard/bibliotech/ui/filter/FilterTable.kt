@@ -90,7 +90,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun changeColumn() {
             // If value has focus, redo autocomplete
-            if (tagBox.textView.hasFocus())
+            if (tagBox.chipInput.hasFocus())
                 valueFocusChange(true)
             // Create the new predicate map.
             val newColumn = column
@@ -130,8 +130,8 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun getQuery(): Cursor {
             // Extract the token at the end of the selection
-            val edit = tagBox.textView
-            val token = edit.text.toString().trim { it <= ' ' }
+            val edit = tagBox.chipInput
+            val token = edit.value.trim { it <= ' ' }
             // return the query string
             return column.desc.getAutoCompleteCursor(BookRepository.repo, token)
         }
@@ -142,7 +142,7 @@ class FilterTable(private val fragment: Fragment) {
          */
         fun valueFocusChange(hasFocus: Boolean) {
             // Get the value field
-            val edit = tagBox.textView as AutoCompleteTextView
+            val edit = tagBox.chipInput
             if (hasFocus) {
                 // No autocomplete, don't do anything
                 if (!column.desc.hasAutoComplete())
@@ -171,7 +171,7 @@ class FilterTable(private val fragment: Fragment) {
                     adapter.setFilterQueryProvider { getQuery() }
 
                     // Set the adapter on the text view
-                    edit.setAdapter(adapter)
+                    edit.setAutoCompleteAdapter(adapter)
                     // Flag that the job is done
                     autoCompleteJob = null
                 }
@@ -182,7 +182,7 @@ class FilterTable(private val fragment: Fragment) {
                     autoCompleteJob = null
                 }
                 // Clear the adapter
-                edit.setAdapter(null)
+                edit.setAutoCompleteAdapter(null)
             }
         }
 
@@ -220,7 +220,7 @@ class FilterTable(private val fragment: Fragment) {
             }
             set(value) {
                 // Form the value text by joining the values
-                tagBox.textView.text.clear()
+                tagBox.chipInput.value = ""
                 tagBox.setChips(booksViewModel.viewModelScope, value.asSequence())
             }
 
@@ -345,10 +345,9 @@ class FilterTable(private val fragment: Fragment) {
     private fun connectListeners(row: Int, clear: Boolean = false) {
         // Get the rows
         val rowItem = rows[row]
-        val view: View
 
         // Add remove row listener
-        view = rowItem.topRow.findViewById(R.id.action_remove_filter_row)
+        val view: View = rowItem.topRow.findViewById(R.id.action_remove_filter_row)
         view.setOnClickListener(if (clear) null else removeRowListener)
         view.tag = row
 
@@ -366,19 +365,17 @@ class FilterTable(private val fragment: Fragment) {
         val chips = rowItem.valueRow.findViewById<ChipBox>(R.id.filter_value)
         if (clear) {
             chips.delegate = object: ChipBox.Delegate {}
-            (chips.textView as AutoCompleteTextView).onItemClickListener = null
+            chips.chipInput.autoCompleteClickListener = null
         } else {
             chips.delegate = rowItem
-            (chips.textView as AutoCompleteTextView).let {
-                it.threshold = 1
-                // If the view is an AutoComplete view, then add a chip when an item is selected
-                it.onItemClickListener =
-                    AdapterView.OnItemClickListener { _, _, _, _ ->
-                        chips.onCreateChipAction()
-                    }
-            }
+            chips.chipInput.autoCompleteThreshold = 1
+            // If the view is an AutoComplete view, then add a chip when an item is selected
+            chips.chipInput.autoCompleteClickListener =
+                AdapterView.OnItemClickListener { _, _, _, _ ->
+                    chips.onCreateChipAction()
+                }
         }
-        chips.textView.tag = row
+        chips.chipInput.view?.tag = row
     }
 
     /**

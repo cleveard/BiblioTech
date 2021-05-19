@@ -375,10 +375,9 @@ internal open class BooksAdapter(
                     view = LayoutInflater.from(itemView.context).inflate(detailLayout, itemView as ViewGroup)
                     itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
                         it.delegate = chipBoxDelegate
-                        val edit = it.textView as AutoCompleteTextView
-                        edit.threshold = 1
+                        it.chipInput.autoCompleteThreshold = 1
                         // Add a chip when an item is selected
-                        edit.onItemClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
+                        it.chipInput.autoCompleteClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
                             it.onCreateChipAction()
                         }
                     }
