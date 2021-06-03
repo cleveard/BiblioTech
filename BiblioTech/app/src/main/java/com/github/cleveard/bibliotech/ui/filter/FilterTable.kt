@@ -171,7 +171,7 @@ class FilterTable(private val fragment: Fragment) {
                     adapter.setFilterQueryProvider { getQuery() }
 
                     // Set the adapter on the text view
-                    edit.setAutoCompleteAdapter(adapter)
+                    edit.autoCompleteAdapter = ChipBox.SelectCursorItemAdapter(adapter)
                     // Flag that the job is done
                     autoCompleteJob = null
                 }
@@ -182,7 +182,7 @@ class FilterTable(private val fragment: Fragment) {
                     autoCompleteJob = null
                 }
                 // Clear the adapter
-                edit.setAutoCompleteAdapter(null)
+                edit.autoCompleteAdapter = null
             }
         }
 

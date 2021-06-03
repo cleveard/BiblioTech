@@ -73,15 +73,12 @@
             app:layout_constraintStart_toStartOf="@+id/scan_title"
             app:layout_constraintTop_toBottomOf="@id/view_finder">
 
-            <AutoCompleteTextView
+            <Spinner
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:hint="@string/selected_tags"
-                android:imeOptions="actionNone"
                 android:dropDownWidth="160dp"
-                android:autofillHints=""
-                android:inputType="textCapWords">
-            </AutoCompleteTextView>
+                android:autofillHints="">
+            </Spinner>
 
         </com.github.cleveard.bibliotech.ui.widget.ChipBox>
 

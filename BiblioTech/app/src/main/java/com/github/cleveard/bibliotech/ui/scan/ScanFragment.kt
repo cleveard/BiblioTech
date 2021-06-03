@@ -464,17 +464,13 @@ class ScanFragment : Fragment() {
          * Get the auto complete query string for a column
          */
         fun getQuery(): Cursor {
-            // Extract the token at the end of the selection
-            val edit = box.chipInput
-            val token = edit.value.trim { it <= ' ' }
             // return the query string
             return ColumnDataDescriptor.buildAutoCompleteCursor(
                 tagViewModel.repo, BookDatabase.tagsTable,
-                TAGS_NAME_COLUMN, token
+                TAGS_NAME_COLUMN, ""
             )
         }
 
-        var autoCompleteJob: Job? = null
         box.delegate = object: ChipBox.Delegate {
             override val scope: CoroutineScope
                 get() = scanViewModel.viewModelScope
@@ -499,51 +495,9 @@ class ScanFragment : Fragment() {
                 tagViewModel.selection.selectAsync((chip as TagChip).tag.id, false)
             }
 
-            override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) {
-                // Get the value field
-                edit as AutoCompleteTextView
-                if (hasFocus) {
-                    // Setting focus, setup adapter and set it in the text view
-                    // This is done in a coroutine job and we use the job
-                    // to flag that the job is still active. When we lose focus
-                    // we cancel the job if it is still active
-                    autoCompleteJob = scanViewModel.viewModelScope.launch {
-                        // Get the cursor for the column, null means no auto complete
-                        val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
-                            getQuery()
-                        }
-
-                        // Get the adapter from the column description
-                        val adapter = SimpleCursorAdapter(
-                            context,
-                            R.layout.books_drawer_filter_auto_complete,
-                            cursor,
-                            arrayOf("_result"),
-                            intArrayOf(R.id.auto_complete_item),
-                            0
-                        )
-                        adapter.stringConversionColumn = cursor.getColumnIndex("_result")
-                        adapter.setFilterQueryProvider { getQuery() }
-
-                        // Set the adapter on the text view
-                        edit.setAdapter(adapter)
-                        // Flag that the job is done
-                        // Flag that the job is done
-                        autoCompleteJob = null
-                    }
-                } else {
-                    // If we lose focus and the set focus job isn't done, cancel it
-                    autoCompleteJob?.let {
-                        it.cancel()
-                        autoCompleteJob = null
-                    }
-                    // Clear the adapter
-                    edit.setAdapter(null)
-                }
-            }
+            override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) { }
         }
 
-        box.chipInput.autoCompleteThreshold = 1
         // If the view is an AutoComplete view, then add a chip when an item is selected
         box.chipInput.autoCompleteClickListener =
             AdapterView.OnItemClickListener { _, _, _, _ ->
@@ -551,6 +505,25 @@ class ScanFragment : Fragment() {
             }
 
         scanViewModel.viewModelScope.launch {
+            // Get the cursor for the column, null means no auto complete
+            val cursor = withContext(tagViewModel.repo.queryScope.coroutineContext) {
+                getQuery()
+            }
+
+            // Get the adapter from the column description
+            val adapter = SimpleCursorAdapter(
+                context,
+                R.layout.books_drawer_filter_auto_complete,
+                cursor,
+                arrayOf("_result"),
+                intArrayOf(R.id.auto_complete_item),
+                0
+            )
+            adapter.stringConversionColumn = cursor.getColumnIndex("_result")
+
+            // Set the adapter on the text view
+            box.chipInput.autoCompleteAdapter = ChipBox.SelectCursorItemAdapter(adapter)
+
             tags = tagViewModel.repo.getTagsLive().also {
                 it.observeForever(tagObserver)
             }

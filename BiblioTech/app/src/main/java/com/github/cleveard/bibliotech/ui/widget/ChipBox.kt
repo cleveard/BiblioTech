@@ -132,6 +132,27 @@ open class ChipBox: FlexboxLayout {
 
     }
 
+    /** Interface to select chip values */
+    interface SelectItemAdapter {
+        val adapter: Adapter
+        val count: Int
+        fun convertToString(position: Int): String
+    }
+
+    /**  SelectItemAdapter for a CursorAdapter */
+    open class SelectCursorItemAdapter(val cursorAdapter: CursorAdapter): SelectItemAdapter {
+        override val adapter: Adapter
+            get() = cursorAdapter
+
+        override val count: Int
+            get() = cursorAdapter.count
+
+        override fun convertToString(position: Int): String {
+            cursorAdapter.cursor.moveToPosition(position)
+            return cursorAdapter.convertToString(cursorAdapter.cursor).toString()
+        }
+    }
+
     /**
      * Adapter used to get input for a chip value
      * @param view The input view
@@ -143,9 +164,6 @@ open class ChipBox: FlexboxLayout {
         /** Threshold for an auto complete edit text */
         open var autoCompleteThreshold: Int = 1
 
-        /** Initialize the adapter */
-        open fun initialize() {}
-
         /** Listener for an auto complete edit text */
         @Suppress("UNUSED_PARAMETER")
         open var autoCompleteClickListener: AdapterView.OnItemClickListener?
@@ -153,14 +171,10 @@ open class ChipBox: FlexboxLayout {
             set(v) {}
 
         /** Adapter for an auto complete edit text */
-        open val autoCompleteAdapter: ListAdapter?
+        @Suppress("UNUSED_PARAMETER")
+        open var autoCompleteAdapter: SelectItemAdapter?
             get() = null
-
-        /**
-         * Set the auto complete adapter
-         */
-        open fun <T> setAutoCompleteAdapter(adapter: T?)
-            where T: ListAdapter, T: Filterable {}
+            set(v) {}
 
         /**
          * Set the action of an edit text
@@ -200,7 +214,7 @@ open class ChipBox: FlexboxLayout {
      * the action is reset to the saved action
      */
     @SuppressLint("ClickableViewAccessibility")
-    private open inner class EditTextAdapter(val textView: EditText): InputAdapter(textView) {
+    open class EditTextAdapter(val box: ChipBox, val textView: EditText): InputAdapter(textView) {
         /**
          * The Main Action assigned to the edit text
          */
@@ -227,19 +241,19 @@ open class ChipBox: FlexboxLayout {
             }
         }
 
-        override fun initialize() {
+        init {
             // Set a focus listener to change the soft keyboard action
             textView.setOnFocusChangeListener { view, hasFocus ->
                 if (hasFocus)
                     setIMEAction()
                 else
-                    cancelEdit()
-                delegate.onEditorFocusChange(this@ChipBox, view, hasFocus)
+                    box.cancelEdit()
+                box.delegate.onEditorFocusChange(box, view, hasFocus)
             }
             textView.setOnTouchListener { _, e ->
-                if (editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
+                if (box.editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
                     if (textView.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
-                        cancelEdit()
+                        box.cancelEdit()
                         return@setOnTouchListener true
                     }
                 }
@@ -255,13 +269,13 @@ open class ChipBox: FlexboxLayout {
             textView.setOnEditorActionListener { v, action, keyEvent ->
                 // If the action is the create chip action, and the text is not empty
                 // create a chip, otherwise call the client action listener
-                if (action == imeAction) {
+                if (action == box.imeAction) {
                     if (value.trim { it <= ' ' }.isNotEmpty())
-                        return@setOnEditorActionListener onCreateChipAction()
-                    else if (cancelEdit())
+                        return@setOnEditorActionListener box.onCreateChipAction()
+                    else if (box.cancelEdit())
                         return@setOnEditorActionListener true
                 }
-                delegate.onEditorAction(this@ChipBox, v, action, keyEvent)
+                box.delegate.onEditorAction(box, v, action, keyEvent)
             }
         }
 
@@ -281,11 +295,11 @@ open class ChipBox: FlexboxLayout {
             if (isMainAction)
                 mainAction = newOptions and EditorInfo.IME_MASK_ACTION
             newOptions = newOptions and EditorInfo.IME_MASK_ACTION.inv()
-            if (textView.text.toString().isEmpty() && editingChip == null) {
+            if (textView.text.toString().isEmpty() && box.editingChip == null) {
                 newOptions += mainAction
                 isMainAction = true
             } else {
-                newOptions += imeAction
+                newOptions += box.imeAction
                 isMainAction = false
             }
 
@@ -316,7 +330,7 @@ open class ChipBox: FlexboxLayout {
         }
     }
 
-    private open inner class AutoCompleteAdapter(val auto: AutoCompleteTextView): EditTextAdapter(auto) {
+    open class AutoCompleteAdapter(box: ChipBox, val auto: AutoCompleteTextView): EditTextAdapter(box, auto) {
         /** @inheritDoc */
         override var autoCompleteThreshold: Int
             get() = auto.threshold
@@ -328,13 +342,79 @@ open class ChipBox: FlexboxLayout {
             set(value) { auto.onItemClickListener = value }
 
         /** @inheritDoc */
-        override val autoCompleteAdapter: ListAdapter?
-            get() = auto.adapter
+        override var autoCompleteAdapter: SelectItemAdapter? = null
+            set(value) {
+                field = value
+                if (value == null)
+                    auto.setAdapter(null)
+                else {
+                    val a = value.adapter
+                    if (a is ListAdapter && a is Filterable)
+                        auto.setAdapter(a)
+                    else
+                        throw IllegalArgumentException("Autocomplete adapter must be Filterable ListAdapter")
+                }
+            }
+    }
 
-        /** @inheritDoc */
-        override fun <T> setAutoCompleteAdapter(adapter: T?) where T : ListAdapter, T : Filterable {
-            auto.setAdapter(adapter)
+    @Suppress("UNUSED_PARAMETER")
+    open class SpinnerAdapter(chipBox: ChipBox, val spinner: Spinner): InputAdapter(spinner) {
+        /** The current value of the input */
+        override var value: String
+            get() = autoCompleteAdapter?.convertToString(spinner.selectedItemPosition)?: ""
+            set(value) {
+                val pos = findPos(value)
+                if (pos >= 0)
+                    spinner.setSelection(pos)
+            }
+
+        /** Click listener for the spinner */
+        override var autoCompleteClickListener: AdapterView.OnItemClickListener? = null
+            set(value) {
+                field = value
+                spinner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                        value?.onItemClick(parent, view, position, id)
+                    }
+
+                    override fun onNothingSelected(parent: AdapterView<*>?) { }
+                }
+            }
+
+        fun findPos(name: String): Int {
+            val n = name.trim { it <= ' ' }
+            return autoCompleteAdapter?.let {
+                for (i in 0 until it.count) {
+                    if (n == it.convertToString(i).trim {c -> c <= ' ' })
+                        return@let i
+                }
+                -1
+            }?: -1
         }
+
+        /** Adapter for the spinner */
+        override var autoCompleteAdapter: SelectItemAdapter? = null
+            set(value) {
+                field = value
+                if (value == null)
+                    spinner.adapter = null
+                else {
+                    when (val a = value.adapter) {
+                        is CursorAdapter -> {
+                            spinner.adapter = a
+                        }
+                        is ArrayAdapter<*> -> {
+                            spinner.adapter = a
+                        }
+                        is SimpleAdapter -> {
+                            spinner.adapter = a
+                        }
+                        else -> throw IllegalArgumentException("Must be a SpinnerAdapter")
+                    }
+                    if (this.value != "")
+                        this.value = this.value
+                }
+            }
     }
 
     /**
@@ -359,13 +439,11 @@ open class ChipBox: FlexboxLayout {
         attrs?.let { applyAttributes(it) }
     }
 
-    /**
-     * The edit text
-     */
     private var _chipInput: InputAdapter? = null
+    /** The input adapter */
     var chipInput: InputAdapter
         get() {
-            return _chipInput?: setupChipBox()
+            return _chipInput?: setupChipBox().also { _chipInput = it }
         }
         set(v) {
             // Get previous edit position
@@ -500,22 +578,26 @@ open class ChipBox: FlexboxLayout {
     private fun setupChipBox(): InputAdapter {
         // Find an edit text in the flex box if there is one
         // Pick the last one
-        var edit: View? = null
-        for (v in children) {
-            if (v is EditText)
-                edit = v
-            else if (v is AutoCompleteTextView)
-                edit = v
+        for (i in childCount - 1 downTo 0) {
+            val input = getAdapter(getChildAt(i))
+            if (input != null)
+                return input
         }
 
-        // Create input for the view we found or didn't find
-        return when {
-            edit == null -> InputAdapter()
-            edit is AutoCompleteTextView -> AutoCompleteAdapter(edit)
-            else -> EditTextAdapter(edit as EditText)
-        }.apply {
-            chipInput = this
-            initialize()
+        // Set the view for the input
+        return InputAdapter()
+    }
+
+    /**
+     * Get an adapter for a view
+     * @param edit The view
+     */
+    fun getAdapter(edit: View?): InputAdapter? {
+        return when (edit) {
+            is AutoCompleteTextView -> AutoCompleteAdapter(this, edit)
+            is EditText -> EditTextAdapter(this, edit)
+            is Spinner -> SpinnerAdapter(this, edit)
+            else -> null
         }
     }
 
