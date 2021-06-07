@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.*
 import androidx.core.view.children
 import androidx.lifecycle.LiveData
@@ -176,6 +177,15 @@ open class ChipBox: FlexboxLayout {
             get() = null
             set(v) {}
 
+        /** Flag to disable input and only select from list */
+        @Suppress("UNUSED_PARAMETER")
+        open var autoCompleteSelectOnly: Boolean
+            get() = false
+            set(v) {}
+
+        /** Show the auto complete drop down */
+        open fun autoCompleteShowDropDown() {}
+
         /**
          * Set the action of an edit text
          * This sets the action to imeAction and saves the
@@ -229,7 +239,7 @@ open class ChipBox: FlexboxLayout {
          * Listener for text changes on the EditText
          * This listener changes the IME action of the EditText when the contents is not empty
          */
-        private var textWatcher: TextWatcher = object: TextWatcher {
+        private val textWatcher: TextWatcher = object: TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
             }
 
@@ -241,15 +251,17 @@ open class ChipBox: FlexboxLayout {
             }
         }
 
+        protected open fun onFocusChanged(view: View, hasFocus: Boolean) {
+            if (hasFocus)
+                setIMEAction()
+            else
+                box.cancelEdit()
+            box.delegate.onEditorFocusChange(box, view, hasFocus)
+        }
+
         init {
             // Set a focus listener to change the soft keyboard action
-            textView.setOnFocusChangeListener { view, hasFocus ->
-                if (hasFocus)
-                    setIMEAction()
-                else
-                    box.cancelEdit()
-                box.delegate.onEditorFocusChange(box, view, hasFocus)
-            }
+            textView.setOnFocusChangeListener {view, hasFocus -> onFocusChanged(view, hasFocus) }
             textView.setOnTouchListener { _, e ->
                 if (box.editingChip != null && e.action == MotionEvent.ACTION_DOWN && e.pointerCount == 1) {
                     if (textView.compoundDrawables[0]?.bounds?.contains(e.x.toInt(), e.y.toInt()) == true) {
@@ -349,72 +361,50 @@ open class ChipBox: FlexboxLayout {
                     auto.setAdapter(null)
                 else {
                     val a = value.adapter
-                    if (a is ListAdapter && a is Filterable)
+                    if (a is ListAdapter && a is Filterable) {
                         auto.setAdapter(a)
-                    else
+                    } else
                         throw IllegalArgumentException("Autocomplete adapter must be Filterable ListAdapter")
                 }
             }
-    }
 
-    @Suppress("UNUSED_PARAMETER")
-    open class SpinnerAdapter(chipBox: ChipBox, val spinner: Spinner): InputAdapter(spinner) {
-        /** The current value of the input */
-        override var value: String
-            get() = autoCompleteAdapter?.convertToString(spinner.selectedItemPosition)?: ""
-            set(value) {
-                val pos = findPos(value)
-                if (pos >= 0)
-                    spinner.setSelection(pos)
-            }
-
-        /** Click listener for the spinner */
-        override var autoCompleteClickListener: AdapterView.OnItemClickListener? = null
+        override var autoCompleteSelectOnly: Boolean = false
             set(value) {
                 field = value
-                spinner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                        value?.onItemClick(parent, view, position, id)
-                    }
-
-                    override fun onNothingSelected(parent: AdapterView<*>?) { }
-                }
+                auto.showSoftInputOnFocus = !value
             }
 
-        fun findPos(name: String): Int {
-            val n = name.trim { it <= ' ' }
-            return autoCompleteAdapter?.let {
-                for (i in 0 until it.count) {
-                    if (n == it.convertToString(i).trim {c -> c <= ' ' })
-                        return@let i
-                }
-                -1
-            }?: -1
+        override fun onFocusChanged(view: View, hasFocus: Boolean) {
+            super.onFocusChanged(view, hasFocus)
+            if (autoCompleteSelectOnly) {
+                val input = auto.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                input.hideSoftInputFromWindow(auto.windowToken, InputMethodManager.HIDE_NOT_ALWAYS)
+                auto.showDropDown()
+            }
         }
 
-        /** Adapter for the spinner */
-        override var autoCompleteAdapter: SelectItemAdapter? = null
-            set(value) {
-                field = value
-                if (value == null)
-                    spinner.adapter = null
-                else {
-                    when (val a = value.adapter) {
-                        is CursorAdapter -> {
-                            spinner.adapter = a
-                        }
-                        is ArrayAdapter<*> -> {
-                            spinner.adapter = a
-                        }
-                        is SimpleAdapter -> {
-                            spinner.adapter = a
-                        }
-                        else -> throw IllegalArgumentException("Must be a SpinnerAdapter")
-                    }
-                    if (this.value != "")
-                        this.value = this.value
-                }
+        override fun autoCompleteShowDropDown() {
+            auto.showDropDown()
+        }
+
+        init {
+            auto.setOnClickListener {
+                if (autoCompleteSelectOnly)
+                    auto.showDropDown()
             }
+        }
+        /** @inheritDoc */
+        override fun setIMEAction() {
+            if (!autoCompleteSelectOnly)
+                super.setIMEAction()
+        }
+
+        /** @inheritDoc */
+        override fun requestFocus() {
+            super.requestFocus()
+            if (autoCompleteSelectOnly)
+                auto.showDropDown()
+        }
     }
 
     /**
@@ -535,7 +525,8 @@ open class ChipBox: FlexboxLayout {
 
     init {
         delegate.scope.launch {
-            chipInput = setupChipBox()
+            if (_chipInput == null)
+                _chipInput = setupChipBox()
         }
     }
 
@@ -596,7 +587,6 @@ open class ChipBox: FlexboxLayout {
         return when (edit) {
             is AutoCompleteTextView -> AutoCompleteAdapter(this, edit)
             is EditText -> EditTextAdapter(this, edit)
-            is Spinner -> SpinnerAdapter(this, edit)
             else -> null
         }
     }
@@ -723,9 +713,11 @@ open class ChipBox: FlexboxLayout {
             addView(chip, index)
             // Move the edit text back to the end of the chip box
             // and clear its text
+            val hadFocus = chipInput.view?.hasFocus() == true
             moveView(chipInput.view)
             chipInput.value = ""
-            chipInput.requestFocus()
+            if (hadFocus)
+                chipInput.requestFocus()
             if (!isBatched)
                 setValueSequence()
             // We processed the chip

@@ -503,6 +503,7 @@ class ScanFragment : Fragment() {
             AdapterView.OnItemClickListener { _, _, _, _ ->
                 box.onCreateChipAction()
             }
+        box.chipInput.autoCompleteSelectOnly = true
 
         scanViewModel.viewModelScope.launch {
             // Get the cursor for the column, null means no auto complete

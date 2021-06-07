@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="5dp">
@@ -82,4 +83,48 @@
         </RelativeLayout>
 
     </LinearLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/book_tags_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/book_list_always">
+
+        <TextView
+            android:id="@+id/book_tags_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toTopOf="@id/book_tags"
+            app:layout_constraintBottom_toBottomOf="@id/book_tags"
+            app:layout_constraintStart_toStartOf="parent"
+            android:text="@string/tags" />
+
+        <com.github.cleveard.bibliotech.ui.widget.ChipBox
+            android:id="@+id/book_tags"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_marginTop="3dp"
+            android:descendantFocusability="beforeDescendants"
+            android:focusableInTouchMode="true"
+            app:flexWrap="wrap"
+            android:layout_toEndOf="@id/book_tags_label"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toEndOf="@id/book_tags_label"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <AutoCompleteTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:hint="@string/tag"
+                android:imeOptions="actionNone"
+                android:dropDownWidth="160dp"
+                android:autofillHints=""
+                android:inputType="textCapWords">
+            </AutoCompleteTextView>
+
+        </com.github.cleveard.bibliotech.ui.widget.ChipBox>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
 </RelativeLayout>

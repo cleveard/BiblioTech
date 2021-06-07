@@ -114,6 +114,7 @@ internal open class BooksAdapter(
                                           toString: (T) -> String) {
             // Get the text view
             parent.findViewById<ChipBox>(id)?.let { box ->
+                box.chipInput.autoCompleteSelectOnly = true
                 box.setChips(scope, this?.run {
                     this.asSequence().map(toString)
                 }?: emptySequence())
@@ -189,7 +190,7 @@ internal open class BooksAdapter(
         /**
          * Delegate for interacting with ChipBox
          */
-        private val chipBoxDelegate: ChipBox.Delegate = object: ChipBox.Delegate {
+        val chipBoxDelegate: ChipBox.Delegate = object: ChipBox.Delegate {
             /**
              * Job used to get the autocomplete Cursors
              */
@@ -230,13 +231,11 @@ internal open class BooksAdapter(
                 }
             }
 
-            private fun getQuery(edit: EditText): Cursor {
-                // Extract the token at the end of the selection
-                val token = edit.text.toString().trim { it <= ' ' }
+            private fun getQuery(): Cursor {
                 // return the query string
                 return ColumnDataDescriptor.buildAutoCompleteCursor(
                     BookRepository.repo, BookDatabase.tagsTable,
-                    TAGS_NAME_COLUMN, token
+                    TAGS_NAME_COLUMN, ""
                 )
             }
 
@@ -247,7 +246,6 @@ internal open class BooksAdapter(
                     autoCompleteJob = null
                 }
                 // Get the value field
-                edit as AutoCompleteTextView
                 if (hasFocus) {
                     // Setting focus, setup adapter and set it in the text view
                     // This is done in a coroutine job and we use the job
@@ -256,7 +254,7 @@ internal open class BooksAdapter(
                     autoCompleteJob = access.scope.launch {
                         // Get the cursor for the column, null means no auto complete
                         val cursor = withContext(BookRepository.repo.queryScope.coroutineContext) {
-                            getQuery(edit)
+                            getQuery()
                         }
 
                         // Get the adapter from the column description
@@ -269,16 +267,17 @@ internal open class BooksAdapter(
                             0
                         )
                         adapter.stringConversionColumn = cursor.getColumnIndex("_result")
-                        adapter.setFilterQueryProvider { getQuery(edit) }
+                        adapter.setFilterQueryProvider { getQuery() }
 
                         // Set the adapter on the text view
-                        edit.setAdapter(adapter)
+                        chipBox.chipInput.autoCompleteAdapter = ChipBox.SelectCursorItemAdapter(adapter)
+                        chipBox.chipInput.autoCompleteShowDropDown()
                         // Flag that the job is done
                         autoCompleteJob = null
                     }
                 } else {
                     // Clear the adapter
-                    edit.setAdapter(null)
+                    chipBox.chipInput.autoCompleteAdapter = null
                 }
             }
         }
@@ -373,22 +372,11 @@ internal open class BooksAdapter(
                     return@let
                 if (view == null) {
                     view = LayoutInflater.from(itemView.context).inflate(detailLayout, itemView as ViewGroup)
-                    itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
-                        it.delegate = chipBoxDelegate
-                        it.chipInput.autoCompleteThreshold = 1
-                        // Add a chip when an item is selected
-                        it.chipInput.autoCompleteClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
-                            it.onCreateChipAction()
-                        }
-                    }
                 }
 
                 view.visibility = View.VISIBLE
                 book.categories.setField(itemView, R.id.book_categories, ", ") {
                     it.category
-                }
-                book.tags.setChips(access.scope, itemView, R.id.book_tags) {
-                    it.name
                 }
                 book.book.description.setField(itemView, R.id.book_desc)
                 book.book.volumeId.setField(itemView, R.id.book_vol_id)
@@ -505,6 +493,18 @@ internal open class BooksAdapter(
         // Set the icon to the thumbnail or selected icon
         val box = holder.itemView.findViewById<ViewFlipper>(R.id.book_list_flipper)
         box?.displayedChild = if (book.book.isSelected) 1 else 0
+        holder.itemView.findViewById<ChipBox>(R.id.book_tags)?.let {
+            it.delegate = holder.chipBoxDelegate
+            it.chipInput.autoCompleteSelectOnly = true
+            it.chipInput.autoCompleteThreshold = 1
+            // Add a chip when an item is selected
+            it.chipInput.autoCompleteClickListener = AdapterView.OnItemClickListener { _, _, _, _ ->
+                it.onCreateChipAction()
+            }
+        }
+        book.tags.setChips(access.scope, holder.itemView, R.id.book_tags) {
+            it.name
+        }
 
         // Make the details visible or invisible
         holder.bindAdditionalViews(book.book.isExpanded)

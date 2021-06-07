@@ -6,7 +6,7 @@
     android:id="@+id/book_list_open"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_below="@id/book_list_always"
+    android:layout_below="@id/book_tags_container"
     android:layout_marginHorizontal="10dp"
     android:layout_marginVertical="3dp">
 
@@ -65,41 +65,6 @@
         app:layout_constraintStart_toEndOf="@id/book_categories_label" />
 
     <TextView
-        android:id="@+id/book_tags_label"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="@id/book_tags"
-        app:layout_constraintBottom_toBottomOf="@id/book_tags"
-        app:layout_constraintStart_toStartOf="parent"
-        android:text="@string/tags" />
-
-    <com.github.cleveard.bibliotech.ui.widget.ChipBox
-        android:id="@+id/book_tags"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="3dp"
-        android:layout_marginTop="3dp"
-        android:descendantFocusability="beforeDescendants"
-        android:focusableInTouchMode="true"
-        app:flexWrap="wrap"
-        android:layout_toEndOf="@id/book_tags_label"
-        app:layout_constraintTop_toBottomOf="@id/book_categories"
-        app:layout_constraintStart_toEndOf="@id/book_tags_label"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <AutoCompleteTextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:hint="@string/tag"
-            android:imeOptions="actionNone"
-            android:dropDownWidth="160dp"
-            android:autofillHints=""
-            android:inputType="textCapWords">
-        </AutoCompleteTextView>
-
-    </com.github.cleveard.bibliotech.ui.widget.ChipBox>
-
-    <TextView
         android:id="@+id/book_id_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -130,7 +95,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="3dp"
-        app:layout_constraintTop_toBottomOf="@id/book_tags"
+        app:layout_constraintTop_toBottomOf="@id/book_categories"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <TextView
