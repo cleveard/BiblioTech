@@ -704,10 +704,11 @@ class ScanFragment : Fragment() {
                 if (isbn.isNotEmpty()) {
                     val codes = ArrayList<String>()
                     for (s in isbn.replace(getXDigit, "X").split(splitIsbn)) {
-                        if (s.isNotEmpty() && !addToCodes(codes, s)) {
+                        val code = s.replace(onlyDigitsAndX, "")
+                        if (code.isNotEmpty() && !addToCodes(codes, code)) {
                             Toast.makeText(
                                 context,
-                                requireContext().resources.getString(R.string.bad_isbn, s),
+                                requireContext().resources.getString(R.string.bad_isbn, code),
                                 Toast.LENGTH_LONG
                             ).show()
                             return@launch
@@ -997,8 +998,9 @@ class ScanFragment : Fragment() {
         private const val RATIO_16_9_VALUE = 16.0 / 9.0
 
         /** Expressions for splitting ISBNs **/
-        private val splitIsbn: Regex = Regex("[, ]+")
+        private val splitIsbn: Regex = Regex("(\\s*,\\s*)+")
         private val getXDigit: Regex = Regex("[*#]")
+        private val onlyDigitsAndX: Regex = Regex("[^0-9X]")
 
         /** Convenience method used to check if all permissions required by this app are granted */
         fun hasPermissions(context: Context) = PERMISSIONS_REQUIRED.all {
