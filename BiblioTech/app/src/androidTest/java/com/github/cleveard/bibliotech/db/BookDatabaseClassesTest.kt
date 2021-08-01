@@ -101,7 +101,6 @@ class BookDatabaseClassesTest {
         changeAndCheck(book1, book2, book1::volumeId, "volumeIdx")
         @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::sourceId, "sourceIddd")
-        changeAndCheck(book1, book2, book1::ISBN, "ISB")
         @Suppress("SpellCheckingInspection")
         changeAndCheck(book1, book2, book1::title, "tite")
         @Suppress("SpellCheckingInspection")
@@ -227,6 +226,14 @@ class BookDatabaseClassesTest {
         )
     }
 
+    private fun makeIsbn(): IsbnEntity {
+        return IsbnEntity(
+            id = 0L,
+            isbn = "isbn",
+            flags = 0,
+        )
+    }
+
     @Test(timeout = 5000L) fun tagEntityTest() {
         val tag1 = makeTag()
         val tag2 = makeTag()
@@ -297,7 +304,8 @@ class BookDatabaseClassesTest {
                book = makeBook(),
                authors = listOf(AuthorEntity(0L, "sourceId volumeId")),
                categories = listOf(makeCategory()),
-               tags = listOf(makeTag())
+               tags = listOf(makeTag()),
+               isbns = listOf(makeIsbn())
            )
        }
 
@@ -312,11 +320,13 @@ class BookDatabaseClassesTest {
        changeAndCheck(book1, book2, book1.authors[0]::name, "somethingElse")
        changeAndCheck(book1, book2, book1.categories[0]::category, "A different description")
        changeAndCheck(book1, book2, book1.tags[0]::desc, "junk that is different")
+       changeAndCheck(book1, book2, book1.isbns[0]::isbn, "junk that is different")
        // Assert the the sort order doesn't affect equals or the hash code
        book1.sortCategory = "ccc"
        book1.sortLast = "lll"
        book1.sortFirst = "fff"
        book1.sortTag = "ttt"
+       book1.sortIsbn = "iii"
        assertThat(book1 == book2).isTrue()
        assertThat(book1.hashCode()).isEqualTo(book2.hashCode())
 

@@ -142,6 +142,8 @@ class ImportCSV {
         private const val TAG_VALUE = 4
         /** ColumnId for values in the category entity */
         private const val CATEGORY_VALUE = 8
+        /** ColumnId for values in the isbn entity */
+        private const val ISBN_VALUE = 16
         /** The list of book columns we import */
         private val importBookColumns = mapOf<String, ImportColumn<BookAndAuthors>>(
             BOOK_ID_COLUMN to ImportColumn(
@@ -162,10 +164,6 @@ class ImportCSV {
             ),
             SOURCE_ID_COLUMN to ImportColumn(
                 {v, a ->  book.sourceId = if (v.isEmpty()) null else v; a },
-                columnId = BOOK_VALUE
-            ),
-            ISBN_COLUMN to ImportColumn(
-                {v, a ->  book.ISBN = if (v.isEmpty()) null else v; a },
                 columnId = BOOK_VALUE
             ),
             DESCRIPTION_COLUMN to ImportColumn(
@@ -223,6 +221,10 @@ class ImportCSV {
             TAGS_DESC_COLUMN to ImportColumn(
                 {v, a ->  newTag(a).desc = v; a or TAG_VALUE },
                 columnId = 0
+            ),
+            ISBN_COLUMN to ImportColumn(
+                {v, a ->  newIsbn(a).isbn = v; a or ISBN_VALUE },
+                columnId = 0
             )
         )
 
@@ -266,6 +268,12 @@ class ImportCSV {
             if ((allocated and TAG_VALUE) == 0)
                 (tags as ArrayList).add(TagEntity(id = 0L, name = "", desc = "", flags = 0))
             return tags.last()
+        }
+
+        private fun BookAndAuthors.newIsbn(allocated: Int): IsbnEntity {
+            if ((allocated and ISBN_VALUE) == 0)
+                (isbns as ArrayList).add(IsbnEntity(id = 0L, isbn = "", flags = 0))
+            return isbns.last()
         }
 
         private fun <T> ArrayList<T>.popDuplicate(
@@ -430,7 +438,6 @@ class ImportCSV {
                                 id = 0L,
                                 title = "",
                                 subTitle = "",
-                                ISBN = null,
                                 sourceId = null,
                                 volumeId = null,
                                 description = "",
@@ -446,7 +453,8 @@ class ImportCSV {
                             ),
                             tags = ArrayList(),
                             authors = ArrayList(),
-                            categories = ArrayList()
+                            categories = ArrayList(),
+                            isbns = ArrayList()
                         )
                     }
 

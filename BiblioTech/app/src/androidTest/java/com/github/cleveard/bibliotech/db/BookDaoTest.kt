@@ -240,7 +240,7 @@ class BookDaoTest {
             // Randomly make the ISBN or source id and volume id match
             val x = expected.random.nextInt(3)
             if ((x and 1) == 0)
-                new.book.ISBN = old.book.ISBN
+                new.isbns = old.isbns.map { it.copy() }
             if (x > 0) {
                 new.book.sourceId = old.book.sourceId
                 new.book.volumeId = old.book.volumeId
@@ -267,7 +267,7 @@ class BookDaoTest {
         // Updating a book that conflicts with two other books will fail
         val expected = BookDbTracker.addBooks(db,5668721L, "AddBooks Update", 20)
         val book = expected.tables.bookEntities.new()
-        book.book.ISBN = expected.tables.bookEntities[3].book.ISBN
+        book.isbns = expected.tables.bookEntities[3].isbns.map { it.copy() }
         book.book.sourceId = expected.tables.bookEntities[11].book.sourceId
         book.book.volumeId = expected.tables.bookEntities[11].book.volumeId
         expected.addOneBook("Update Fail", book, true)

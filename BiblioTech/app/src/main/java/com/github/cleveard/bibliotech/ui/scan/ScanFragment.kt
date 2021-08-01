@@ -669,7 +669,11 @@ class ScanFragment : Fragment() {
                         buildAuthors(StringBuilder(), book.authors))
 
                     // Make sure the isbn in the book record is the one we searched
-                    book.book.ISBN = isbn
+                    if (book.isbns.indexOfFirst { isbn.compareTo(it.isbn, true) == 0 } < 0) {
+                        book.isbns = book.isbns.toMutableList().apply {
+                            add(IsbnEntity(id = 0, isbn = isbn))
+                        }
+                    }
                     // Select the book
                     book.book.isSelected = true
                     // Deselect everything else

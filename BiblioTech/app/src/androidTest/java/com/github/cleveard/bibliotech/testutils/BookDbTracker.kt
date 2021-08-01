@@ -1052,18 +1052,17 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             {e1, e2 -> e1.book.id == e2.book.id }
             // Do delete books when unlinked is called
         ) {
+            private val comp = nullsFirst(object: Comparator<String> {
+                override fun compare(o1: String?, o2: String?): Int {
+                    return o1!!.compareTo(o2!!, true)
+                }
+            }).let {c -> compareBy<BookAndAuthors, String?>(c, { it.book.sourceId }).thenBy(c, { it.book.volumeId })}
             /**
              * @inheritDoc
              * Books conflict if the ISBN or source and volume ids are not null and are the same
              */
             override fun compare(e1: BookAndAuthors, e2: BookAndAuthors): Int {
-                var g = e2.book.sourceId?.let { e1.book.sourceId?.compareTo(it, true)?: -1 }?: 1
-                if (g == 0) {
-                    g = e2.book.volumeId?.let { e1.book.volumeId?.compareTo(it, true) ?: -1 } ?: 1
-                    if (g == 0)
-                        return g
-                }
-                return e2.book.ISBN?.let { e1.book.ISBN?.compareTo(it, true)?: -1 }?: 1
+                return comp.compare(e1, e2)
             }
         }
         /**

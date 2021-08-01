@@ -24,7 +24,6 @@ const val BOOK_TABLE = "books"                          // Book table name
 const val BOOK_ID_COLUMN = "books_id"                   // Incrementing id
 const val VOLUME_ID_COLUMN = "books_volume_id"          // Volume id from book source site
 const val SOURCE_ID_COLUMN = "books_source_id"          // Id of the site where the book data came from
-const val ISBN_COLUMN = "books_isbn"                    // ISBN
 const val TITLE_COLUMN = "books_title"                  // Title
 const val SUBTITLE_COLUMN = "books_subtitle"            // Subtitle
 const val DESCRIPTION_COLUMN = "books_description"      // Description
@@ -39,7 +38,7 @@ const val LARGE_THUMB_COLUMN = "books_large_thumb"      // Link to large thumbna
 const val BOOK_FLAGS = "books_flags"                    // Flags for the book
 val ALL_BOOK_COLUMNS = arrayOf(                         // Array of all book columns, used building queries
     BOOK_ID_COLUMN, VOLUME_ID_COLUMN, SOURCE_ID_COLUMN,
-    ISBN_COLUMN, TITLE_COLUMN, SUBTITLE_COLUMN,
+    TITLE_COLUMN, SUBTITLE_COLUMN,
     DESCRIPTION_COLUMN, PAGE_COUNT_COLUMN, BOOK_COUNT_COLUMN,
     VOLUME_LINK, RATING_COLUMN, DATE_ADDED_COLUMN,
     DATE_MODIFIED_COLUMN, SMALL_THUMB_COLUMN, LARGE_THUMB_COLUMN, BOOK_FLAGS)
@@ -64,14 +63,12 @@ class DateConverters {
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
-        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN]),
-        Index(value = [ISBN_COLUMN])
+        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN])
     ])
 data class BookEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
     @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
-    @ColumnInfo(name = ISBN_COLUMN) var ISBN: String?,
     @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") var title: String,
     @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") var subTitle: String,
     @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") var description: String,
@@ -148,12 +145,24 @@ data class BookAndAuthors(
         )
     )
     var tags: List<TagEntity>,
+    @Relation(
+        entity = IsbnEntity::class,
+        parentColumn = BOOK_ID_COLUMN,
+        entityColumn = ISBNS_ID_COLUMN,
+        associateBy = Junction(
+            BookAndIsbnEntity::class,
+            parentColumn = BOOK_ISBNS_BOOK_ID_COLUMN,
+            entityColumn = BOOK_ISBNS_ISBN_ID_COLUMN
+        )
+    )
+    var isbns: List<IsbnEntity>,
     // Columns used when sorting by related field. These are used to
     // Construct the header for the list.
     @ColumnInfo(name= REMAINING_COLUMN) var sortFirst: String? = null,
     @ColumnInfo(name= LAST_NAME_COLUMN) var sortLast: String? = null,
     @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String? = null,
-    @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null
+    @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null,
+    @ColumnInfo(name= ISBN_COLUMN) var sortIsbn: String? = null
 ) : Parcelable {
     /**
      * @inheritDoc
@@ -201,6 +210,10 @@ data class BookAndAuthors(
         for (i in tags) {
             writeTag(dest, i)
         }
+        dest.writeInt(isbns.size)
+        for (i in isbns) {
+            writeIsbn(dest, i)
+        }
     }
 
     override fun describeContents(): Int {
@@ -211,7 +224,6 @@ data class BookAndAuthors(
         dest.writeLong(book.id)
         dest.writeString(book.volumeId)
         dest.writeString(book.sourceId)
-        dest.writeString(book.ISBN)
         dest.writeString(book.title)
         dest.writeString(book.subTitle)
         dest.writeString(book.description)
@@ -244,6 +256,11 @@ data class BookAndAuthors(
         dest.writeInt(tag.flags)
     }
 
+    private fun writeIsbn(dest: Parcel, isbn: IsbnEntity) {
+        dest.writeLong(isbn.id)
+        dest.writeString(isbn.isbn)
+    }
+
     companion object {
         @Suppress("unused")
         @JvmField
@@ -265,8 +282,13 @@ data class BookAndAuthors(
                 for (i in 0 until count) {
                     tags.add(readTag(src))
                 }
+                count = src.readInt()
+                val isbns = ArrayList<IsbnEntity>(count)
+                for (i in 0 until count) {
+                    isbns.add(readIsbn(src))
+                }
 
-                return BookAndAuthors(book, authors, categories, tags)
+                return BookAndAuthors(book, authors, categories, tags, isbns)
             }
 
             override fun newArray(size: Int): Array<BookAndAuthors?> {
@@ -278,7 +300,6 @@ data class BookAndAuthors(
             val id = src.readLong()
             val volumeId = src.readString()
             val sourceId = src.readString()
-            val iSBN = src.readString()
             val title = src.readString()
             val subTitle = src.readString()
             val description = src.readString()
@@ -295,7 +316,6 @@ data class BookAndAuthors(
                 id = id,
                 volumeId = volumeId,
                 sourceId = sourceId,
-                ISBN = iSBN,
                 title = title?:"",
                 subTitle = subTitle?:"",
                 description = description?:"",
@@ -341,6 +361,15 @@ data class BookAndAuthors(
                 name = name?:"",
                 desc = desc?:"",
                 flags = flags
+            )
+        }
+
+        private fun readIsbn(src: Parcel): IsbnEntity {
+            val id = src.readLong()
+            val isbn = src.readString()
+            return IsbnEntity(
+                id = id,
+                isbn = isbn?:""
             )
         }
     }
@@ -425,45 +454,23 @@ abstract class BookDao(private val db: BookDatabase) {
 
     /**
      * Look for existing book
-     * @param query The SQLite query to find the existing book
+     * @param volumeId The volume id
+     * @param sourceId The source id
      */
-    @RawQuery
-    protected abstract suspend fun findConflict(query: SupportSQLiteQuery): List<BookEntity>?
+    @Query(value = "SELECT * FROM $BOOK_TABLE WHERE ( ( $VOLUME_ID_COLUMN = :volumeId AND $SOURCE_ID_COLUMN = :sourceId ) ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
+    protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): List<BookEntity>?
 
     /**
      * Find a conflicting book
      * @param volumeId The conflicting volume id
      * @param sourceId The conflicting source id
-     * @param ISBN The conflicting ISBN
      */
-    private suspend fun findConflict(volumeId: String?, sourceId: String?, ISBN: String?): List<BookEntity>? {
+    private suspend fun findConflict(volumeId: String?, sourceId: String?): List<BookEntity>? {
         // If this book doesn't have a volume id or ISBN, Then we can't conflict
-        if (volumeId == null && ISBN == null)
-            return null
-        val args = ArrayList<String?>(3)
-
-        // Build query to look for conflict
-        val query = StringBuilder("SELECT * FROM $BOOK_TABLE WHERE (")
-
-        // If there is a volume id, then look for it
-        if (volumeId != null) {
-            query.append(" ( $VOLUME_ID_COLUMN = ? AND $SOURCE_ID_COLUMN = ? )")
-            args.add(volumeId)
-            args.add(sourceId)
-        }
-
-        // If there is an ISBN look for it
-        if (ISBN != null) {
-            if (volumeId != null)
-                query.append(" OR")
-            query.append(" $ISBN_COLUMN = ?")
-            args.add(ISBN)
-        }
-
-        // Only need one row to conflict
-        query.append(" ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
-
-        return findConflict(SimpleSQLiteQuery(query.toString(), args.toArray()))
+        return if (volumeId == null)
+            null
+        else
+            doFindConflict(volumeId, sourceId?:"")
     }
 
     /**
@@ -482,7 +489,7 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Look for a conflict
-        val ids = findConflict(book.volumeId, book.sourceId, book.ISBN)
+        val ids = findConflict(book.volumeId, book.sourceId)
         if (ids.isNullOrEmpty()) {
             // Didn't find a conflict add the book
             book.id = 0

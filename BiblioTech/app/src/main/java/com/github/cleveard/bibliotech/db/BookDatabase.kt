@@ -49,9 +49,11 @@ const val kAsc = "ASC"
         BookAndCategoryEntity::class,
         ViewEntity::class,
         UndoRedoOperationEntity::class,
-        UndoTransactionEntity::class
+        UndoTransactionEntity::class,
+        IsbnEntity::class,
+        BookAndIsbnEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -62,6 +64,7 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getCategoryDao(): CategoryDao
     abstract fun getViewDao(): ViewDao
     abstract fun getUndoRedoDao(): UndoRedoDao
+    abstract fun getIsbnDao(): IsbnDao
 
     /**
      * Descriptor for tables in the book database
@@ -170,6 +173,10 @@ abstract class BookDatabase : RoomDatabase() {
         val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
         /** The book_tags link table descriptor */
         val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
+        /** The isbns table descriptor */
+        val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, null, null)
+        /** The book_isbns link table descriptor */
+        val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
 
         /** Undo levels preference key */
         const val UNDO_LEVEL_KEY = "undo_levels"
@@ -515,8 +522,9 @@ abstract class BookDatabase : RoomDatabase() {
                     // Change UNIQUE indexes to be non-unique
                     database.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`$ISBN_COLUMN`)")
+                    // Drop column and index in version 6, don't create it here
+                    // database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    // database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`$ISBN_COLUMN`)")
                     database.execSQL("DROP INDEX IF EXISTS `index_authors_authors_last_name_authors_remaining`")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `$AUTHORS_TABLE` (`$LAST_NAME_COLUMN`, `$REMAINING_COLUMN`)")
                     database.execSQL("DROP INDEX IF EXISTS `index_tags_tags_name`")
@@ -525,6 +533,28 @@ abstract class BookDatabase : RoomDatabase() {
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_categories_categories_category` ON `$CATEGORIES_TABLE` (`$CATEGORY_COLUMN`)")
                     database.execSQL("DROP INDEX IF EXISTS `index_views_views_name`")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_views_views_name` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
+                }
+            },
+            object: Migration(5, 6) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    // Create new tables and indices for isbns
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$ISBN_COLUMN` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `$ISBNS_FLAGS` INTEGER NOT NULL DEFAULT 0)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_isbns_isbns_id` ON `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_isbns_isbns_isbn` ON `$ISBNS_TABLE` (`$ISBN_COLUMN`)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_ISBNS_ISBN_ID_COLUMN` INTEGER NOT NULL, `$BOOK_ISBNS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_ISBNS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_ISBNS_ISBN_ID_COLUMN`) REFERENCES `$ISBNS_TABLE`(`$ISBNS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`)")
+                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+
+                    // Insert all of the isbns in to the isbn table
+                    database.execSQL("INSERT OR ABORT INTO $ISBNS_TABLE ( $ISBNS_ID_COLUMN, $ISBN_COLUMN ) SELECT NULL, `books_isbn` FROM `$BOOK_TABLE` WHERE `books_isbn` != NULL")
+
+                    // Insert all of the isbns in to the isbn table
+                    database.execSQL("INSERT OR ABORT INTO $BOOK_ISBNS_TABLE ( $BOOK_ISBNS_ID_COLUMN, $BOOK_ISBNS_BOOK_ID_COLUMN, $BOOK_ISBNS_ISBN_ID_COLUMN ) SELECT NULL, $BOOK_ID_COLUMN, $ISBNS_ID_COLUMN FROM `$BOOK_TABLE` LEFT JOIN $ISBNS_TABLE ON $ISBN_COLUMN = `books_isbn` WHERE `books_isbn` != NULL")
+
+                    // Delete the isbn index and set all values to NULL
+                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    database.execSQL("UPDATE OR ABORT $BOOK_TABLE SET `books_isbn` = NULL")
                 }
             }
         )

@@ -543,6 +543,17 @@ class BookFilterTest {
                 }.flatten()
             }, { sequenceOf(tags.asSequence().map { it.name }) }
         ),
+        ISBNS(Column.ISBN, { if (isbns.isNullOrEmpty()) null else isbns[it.nextInt(isbns.size)].isbn },
+            { (this.sortIsbn).compareWith(it.sortIsbn, true) },
+            {
+                map { book ->
+                    if (book.isbns.isEmpty())
+                        sequenceOf(book.copy(sortTag = null))
+                    else
+                        book.isbns.asSequence().map { book.copy(sortTag = it.isbn) }
+                }.flatten()
+            }, { sequenceOf(isbns.asSequence().map { it.isbn }) }
+        ),
         TITLE(Column.TITLE, { book.title }, { book.title.compareWith(it.book.title) }, { this }, {
             sequenceOf(sequenceOf(book.title))
         }),
@@ -566,9 +577,6 @@ class BookFilterTest {
         }),
         PAGE_COUNT(Column.PAGE_COUNT, { book.pageCount.toString() }, { book.pageCount.compareTo(it.book.pageCount) }, { this }, {
             sequenceOf(sequenceOf(book.pageCount))
-        }),
-        ISBN(Column.ISBN, { book.ISBN }, { (book.ISBN?: "").compareWith(it.book.ISBN?: "") }, { this }, {
-            sequenceOf(sequenceOf(book.ISBN?: ""))
         }),
         DESCRIPTION(Column.DESCRIPTION, { book.description }, { book.description.compareWith(it.book.description) }, { this }, {
             sequenceOf(sequenceOf(book.description))

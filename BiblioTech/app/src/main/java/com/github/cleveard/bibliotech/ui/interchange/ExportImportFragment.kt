@@ -16,7 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
-import androidx.paging.PagingSource
 import androidx.room.withTransaction
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.*
@@ -51,7 +50,6 @@ class ExportImportFragment : Fragment() {
             ExportColumn(SUBTITLE_COLUMN) { if (it > 0) "" else book.subTitle },
             ExportColumn(VOLUME_ID_COLUMN) { if (it > 0) "" else book.volumeId ?: "" },
             ExportColumn(SOURCE_ID_COLUMN) { if (it > 0) "" else book.sourceId ?: "" },
-            ExportColumn(ISBN_COLUMN) { if (it > 0) "" else book.ISBN ?: "" },
             ExportColumn(DESCRIPTION_COLUMN) { if (it > 0) "" else book.description },
             ExportColumn(PAGE_COUNT_COLUMN) { if (it > 0) "" else book.pageCount.toString() },
             ExportColumn(BOOK_COUNT_COLUMN) { if (it > 0) "" else book.bookCount.toString() },
@@ -65,7 +63,8 @@ class ExportImportFragment : Fragment() {
             ExportColumn(ImportCSV.AUTHOR_NAME) { if (it >= authors.size) "" else authors[it].name },
             ExportColumn(CATEGORY_COLUMN) { if (it >= categories.size) "" else categories[it].category },
             ExportColumn(TAGS_NAME_COLUMN) { if (it >= tags.size) "" else tags[it].name },
-            ExportColumn(TAGS_DESC_COLUMN) { if (it >= tags.size) "" else tags[it].desc }
+            ExportColumn(TAGS_DESC_COLUMN) { if (it >= tags.size) "" else tags[it].desc },
+            ExportColumn(ISBN_COLUMN) { if (it >= isbns.size) "" else isbns[it].isbn }
         )
 
         /** Array view of columns we export */
@@ -386,7 +385,7 @@ class ExportImportFragment : Fragment() {
                     // Output as many lines as needed to include
                     // all authors, tags and categories and the book
                     repeat(b.authors.size.coerceAtLeast(b.tags.size)
-                        .coerceAtLeast(b.categories.size)
+                        .coerceAtLeast(b.categories.size).coerceAtLeast(b.isbns.size)
                         .coerceAtLeast(1)) { j ->
                         // Output each field on this line.
                         for (i in exportBookColumns.indices) {

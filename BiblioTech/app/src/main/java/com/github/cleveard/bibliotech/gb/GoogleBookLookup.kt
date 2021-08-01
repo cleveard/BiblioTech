@@ -258,8 +258,8 @@ internal class GoogleBookLookup private constructor() {
          * @return The ISBN, or null if there isn't one
          */
         @Throws(Exception::class)
-        private fun findISBN(identifiers: JSONArray): String? {
-            var result: String? = null
+        private fun findISBNs(identifiers: JSONArray): ArrayList<IsbnEntity> {
+            val result = ArrayList<IsbnEntity>()
             var i = identifiers.length()
             // Loop through the identifiers
             while (--i >= 0) {
@@ -269,10 +269,10 @@ internal class GoogleBookLookup private constructor() {
                 val type = id.getString(kType)
                 // If we get an ISBN 13 identifier, then return it
                 if (type == kISBN_13)
-                    return id.getString(kIdentifier)
+                    result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
                 // If we get an ISBN 10 identifier, then remember it
                 if (type == kISBN_10)
-                    result = id.getString(kIdentifier)
+                    result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
             }
             // Return null or the ISBN 10 identifier, if no ISBN 13 id was found
             return result
@@ -322,12 +322,6 @@ internal class GoogleBookLookup private constructor() {
                     id = 0,
                     volumeId = getJsonValue(json, kVolumeID, ""),
                     sourceId = "books.google.com",
-                    ISBN = run {
-                        if (volume.has(kIndustryIdentifiers))
-                            findISBN(volume.getJSONArray(kIndustryIdentifiers))
-                        else
-                            null
-                    },
                     title = getJsonValue(volume, kTitle, ""),
                     subTitle = getJsonValue(volume, kSubTitle, ""),
                     description = getJsonValue(volume, kDescription, ""),
@@ -345,7 +339,13 @@ internal class GoogleBookLookup private constructor() {
                     separateAuthor(it)
                 },
                 categories = categories,
-                tags = ArrayList()
+                tags = ArrayList(),
+                isbns = run {
+                    if (volume.has(kIndustryIdentifiers))
+                        findISBNs(volume.getJSONArray(kIndustryIdentifiers))
+                    else
+                        emptyList()
+                }
             )
         }
 

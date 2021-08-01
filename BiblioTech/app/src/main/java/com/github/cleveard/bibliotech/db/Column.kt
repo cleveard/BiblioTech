@@ -741,19 +741,39 @@ private val sourceId = object: ColumnDataDescriptor(
 }
 
 /** ISBN */
-private val isbn = object: ColumnDataDescriptor(
-    arrayOf("ifnull($ISBN_COLUMN, '')"),
+private val isbn = object: SubQueryColumnDataDescriptor(
+    arrayOf(ISBN_COLUMN),
     R.string.isbn,
-    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB)
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
+    BOOK_ID_COLUMN,
+    BookDatabase.isbnTable,
+    BookDatabase.bookIsbnsTable
 ) {
     /** @inheritDoc */
+    override fun addJoin(buildQuery: BuildQuery) {
+        buildQuery.addJoin(BOOK_ISBNS_TABLE, BOOK_ID_COLUMN, BOOK_ISBNS_BOOK_ID_COLUMN)
+        buildQuery.addJoin(ISBNS_TABLE, BOOK_ISBNS_ISBN_ID_COLUMN, ISBNS_ID_COLUMN)
+    }
+
+    /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
-        return book.book.ISBN != other.book.ISBN
+        return book.sortIsbn != other.sortIsbn
     }
 
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors, context: Context): String {
-        return book.book.ISBN?: ""
+        return book.sortIsbn?: ""
+    }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, BookDatabase.isbnTable,
+            ISBN_COLUMN, constraint)
     }
 }
 

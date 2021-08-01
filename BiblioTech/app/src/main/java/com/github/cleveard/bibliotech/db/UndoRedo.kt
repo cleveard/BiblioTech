@@ -275,6 +275,30 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
+        },
+        /** Add a BookEntity operation */
+        ADD_ISBN(AddDataDescriptor(BookDatabase.isbnTable)) {
+            override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
+                dao.record(this, id)
+            }
+        },
+        /** Delete BookEntities operation */
+        DELETE_ISBN(DeleteDataDescriptor(BookDatabase.isbnTable)) {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+                return dao.recordDelete(this, expression, delete)
+            }
+        },
+        /** Add a BookCategoryEntity operation */
+        ADD_BOOK_ISBN_LINK(AddLinkDescriptor(BookDatabase.bookIsbnsTable)) {
+            override suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
+                dao.record(this, bookId, linkId)
+            }
+        },
+        /** Delete BookCategoryEntities operation */
+        DELETE_BOOK_ISBN_LINK(DeleteLinkDescriptor(BookDatabase.bookIsbnsTable)) {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+                return dao.recordDeleteLinks(this, expression, delete)
+            }
         };
 
         /**
@@ -1090,8 +1114,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     @Transaction
     protected open suspend fun copyForBookUndo(bookId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $BOOK_TABLE ( $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS )
-                | SELECT NULL, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $ISBN_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS | ${BookEntity.HIDDEN} FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = ?
+            """INSERT INTO $BOOK_TABLE ( $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS )
+                | SELECT NULL, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS | ${BookEntity.HIDDEN} FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(bookId)
         ))
