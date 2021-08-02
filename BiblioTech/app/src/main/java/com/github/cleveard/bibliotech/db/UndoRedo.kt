@@ -795,6 +795,26 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
+     * Delete all undo from a table and link table
+     */
+    private fun deleteUndo(table: BookDatabase.TableDescription, linkTable: BookDatabase.TableDescription) {
+        // Delete links for hidden rows in book table
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM ${linkTable.name} WHERE ${linkTable.bookIdColumn} IN (
+            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
+            |)
+            """.trimMargin()))
+        // Delete links for hidden rows in table
+        db.execUpdateDelete(SimpleSQLiteQuery("""
+            |DELETE FROM ${linkTable.name} WHERE ${linkTable.linkIdColumn} IN (
+            | SELECT ${table.idColumn} FROM $table WHERE ( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )
+            |)
+            """.trimMargin()))
+        // Delete hidden rows in table
+        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM ${table.name} WHERE ( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )"))
+    }
+
+    /**
      * Clear all of the undo info in the database
      */
     @Transaction
@@ -807,59 +827,20 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         // Delete all of the undo info
         delete(Int.MIN_VALUE, Int.MAX_VALUE)
 
-        // Delete author links for hidden books
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_BOOK_ID_COLUMN IN (
-            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
+        // Delete author undo
+        deleteUndo(BookDatabase.authorsTable, BookDatabase.bookAuthorsTable)
 
-        // Delete tag links for hidden books
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_BOOK_ID_COLUMN IN (
-            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
+        // Delete tag undo
+        deleteUndo(BookDatabase.tagsTable, BookDatabase.bookTagsTable)
 
-        // Delete category links for hidden books
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_BOOK_ID_COLUMN IN (
-            | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
+        // Delete category undo
+        deleteUndo(BookDatabase.categoriesTable, BookDatabase.bookCategoriesTable)
 
-        // Delete author links for hidden authors
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_AUTHORS_TABLE WHERE $BOOK_AUTHORS_AUTHOR_ID_COLUMN IN (
-            | SELECT $AUTHORS_ID_COLUMN FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
-
-        // Delete tag links for hidden tags
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN IN (
-            | SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
-
-        // Delete category links for hidden categories
-        db.execUpdateDelete(SimpleSQLiteQuery("""
-            |DELETE FROM $BOOK_CATEGORIES_TABLE WHERE $BOOK_CATEGORIES_CATEGORY_ID_COLUMN IN (
-            | SELECT $CATEGORIES_ID_COLUMN FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) != 0 )
-            |)
-            """.trimMargin()))
+        // Delete isbns undo
+        deleteUndo(BookDatabase.isbnTable, BookDatabase.bookIsbnsTable)
 
         // Delete hidden books
         db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )"))
-
-        // Delete hidden authors
-        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) != 0 )"))
-
-        // Delete hidden tags
-        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) != 0 )"))
-
-        // Delete hidden categories
-        db.execUpdateDelete(SimpleSQLiteQuery("DELETE FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) != 0 )"))
 
         // Reset the undo ids
         minUndoId = 1

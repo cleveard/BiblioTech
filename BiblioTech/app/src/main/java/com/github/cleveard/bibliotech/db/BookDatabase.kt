@@ -483,6 +483,23 @@ abstract class BookDatabase : RoomDatabase() {
             }
         }
 
+        private fun deleteUndo(database: SupportSQLiteDatabase, table: TableDescription, linkTable: TableDescription) {
+            // Delete links for hidden rows in book table
+            database.delete(linkTable.name, """
+                        |${linkTable.bookIdColumn} IN (
+                        | SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )
+                        |)
+                        """.trimMargin(), null)
+            // Delete links for hidden rows in table
+            database.delete(linkTable.name, """
+                        |${linkTable.linkIdColumn} IN (
+                        | SELECT ${table.idColumn} FROM ${table.name} WHERE ( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )
+                        |)
+                        """.trimMargin(), null)
+            // Delete hidden rows in table
+            database.delete(table.name, "( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )", null)
+        }
+
         /**
          * Migrations for the book data base
          */
@@ -522,9 +539,8 @@ abstract class BookDatabase : RoomDatabase() {
                     // Change UNIQUE indexes to be non-unique
                     database.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
-                    // Drop column and index in version 6, don't create it here
-                    // database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
-                    // database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`$ISBN_COLUMN`)")
+                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`books_isbn`)")
                     database.execSQL("DROP INDEX IF EXISTS `index_authors_authors_last_name_authors_remaining`")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `$AUTHORS_TABLE` (`$LAST_NAME_COLUMN`, `$REMAINING_COLUMN`)")
                     database.execSQL("DROP INDEX IF EXISTS `index_tags_tags_name`")
@@ -546,14 +562,23 @@ abstract class BookDatabase : RoomDatabase() {
                     database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
 
-                    // Insert all of the isbns in to the isbn table
-                    database.execSQL("INSERT OR ABORT INTO $ISBNS_TABLE ( $ISBNS_ID_COLUMN, $ISBN_COLUMN ) SELECT NULL, `books_isbn` FROM `$BOOK_TABLE` WHERE `books_isbn` != NULL")
+                    // Clear all undo from the database
+                    database.delete(OPERATION_TABLE, null, null)
+                    database.delete(UNDO_TABLE, null, null)
+                    deleteUndo(database, authorsTable, bookAuthorsTable)
+                    deleteUndo(database, tagsTable, bookTagsTable)
+                    deleteUndo(database, categoriesTable, bookCategoriesTable)
+                    database.delete(BOOK_TABLE, "( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )", null)
 
                     // Insert all of the isbns in to the isbn table
-                    database.execSQL("INSERT OR ABORT INTO $BOOK_ISBNS_TABLE ( $BOOK_ISBNS_ID_COLUMN, $BOOK_ISBNS_BOOK_ID_COLUMN, $BOOK_ISBNS_ISBN_ID_COLUMN ) SELECT NULL, $BOOK_ID_COLUMN, $ISBNS_ID_COLUMN FROM `$BOOK_TABLE` LEFT JOIN $ISBNS_TABLE ON $ISBN_COLUMN = `books_isbn` WHERE `books_isbn` != NULL")
+                    database.execSQL("INSERT OR ABORT INTO $ISBNS_TABLE ( $ISBNS_ID_COLUMN, $ISBN_COLUMN ) SELECT NULL, `books_isbn` FROM `$BOOK_TABLE` WHERE `books_isbn` NOTNULL")
+
+                    // Insert all of the isbns in to the isbn table
+                    database.execSQL("INSERT OR ABORT INTO $BOOK_ISBNS_TABLE ( $BOOK_ISBNS_ID_COLUMN, $BOOK_ISBNS_BOOK_ID_COLUMN, $BOOK_ISBNS_ISBN_ID_COLUMN ) SELECT NULL, $BOOK_ID_COLUMN, $ISBNS_ID_COLUMN FROM `$BOOK_TABLE` LEFT JOIN $ISBNS_TABLE ON $ISBN_COLUMN = `books_isbn` WHERE `books_isbn` NOTNULL")
 
                     // Delete the isbn index and set all values to NULL
                     database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    // Set the original books_isbn column to null
                     database.execSQL("UPDATE OR ABORT $BOOK_TABLE SET `books_isbn` = NULL")
                 }
             }

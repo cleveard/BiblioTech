@@ -58,6 +58,8 @@ class DateConverters {
 
 /**
  * Room Entity for the Books table
+ * Make the constructor private to prevent accidental
+ * setting of the unused1 field
  */
 @TypeConverters(DateConverters::class)
 @Entity(tableName = BOOK_TABLE,
@@ -65,10 +67,11 @@ class DateConverters {
         Index(value = [BOOK_ID_COLUMN],unique = true),
         Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN])
     ])
-data class BookEntity(
+data class BookEntity private constructor(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
     @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
+    @ColumnInfo(name = "books_isbn") var unused1: String?, // Removed in version 6 of the database
     @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") var title: String,
     @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") var subTitle: String,
     @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") var description: String,
@@ -82,6 +85,41 @@ data class BookEntity(
     @ColumnInfo(name = LARGE_THUMB_COLUMN) var largeThumb: String?,
     @ColumnInfo(name = BOOK_FLAGS,defaultValue = "0") var flags: Int
 ) {
+    // This constructor initializes the unused1 field to null
+    constructor(
+        id: Long,
+        volumeId: String?,
+        sourceId: String?,
+        title: String,
+        subTitle: String,
+        description: String,
+        pageCount: Int,
+        bookCount: Int,
+        linkUrl: String,
+        rating: Double,
+        added: Date,
+        modified: Date,
+        smallThumb: String?,
+        largeThumb: String?,
+        flags: Int
+    ): this(id = id,
+        volumeId = volumeId,
+        sourceId = sourceId,
+        unused1 = null,
+        title = title,
+        subTitle = subTitle,
+        description = description,
+        pageCount = pageCount,
+        bookCount = bookCount,
+        linkUrl = linkUrl,
+        rating = rating,
+        added = added,
+        modified = modified,
+        smallThumb = smallThumb,
+        largeThumb = largeThumb,
+        flags = flags
+    )
+
     var isSelected: Boolean
         get() = ((flags and SELECTED) != 0)
         set(v) {
