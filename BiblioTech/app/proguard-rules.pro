@@ -40,3 +40,4 @@
 -keepclasseswithmembers class com.github.cleveard.bibliotech.** { # <-- change package name to your app's
     kotlinx.serialization.KSerializer serializer(...);
 }
+-keep class com.yanzhenjie.zbar.* { *; }
