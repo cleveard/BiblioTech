@@ -419,7 +419,7 @@ class ImportCSV {
                               private val inContext: Context,
                               private val inScope: CoroutineScope,
                               columns: Map<String, ImportColumn<BookAndAuthors>>)
-        : ImportHandler<BookAndAuthors, List<BookEntity>>(resolution, R.string.ask_replace_message_books, columns)
+        : ImportHandler<BookAndAuthors, BookAndAuthors>(resolution, R.string.ask_replace_message_books, columns)
     {
         /**
          * @inheritDoc
@@ -498,7 +498,7 @@ class ImportCSV {
         /**
          * @inheritDoc
          */
-        override suspend fun addToDatabase(data: BookAndAuthors, conflictCallback: suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean): Long {
+        override suspend fun addToDatabase(data: BookAndAuthors, conflictCallback: suspend CoroutineScope.(conflict: BookAndAuthors) -> Boolean): Long {
             data.book.id = 0L
             val id = repo.addOrUpdateBook(data, conflictCallback)
             if (records.size > 0 && data == records.last())

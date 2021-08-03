@@ -225,7 +225,7 @@ class BookRepository private constructor(context: Context) {
      * @param callback Callback used to resolve conflicts
      * The book is added and selected tags
      */
-    suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
+    suspend fun addOrUpdateBook(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: BookAndAuthors) -> Boolean)? = null): Long {
         return withUndo(format(addBook, book.book.title)) {
             db.getBookDao().addOrUpdateWithUndo(book, null, callback)
         }

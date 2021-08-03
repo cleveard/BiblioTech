@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.db
 
 import android.content.Context
-import android.database.sqlite.SQLiteConstraintException
 import android.graphics.Bitmap
 import android.os.Parcel
 import android.os.Parcelable
@@ -58,8 +57,6 @@ class DateConverters {
 
 /**
  * Room Entity for the Books table
- * Make the constructor private to prevent accidental
- * setting of the unused1 field
  */
 @TypeConverters(DateConverters::class)
 @Entity(tableName = BOOK_TABLE,
@@ -67,7 +64,7 @@ class DateConverters {
         Index(value = [BOOK_ID_COLUMN],unique = true),
         Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN])
     ])
-data class BookEntity private constructor(
+data class BookEntity constructor(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
     @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
@@ -498,14 +495,14 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param sourceId The source id
      */
     @Query(value = "SELECT * FROM $BOOK_TABLE WHERE ( ( $VOLUME_ID_COLUMN = :volumeId AND $SOURCE_ID_COLUMN = :sourceId ) ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
-    protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): List<BookEntity>?
+    protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): BookAndAuthors?
 
     /**
      * Find a conflicting book
      * @param volumeId The conflicting volume id
      * @param sourceId The conflicting source id
      */
-    private suspend fun findConflict(volumeId: String?, sourceId: String?): List<BookEntity>? {
+    private suspend fun findConflict(volumeId: String?, sourceId: String?): BookAndAuthors? {
         // If this book doesn't have a volume id or ISBN, Then we can't conflict
         return if (volumeId == null)
             null
@@ -517,43 +514,41 @@ abstract class BookDao(private val db: BookDatabase) {
      * Add or update a book in the data base
      */
     @Transaction
-    protected open suspend fun addOrUpdateWithUndo(book: BookEntity, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
+    protected open suspend fun addOrUpdateWithUndo(book: BookAndAuthors, callback: (suspend CoroutineScope.(conflict: BookAndAuthors) -> Boolean)?): Long {
         // Assume adding, set the added and modified time to now
         val time = Calendar.getInstance().time
 
         // If either the volume or source ids are not null
         // make sure both aren't null
-        if (book.volumeId != null || book.sourceId != null) {
-            book.volumeId = book.volumeId?: ""
-            book.sourceId = book.sourceId?: ""
+        if (book.book.volumeId != null || book.book.sourceId != null) {
+            book.book.volumeId = book.book.volumeId?: ""
+            book.book.sourceId = book.book.sourceId?: ""
         }
 
         // Look for a conflict
-        val ids = findConflict(book.volumeId, book.sourceId)
-        if (ids.isNullOrEmpty()) {
+        val bookConflict = findConflict(book.book.volumeId, book.book.sourceId)
+        if (bookConflict == null) {
             // Didn't find a conflict add the book
-            book.id = 0
-            book.added = time
-            book.modified = time
-            book.id = add(book)
-            if (book.id != 0L)
-                UndoRedoDao.OperationType.ADD_BOOK.recordAdd(db.getUndoRedoDao(), book.id)
-        } else if (BookDatabase.callConflict(ids, callback, true)) {
-            if (ids.size != 1)
-                throw SQLiteConstraintException("Multiple conflicting books")
+            book.book.id = 0
+            book.book.added = time
+            book.book.modified = time
+            book.book.id = add(book.book)
+            if (book.book.id != 0L)
+                UndoRedoDao.OperationType.ADD_BOOK.recordAdd(db.getUndoRedoDao(), book.book.id)
+        } else if (BookDatabase.callConflict(bookConflict, callback, true)) {
             // Had a conflict, get the id and time added and update the book
-            book.id = ids[0].id
-            book.added = ids[0].added
-            book.modified = time
-            if (!UndoRedoDao.OperationType.CHANGE_BOOK.recordUpdate(db.getUndoRedoDao(), book.id) {
-                update(book) > 0
+            book.book.id = bookConflict.book.id
+            book.book.added = bookConflict.book.added
+            book.book.modified = time
+            if (!UndoRedoDao.OperationType.CHANGE_BOOK.recordUpdate(db.getUndoRedoDao(), book.book.id) {
+                update(book.book) > 0
             }) {
-                book.id = 0L
+                book.book.id = 0L
             }
         } else
-            book.id = 0L
+            book.book.id = 0L
 
-        return book.id
+        return book.book.id
     }
 
     /**
@@ -563,9 +558,9 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param callback Callback used to resolve conflicts
      */
     @Transaction
-    open suspend fun addOrUpdateWithUndo(book: BookAndAuthors, tagIds: Array<Any>? = null, callback: (suspend CoroutineScope.(conflict: List<BookEntity>) -> Boolean)? = null): Long {
+    open suspend fun addOrUpdateWithUndo(book: BookAndAuthors, tagIds: Array<Any>? = null, callback: (suspend CoroutineScope.(conflict: BookAndAuthors) -> Boolean)? = null): Long {
         // Add or update the book
-        val id = addOrUpdateWithUndo(book.book, callback)
+        val id = addOrUpdateWithUndo(book, callback)
 
         if (id != 0L) {
             // Delete existing thumbnails, if any
