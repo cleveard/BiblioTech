@@ -205,7 +205,7 @@ data class BookAndAuthors(
     /**
      * @inheritDoc
      *
-     * Override to exclude sortFirst, sortLast, sortTag and sortCategory from equals
+     * Override to exclude sortFirst, sortLast, sortTag, sortCategory and sortIsbn from equals
      */
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -217,6 +217,7 @@ data class BookAndAuthors(
         if (authors != other.authors) return false
         if (categories != other.categories) return false
         if (tags != other.tags) return false
+        if (isbns != other.isbns) return false
 
         return true
     }
@@ -231,6 +232,7 @@ data class BookAndAuthors(
         result = 31 * result + authors.hashCode()
         result = 31 * result + categories.hashCode()
         result = 31 * result + tags.hashCode()
+        result = 31 * result + isbns.hashCode()
         return result
     }
 

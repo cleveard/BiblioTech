@@ -40,8 +40,8 @@ enum class Column(val desc: ColumnDataDescriptor) {
     SOURCE(source),
     /** Id of book details in the source */
     SOURCE_ID(sourceId),
-    /** ISBN */
-    ISBN(isbn),
+    /** ISBNs */
+    ISBN(isbns),
     /** Page Count */
     PAGE_COUNT(pageCount),
     /** Number of books tracked */
@@ -741,7 +741,7 @@ private val sourceId = object: ColumnDataDescriptor(
 }
 
 /** ISBN */
-private val isbn = object: SubQueryColumnDataDescriptor(
+private val isbns = object: SubQueryColumnDataDescriptor(
     arrayOf(ISBN_COLUMN),
     R.string.isbn,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),

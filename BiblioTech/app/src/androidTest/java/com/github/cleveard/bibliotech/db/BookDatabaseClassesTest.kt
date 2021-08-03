@@ -226,14 +226,6 @@ class BookDatabaseClassesTest {
         )
     }
 
-    private fun makeIsbn(): IsbnEntity {
-        return IsbnEntity(
-            id = 0L,
-            isbn = "isbn",
-            flags = 0,
-        )
-    }
-
     @Test(timeout = 5000L) fun tagEntityTest() {
         val tag1 = makeTag()
         val tag2 = makeTag()
@@ -268,6 +260,46 @@ class BookDatabaseClassesTest {
         changeAndCheck(tag1, tag2, tag1::id, 1L)
         changeAndCheck(tag1, tag2, tag1::bookId, 6L)
         changeAndCheck(tag1, tag2, tag1::tagId, 22L)
+    }
+
+    private fun makeIsbn(): IsbnEntity {
+        return IsbnEntity(
+            id = 0L,
+            isbn = "isbn",
+        )
+    }
+
+    @Test(timeout = 5000L) fun isbnEntityTest() {
+        val isbn1 = makeIsbn()
+        val isbn2 = makeIsbn()
+
+        // Assert that the books compare
+        assertThat(isbn1 == isbn2).isTrue()
+        assertThat(isbn1.hashCode()).isEqualTo(isbn2.hashCode())
+        // Assert that changing any field will cause a mis-compare
+        changeAndCheck(isbn1, isbn2, isbn1::id, 1L)
+        changeAndCheck(isbn1, isbn2, isbn1::isbn, "somethingElse")
+    }
+
+    @Test(timeout = 5000L) fun bookIsbnEntityTest() {
+        fun makeBookIsbn(): BookAndIsbnEntity {
+            return BookAndIsbnEntity(
+                id = 0L,
+                bookId = 3,
+                isbnId = 4,
+            )
+        }
+
+        val category1 = makeBookIsbn()
+        val category2 = makeBookIsbn()
+
+        // Assert that the books compare
+        assertThat(category1 == category2).isTrue()
+        assertThat(category1.hashCode()).isEqualTo(category2.hashCode())
+        // Assert that changing any field will cause a mis-compare
+        changeAndCheck(category1, category2, category1::id, 1L)
+        changeAndCheck(category1, category2, category1::bookId, 6L)
+        changeAndCheck(category1, category2, category1::isbnId, 22L)
     }
 
     @Test(timeout = 5000L) fun viewEntityTest() {

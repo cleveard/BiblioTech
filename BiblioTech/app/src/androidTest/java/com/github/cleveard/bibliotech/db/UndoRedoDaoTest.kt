@@ -2,7 +2,6 @@ package com.github.cleveard.bibliotech.db
 
 
 import android.content.Context
-import android.database.sqlite.SQLiteConstraintException
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -591,21 +590,21 @@ class UndoRedoDaoTest {
         expected.testRandomUndo("AddBooks Update", 10)
     }
 
-    @Test(expected = SQLiteConstraintException::class) fun testUpdateFails() {
+    @Test fun testUpdatePasses() {
         runBlocking {
             repo.setMaxUndoLevels(0)
-            doTestUpdateFails()
+            doTestUpdatePasses()
         }
     }
 
-    @Test(expected = SQLiteConstraintException::class) fun testUpdateFailsWithUndo() {
+    @Test fun testUpdatePassesWithUndo() {
         runBlocking {
             repo.setMaxUndoLevels(20, 25)
-            doTestUpdateFails()
+            doTestUpdatePasses()
         }
     }
 
-    private suspend fun doTestUpdateFails() {
+    private suspend fun doTestUpdatePasses() {
         // Updating a book that conflicts with two other books will fail
         val expected = BookDbTracker.addBooks(repo, 5668721L, "AddBooks Update", 20)
         expected.undoTracker.syncUndo("Update Fails")

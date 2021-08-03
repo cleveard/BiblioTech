@@ -27,6 +27,7 @@ fun StandardSubjectBuilder.compareBooks(actual: BookAndAuthors?, expected: BookA
         that(actual.authors).containsExactlyElementsIn(expected.authors)
         that(actual.categories).containsExactlyElementsIn(expected.categories)
         that(actual.tags).containsExactlyElementsIn(expected.tags)
+        that(actual.isbns).containsExactlyElementsIn(expected.isbns)
     }
 
 }
@@ -151,7 +152,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     }
 
     /**
-     * Get a list of all categories that aren't hidden
+     * Get a list of all isbns that aren't hidden
      */
     private suspend fun getIsbns(): List<IsbnEntity> {
         return db.getIsbnDao().get()?: emptyList()
@@ -206,12 +207,12 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     /**
      * Check some consistency in the expected values
      * @param message A message for assertion failures
-     * The tracker keeps a count of links to tags, authors and categories. This method checks to make sure the counts
+     * The tracker keeps a count of links to tags, authors, categories and isbns. This method checks to make sure the counts
      * match the links in the books. It is called when initializing the database with books. When I first wrote this
      * class there were bugs that messed up the count and caused errors later on. This just catches those bugs.
      */
     private fun checkConsistency(message: String) {
-        // Get the sequence of books. We map to a sequence of sequences of tag/authors/categories
+        // Get the sequence of books. We map to a sequence of sequences of tag/authors/categories/isbns
         // and count how many times each tag is in the flattened sequence. These counts should equal
         // the link counts we are tracking.
         val bookSequence = tables.bookEntities.entities
@@ -288,7 +289,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             tags = null
         // Add 0 to 2 random tags
         book.tags = tables.tagEntities.createRelationList(2, random)
-        // Add 0 to 3 random categories
+        // Add 0 to 3 random isbns
         book.isbns = tables.isbnEntities.createRelationList(3, random)
 
         assertWithMessage("%s: Add %s", message, book.book.title).apply {
@@ -1058,17 +1059,17 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
          * The expected values for the isbns table
          */
         val isbnEntities: Table<IsbnEntity> = object: Table<IsbnEntity>(
-            // Create a category entity
+            // Create an isbn entity
             {_, _, unique -> IsbnEntity(0L, "isbn$unique") },
-            // Copy id from one category to another
+            // Copy id from one isbn to another
             {entity, prev ->  prev?.let { entity.id = it.id } },
-            // Determine whether two categories have the same id
+            // Determine whether two isbns have the same id
             {e1, e2 -> e1.id == e2.id }
-            // Do delete categories when the are no longer referenced
+            // Do delete isbns when they are no longer referenced
         ) {
             /**
              * @inheritDoc
-             * Categories conflict when the names are the same
+             * Isbns conflict when the values are the same
              */
             override fun compare(e1: IsbnEntity, e2: IsbnEntity): Int {
                 return e1.isbn.compareTo(e2.isbn, true)

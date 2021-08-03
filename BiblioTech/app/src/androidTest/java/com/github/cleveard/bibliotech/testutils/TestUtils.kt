@@ -10,7 +10,6 @@ fun makeBook(unique: Int = 0, flags: Int = 0, uniqueString: String = unique.toSt
         id = 0L,
         volumeId = "volumeId$uniqueString",
         sourceId = "sourceId$uniqueString",
-        ISBN = "ISBN$uniqueString",
         title = "title$uniqueString",
         subTitle = "subTitle$uniqueString",
         description = "description$uniqueString",
@@ -31,6 +30,7 @@ fun makeBookAndAuthors(unique: Int = 0, flags: Int = 0, uniqueString: String = u
         book = makeBook(unique, flags, uniqueString),
         authors = emptyList(),
         categories = emptyList(),
-        tags = emptyList()
+        tags = emptyList(),
+        isbns = emptyList()
     )
 }

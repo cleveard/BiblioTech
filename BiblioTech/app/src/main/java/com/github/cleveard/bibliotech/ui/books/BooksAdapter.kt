@@ -380,7 +380,9 @@ internal open class BooksAdapter(
                 }
                 book.book.description.setField(itemView, R.id.book_desc)
                 book.book.volumeId.setField(itemView, R.id.book_vol_id)
-                book.isbns.joinToString { it.isbn }.setField(itemView, R.id.book_isbn)
+                book.isbns.setField(itemView, R.id.book_isbn, ", ") {
+                    it.isbn
+                }
                 book.book.linkUrl.setField(itemView, R.id.book_list_link)
                 book.book.pageCount.toString().setField(itemView, R.id.book_list_pages)
                 // Set the rating

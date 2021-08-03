@@ -807,7 +807,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         // Delete links for hidden rows in table
         db.execUpdateDelete(SimpleSQLiteQuery("""
             |DELETE FROM ${linkTable.name} WHERE ${linkTable.linkIdColumn} IN (
-            | SELECT ${table.idColumn} FROM $table WHERE ( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )
+            | SELECT ${table.idColumn} FROM ${table.name} WHERE ( ( ${table.flagColumn} & ${table.flagValue} ) != 0 )
             |)
             """.trimMargin()))
         // Delete hidden rows in table

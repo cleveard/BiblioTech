@@ -23,6 +23,8 @@ import kotlin.collections.ArrayList
 //      Book Categories table - A link table that links Categories table rows to Book table rows
 //      Tags table - Tag names and descriptions
 //      Book Tags table - A link table that links Tags table rows to Book table rows
+//      Isbns table - Isbn numbers
+//      Book Isbns table - A link table that links Isbns table rows to Book table rows
 //
 //      I decided to make all of the column names in all of the tables unique so I don't
 //      need to worry about qualifying names when building queries

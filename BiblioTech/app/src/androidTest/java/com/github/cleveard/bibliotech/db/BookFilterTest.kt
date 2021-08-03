@@ -548,9 +548,9 @@ class BookFilterTest {
             {
                 map { book ->
                     if (book.isbns.isEmpty())
-                        sequenceOf(book.copy(sortTag = null))
+                        sequenceOf(book.copy(sortIsbn = null))
                     else
-                        book.isbns.asSequence().map { book.copy(sortTag = it.isbn) }
+                        book.isbns.asSequence().map { book.copy(sortIsbn = it.isbn) }
                 }.flatten()
             }, { sequenceOf(isbns.asSequence().map { it.isbn }) }
         ),
