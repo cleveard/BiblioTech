@@ -12,6 +12,7 @@
     <string name="book_thumb">Book Thumbnail</string>
     <string name="id">ID:</string>
     <string name="isbn">ISBN</string>
+    <string name="isbns">ISBNs:</string>
     <string name="bad_isbn">%1$s: ISBN is invalid.</string>
     <string name="no_ISBNs">ISBN barcode was not scanned</string>
 
