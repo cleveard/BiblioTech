@@ -180,7 +180,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete a CategoryEntity operation */
         DELETE_CATEGORY(DeleteDataDescriptor(BookDatabase.categoriesTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend suspend (Long) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend (Long) -> Int): Int {
                 return dao.recordDelete(this, curId, delete)
             }
         },
@@ -284,8 +284,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete BookEntities operation */
         DELETE_ISBN(DeleteDataDescriptor(BookDatabase.isbnTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
-                return dao.recordDelete(this, expression, delete)
+            override suspend fun recordDelete(dao: UndoRedoDao, curId: Long, delete: suspend (Long) -> Int): Int {
+                return dao.recordDelete(this, curId, delete)
             }
         },
         /** Add a BookCategoryEntity operation */

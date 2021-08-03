@@ -575,6 +575,8 @@ abstract class BookDao(private val db: BookDatabase) {
             db.getAuthorDao().addWithUndo(book.book.id, book.authors)
             // Add Tags from book along with additional tags
             db.getTagDao().addWithUndo(book.book.id, book.tags, tagIds)
+            // Add ISBNs from book
+            db.getIsbnDao().addWithUndo(book.book.id, book.isbns)
         }
 
         return id
@@ -593,6 +595,8 @@ abstract class BookDao(private val db: BookDatabase) {
         db.getAuthorDao().deleteWithUndo(bookIds, true, filter)
         // Delete all categories for the book - delete categories with no books
         db.getCategoryDao().deleteWithUndo(bookIds, true, filter)
+        // Delete all ISBNs for the book - delete ISBNs with no books
+        db.getIsbnDao().deleteWithUndo(bookIds, true, filter)
 
         // Delete all thumbnails
         queryBookIds(bookIds, filter)?.let {

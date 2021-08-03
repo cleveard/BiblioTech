@@ -151,6 +151,13 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     }
 
     /**
+     * Get a list of all categories that aren't hidden
+     */
+    private suspend fun getIsbns(): List<IsbnEntity> {
+        return db.getIsbnDao().get()?: emptyList()
+    }
+
+    /**
      * Add a tag to the database
      * @param tag The tag to add
      * @param callback A callback to decide whether to update or reject conflicts
@@ -211,6 +218,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.tagEntities.checkCounts("$message: Tags", bookSequence.map { it.tags.asSequence() }.flatten()) { it.name }
         tables.authorEntities.checkCounts("$message: Authors", bookSequence.map { it.authors.asSequence() }.flatten()) { it.name }
         tables.categoryEntities.checkCounts("$message: Categories", bookSequence.map { it.categories.asSequence() }.flatten()) { it.category }
+        tables.isbnEntities.checkCounts("$message: Isbns", bookSequence.map { it.isbns.asSequence() }.flatten()) { it.isbn }
     }
 
     /**
@@ -236,6 +244,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             that(getAuthors()).containsExactlyElementsIn(tables.authorEntities.entities.toList())
             that(getCategories()).containsExactlyElementsIn(tables.categoryEntities.entities.toList())
             that(getViews()).containsExactlyElementsIn(tables.viewEntities.entities.toList())
+            that(getIsbns()).containsExactlyElementsIn(tables.isbnEntities.entities.toList())
         }
     }
 
@@ -279,6 +288,8 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             tags = null
         // Add 0 to 2 random tags
         book.tags = tables.tagEntities.createRelationList(2, random)
+        // Add 0 to 3 random categories
+        book.isbns = tables.isbnEntities.createRelationList(3, random)
 
         assertWithMessage("%s: Add %s", message, book.book.title).apply {
             // Add the book
@@ -324,6 +335,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.categoryEntities.linkRelation(book.categories)
         tables.authorEntities.linkRelation(book.authors)
         tables.bookEntities.linked(book)
+        tables.isbnEntities.linkRelation(book.isbns)
     }
 
     /**
@@ -335,6 +347,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.categoryEntities.unlinkRelation(book.categories)
         tables.authorEntities.unlinkRelation(book.authors)
         tables.bookEntities.unlinked(book)
+        tables.isbnEntities.unlinkRelation(book.isbns)
     }
 
     /**
@@ -349,6 +362,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             tables.tagEntities.updateRelation(prev.tags, book.tags)
             tables.categoryEntities.updateRelation(prev.categories, book.categories)
             tables.authorEntities.updateRelation(prev.authors, book.authors)
+            tables.isbnEntities.updateRelation(prev.isbns, book.isbns)
         } else
             linkBook(book) // No previous, just link in the new book
     }
@@ -1041,6 +1055,26 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             }
         }
         /**
+         * The expected values for the isbns table
+         */
+        val isbnEntities: Table<IsbnEntity> = object: Table<IsbnEntity>(
+            // Create a category entity
+            {_, _, unique -> IsbnEntity(0L, "isbn$unique") },
+            // Copy id from one category to another
+            {entity, prev ->  prev?.let { entity.id = it.id } },
+            // Determine whether two categories have the same id
+            {e1, e2 -> e1.id == e2.id }
+            // Do delete categories when the are no longer referenced
+        ) {
+            /**
+             * @inheritDoc
+             * Categories conflict when the names are the same
+             */
+            override fun compare(e1: IsbnEntity, e2: IsbnEntity): Int {
+                return e1.isbn.compareTo(e2.isbn, true)
+            }
+        }
+        /**
          * The expected values for the books table
          */
         val bookEntities: Table<BookAndAuthors> = object: Table<BookAndAuthors>(
@@ -1135,6 +1169,8 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 t.authorEntities.copy(authorEntities) { it }
                 // Copy the categories and share the entities between all tables
                 t.categoryEntities.copy(categoryEntities) { it }
+                // Copy the isbns and share the entities between all tables
+                t.isbnEntities.copy(isbnEntities) { it }
                 // Copy the books
                 t.bookEntities.copy(bookEntities) {book ->
                     // Make copies of the books
