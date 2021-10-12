@@ -1,6 +1,7 @@
 package com.github.cleveard.bibliotech.ui.books
 
 import android.app.Activity
+import android.app.Application
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.SpannableStringBuilder
@@ -27,6 +28,7 @@ import com.github.cleveard.bibliotech.ManageNavigation
 import com.github.cleveard.bibliotech.MobileNavigationDirections
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookFilter
+import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
 import com.github.cleveard.bibliotech.db.UndoTransactionEntity
 import com.github.cleveard.bibliotech.db.ViewEntity
 import com.github.cleveard.bibliotech.ui.filter.FilterTable
@@ -285,6 +287,8 @@ class BooksFragment : Fragment() {
         activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
         // Setup the filter in the view model
         booksViewModel.applyView(args.filterName)
+        ColumnDataDescriptor.setDateLocale(requireContext().resources.configuration.locales[0])
+
     }
 
     /**

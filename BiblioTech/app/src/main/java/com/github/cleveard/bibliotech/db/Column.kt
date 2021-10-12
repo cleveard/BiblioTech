@@ -269,9 +269,8 @@ abstract class ColumnDataDescriptor(
     /**
      * Get the column value from a book
      * @param book The book holding the value
-     * @param context The context to use for displaying the value
      */
-    abstract fun getValue(book: BookAndAuthors, context: Context): String
+    abstract fun getValue(book: BookAndAuthors): String
 
     /**
      * Return whether a separator should be between two books
@@ -284,10 +283,9 @@ abstract class ColumnDataDescriptor(
     /**
      * Get the value string to include in the separator
      * @param book The book after the separator
-     * @param context The context to use for displaying the value
      */
-    open fun getSeparatorValue(book: BookAndAuthors, context: Context): String {
-        return getValue(book, context)
+    open fun getSeparatorValue(book: BookAndAuthors): String {
+        return getValue(book)
     }
 
     /**
@@ -313,16 +311,23 @@ abstract class ColumnDataDescriptor(
         private var formatLocale: Locale? = null
 
         /**
+         * Set the local to use for dates
+         * @param locale The locale to use for the format
+         */
+        fun setDateLocale(locale: Locale) {
+            if (format == null || locale != formatLocale) {
+                format = DateFormat.getDateInstance(DateFormat.SHORT, locale)
+                formatLocale = locale
+            }
+        }
+
+        /**
          * Format a date
          * @param date The date to format
          * @param locale The locale to use for the format
          * @return The formatted date
          */
-        fun formatDate(date: Date, locale: Locale): String {
-            if (format == null || locale != formatLocale) {
-                format = DateFormat.getDateInstance(DateFormat.SHORT, locale)
-                formatLocale = locale
-            }
+        fun formatDate(date: Date): String {
             return format!!.format(date)
         }
 
@@ -431,7 +436,7 @@ private val lastFirst = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return "${book.sortLast?: ""}, ${book.sortFirst?: ""}"
     }
 }
@@ -457,7 +462,7 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return "${book.sortFirst?: ""} ${book.sortLast?: ""}"
     }
 
@@ -530,7 +535,7 @@ private val anyColumn = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return ""
     }
 
@@ -568,7 +573,7 @@ private val title = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.title
     }
 
@@ -596,7 +601,7 @@ private val subtitle = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.subTitle
     }
 }
@@ -616,7 +621,7 @@ private val description = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return ""
     }
 }
@@ -642,7 +647,7 @@ private val tags = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.sortTag?: ""
     }
 
@@ -679,7 +684,7 @@ private val categories = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.sortCategory?: ""
     }
 
@@ -707,7 +712,7 @@ private val source = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.sourceId?: ""
     }
 
@@ -735,7 +740,7 @@ private val sourceId = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.volumeId?: ""
     }
 }
@@ -761,7 +766,7 @@ private val isbns = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.sortIsbn?: ""
     }
 
@@ -789,7 +794,7 @@ private val pageCount = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.pageCount.toString()
     }
 
@@ -816,7 +821,7 @@ private val bookCount = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return book.book.bookCount.toString()
     }
 
@@ -843,7 +848,7 @@ private val rating = object: ColumnDataDescriptor(
     }
 
     /** @inheritDoc */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
+    override fun getValue(book: BookAndAuthors): String {
         return floor(book.book.rating).toString()
     }
 
@@ -880,8 +885,8 @@ private val dateAdded = object: ColumnDataDescriptor(
      * @inheritDoc
      * Separator value is the day
      */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
-        return formatDate(book.book.added, context.resources.configuration.locales[0])
+    override fun getValue(book: BookAndAuthors): String {
+        return formatDate(book.book.added)
     }
 
     /**
@@ -927,8 +932,8 @@ private val dateModified = object: ColumnDataDescriptor(
      * @inheritDoc
      * Separator value is the day
      */
-    override fun getValue(book: BookAndAuthors, context: Context): String {
-        return formatDate(book.book.modified, context.resources.configuration.locales[0])
+    override fun getValue(book: BookAndAuthors): String {
+        return formatDate(book.book.modified)
     }
 
     /**

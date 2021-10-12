@@ -59,7 +59,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                         if (order.isEmpty())
                             null
                         else
-                            order[0].column.desc.getValue(book, context)
+                            order[0].column.desc.getValue(book)
                     }?: position.toString()
                 }
             }
@@ -349,9 +349,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 // Add the item value, possibly different for headers and separators
                 appendSpan(
                     if (isSeparator)
-                        field.column.desc.getSeparatorValue(book, context)
+                        field.column.desc.getSeparatorValue(book)
                     else
-                        field.column.desc.getValue(book, context),
+                        field.column.desc.getValue(book),
                     textAppearance(itemStyles, i)
                 )
             }
