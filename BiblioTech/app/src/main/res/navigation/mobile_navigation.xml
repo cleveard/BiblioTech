@@ -21,6 +21,9 @@
         <action
             android:id="@+id/action_nav_books_to_settingsFragment"
             app:destination="@id/settingsFragment" />
+        <action
+            android:id="@+id/action_nav_books_to_printFragment"
+            app:destination="@id/printFragment" />
     </fragment>
 
     <fragment
@@ -55,5 +58,16 @@
         android:id="@+id/settingsFragment"
         android:name="com.github.cleveard.bibliotech.ui.settings.SettingsFragment"
         android:label="@string/action_settings" />
+    <fragment
+        android:id="@+id/printFragment"
+        android:name="com.github.cleveard.bibliotech.ui.print.PrintFragment"
+        android:label="@string/print"
+        tools:layout="@layout/print_fragment">
+        <argument
+            android:name="filterName"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+    </fragment>
 
 </navigation>

@@ -7,6 +7,7 @@ import android.text.Layout
 import android.text.SpannableStringBuilder
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
+import kotlin.math.ceil
 
 /** Class to hold absolute layout for a book */
 data class BookLayout(
@@ -39,12 +40,17 @@ data class BookLayout(
     val layoutBounds: LayoutBounds = BookLayoutBounds()
 
     fun verticalClip(y: Float, columnHeight: Float): BookLayout {
-        // If the book is completely visible, then return the height
+        // Initialize the clip rectangles
+        columns.forEach { it.clip.set(it.bounds) }
+
+        // Calculate the layout clip rectangle
         val bookTop = y + bounds.top
         val bookBottom = y + bounds.bottom
         val clipTop = bookTop.coerceAtLeast(0.0f) - bookTop
         val clipBottom = bookBottom.coerceAtMost(columnHeight) -  bookTop
         clip.set(bounds.left, clipTop, bounds.right, clipBottom)
+
+        // If the book is completely visible, then return the layout
         if (bookTop >= 0 && bookBottom <= columnHeight)
             return this
 
@@ -67,6 +73,71 @@ data class BookLayout(
         return this
     }
 
+    fun handleOrphans(y: Float, columnStart: Boolean) {
+        // Don't bother with orphans if orphans aren't important
+        // Or the entire layout isn't visible
+        // Or the bottom of the layout is visible.
+        if (printer.orphans < 1 || clip.isEmpty || clip.bottom + EPSILON >= bounds.bottom)
+            return
+
+        // Create a list of the top and bottom of all lines in the layout
+        val lines: List<Pair<Float,Float>> = columns.asSequence()            // All of the fields
+            .map {l ->
+                // Map each field to a sequence of line vertical bounds
+                // or null if the textLayout is null or doesn't have any lines
+                if (l.bounds.isEmpty)
+                    null
+                else {
+                    l.textLayout?.let { t ->
+                        (0 until t.lineCount).asSequence()
+                            .map {
+                                Pair(
+                                    l.bounds.top + printer.verticalPixelsToPoints(t.getLineTop(it)),
+                                    l.bounds.top + printer.verticalPixelsToPoints(t.getLineTop(it + 1))
+                                )
+                            }
+                    }
+                }
+            } // All of the text layouts from the fields
+            .filterNotNull()                        // Filter out fields without a text layout
+            .flatten()
+            .toMutableList().apply {
+                sortBy { it.first }
+            }
+
+        var end = lines.size
+        while (true) {
+            // Check for orphans at the start
+            if (!columnStart && clip.top <= bounds.top && clip.bottom > bounds.top) {
+                val visibleCount = lines.count { it.second > clip.top && it.first < clip.bottom }
+                if (visibleCount < printer.orphans) {
+                    // Not enough visible lines force next column
+                    clip.top = bounds.top
+                    clip.bottom = bounds.top
+                    return
+                }
+            }
+
+            // We return above when the bottom of the layout is being displayed
+            // So when we get here we need to check the number of lines going
+            // to the next column
+            val nextCount = lines.count { it.first >= clip.bottom }
+            if (nextCount <= 0 || nextCount >= printer.orphans)
+                return
+
+            // Need to move some lines to the next column
+            while (--end >= 0) {
+                // Find the last line above the current clip bottom
+                if (lines[end].first < clip.bottom) {
+                    // Clip to the top of that line
+                    verticalClip(y, y + lines[end].first)
+                    if (clip.isEmpty)
+                        return
+                    break
+                }
+            }
+        }
+    }
     /**
      * Set the content of the layout from a book
      * @param book The book to set the content from
@@ -137,11 +208,15 @@ data class BookLayout(
     }
 
     abstract class DrawLayout(
+        /** The printer */
+        val printer: PDFPrinter,
         /** The field description */
-        val description: LayoutDescription.FieldLayoutDescription
+        val description: LayoutDescription.FieldLayoutDescription,
     ): LayoutBounds {
         /** The bounds on the page */
         override var bounds: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
+        /** Text layout for text. Null for non-text fields */
+        open val textLayout: Layout? = null
         /** Current clip rectangle */
         var clip: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** Baseline location of the first line */
@@ -174,70 +249,75 @@ data class BookLayout(
          * @param book The book to set the content from
          */
         abstract fun setContent(book: BookAndAuthors)
-    }
 
-    open class TextLayout(
-        /** The printer */
-        val printer: PDFPrinter,
-        /** The field description */
-        description: LayoutDescription.FieldLayoutDescription,
-        /** The column in the database */
-        val layout: Layout
-    ): DrawLayout(description) {
-        override fun draw(canvas: Canvas) {
-            canvas.save()
-            canvas.clipOutRect(clip)
-            canvas.translate(bounds.left, bounds.top)
-            layout.draw(canvas)
-            canvas.restore()
-        }
-
-        private fun clip(y: Float, columnHeight: Float): Boolean {
+        protected fun clip(y: Float, columnHeight: Float): Boolean {
             // Calculate the clip to the column height
             clip.set(bounds)
             clip.top = clip.top.coerceAtLeast(y)
             clip.bottom = clip.bottom.coerceAtMost(columnHeight)
             return !clip.isEmpty
         }
+    }
+
+    open class TextLayout(
+        /** The printer */
+        printer: PDFPrinter,
+        /** The field description */
+        description: LayoutDescription.FieldLayoutDescription,
+        /** The column in the database */
+        override var textLayout: Layout
+    ): DrawLayout(printer, description) {
+        override fun draw(canvas: Canvas) {
+            if (!clip.isEmpty) {
+                canvas.save()
+                canvas.clipRect(clip)
+                canvas.translate(bounds.left, bounds.top)
+                textLayout.draw(canvas)
+                canvas.restore()
+            }
+        }
 
         private fun findBoundary(boundary: Float, bottom: Boolean): Float {
-            val lineCount = layout.lineCount
-            if (lineCount <= 0)
-                return bounds.bottom
-            var line = 0
-
-            var l1 = printer.verticalPixelsToPoints(layout.getLineTop(line))
-            var l2: Float
-            // Need to adjust top clip, to fall on a line boundary
-            while (++line < lineCount) {
-                l2 = printer.verticalPixelsToPoints(layout.getLineTop(line))
-                if (l1 <= boundary && l2 > boundary) {
-                    return if (bottom) l2 else l1
-                }
-                l1 = l2
+            val line = textLayout.getLineForVertical(printer.verticalPointstoPixels(boundary))
+            val t = printer.verticalPixelsToPoints(textLayout.getLineTop(line))
+            val b = printer.verticalPixelsToPoints(textLayout.getLineTop(line + 1))
+            return when {
+                t >= boundary -> t
+                b <= boundary -> b
+                bottom -> b
+                else -> t
             }
-            return if (bottom) bounds.bottom else l1
         }
 
         override fun verticalClip(y: Float, columnHeight: Float, exclusive: Boolean): Boolean {
             if (!clip(y, columnHeight))
                 return false
 
-            if (clip.top > bounds.top) {
-                clip.top = findBoundary(clip.top - bounds.top, exclusive) + bounds.top
+            val lineCount = textLayout.lineCount
+            if (lineCount <= 0) {
+                clip.top = bounds.top
+                clip.bottom = bounds.top
+                return false
             }
 
-            if (clip.bottom < bounds.bottom) {
-                clip.bottom = findBoundary(clip.bottom - bounds.top, !exclusive) + bounds.top
-            }
+            clip.top = findBoundary(clip.top - bounds.top, exclusive) + bounds.top
+            clip.bottom = findBoundary(clip.bottom - bounds.top, !exclusive) + bounds.top
+
             return !clip.isEmpty
         }
 
+        protected val maxLineEnd: Float
+            get() = printer.horizontalPixelsToPoints(ceil((0 until textLayout.lineCount).maxOf { textLayout.getLineMax(it) }).toInt())
+
         override fun setContent(book: BookAndAuthors) {
             // Just set the bounding rectangle
-            bounds.set(0.0f, 0.0f, printer.horizontalPixelsToPoints(layout.width), printer.verticalPixelsToPoints(layout.height))
-            baseline = if (layout.lineCount > 0) printer.verticalPixelsToPoints(layout.getLineBaseline(0)) else 0.0f
-            clip.set(bounds)
+            bounds.set(0.0f, 0.0f, maxLineEnd, printer.verticalPixelsToPoints(textLayout.height))
+            baseline = if (!bounds.isEmpty && textLayout.lineCount > 0)
+                printer.verticalPixelsToPoints(textLayout.getLineBaseline(0))
+            else {
+                bounds.set(0.0f, 0.0f, 0.0f, 0.0f)
+                0.0f
+            }
         }
     }
 
@@ -252,10 +332,15 @@ data class BookLayout(
         layout: DynamicLayout
     ): TextLayout(printer, description, layout) {
         override fun setContent(book: BookAndAuthors) {
-            content.replace(0, content.length, column.desc.getValue(book))
-            bounds.set(0.0f, 0.0f, printer.horizontalPixelsToPoints(layout.width), printer.verticalPixelsToPoints(layout.height))
-            baseline = if (layout.lineCount > 0) printer.verticalPixelsToPoints(layout.getLineBaseline(0)) else 0.0f
-            clip.set(bounds)
+            val value = column.desc.getDisplayValue(book)
+            content.replace(0, content.length, value)
+            bounds.set(0.0f, 0.0f, maxLineEnd, printer.verticalPixelsToPoints(textLayout.height))
+            baseline = if (!bounds.isEmpty && textLayout.lineCount > 0)
+                printer.verticalPixelsToPoints(textLayout.getLineBaseline(0))
+            else {
+                bounds.set(0.0f, 0.0f, 0.0f, 0.0f)
+                0.0f
+            }
         }
     }
 }

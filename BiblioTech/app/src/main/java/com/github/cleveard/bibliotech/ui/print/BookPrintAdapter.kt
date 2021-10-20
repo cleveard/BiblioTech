@@ -1,4 +1,4 @@
-package com.github.cleveard.bibliotech.ui.books
+package com.github.cleveard.bibliotech.ui.print
 
 import android.content.Context
 import android.os.Bundle
@@ -8,16 +8,12 @@ import android.print.PageRange
 import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
-import com.github.cleveard.bibliotech.db.Column
-import com.github.cleveard.bibliotech.print.LayoutDescription
 import com.github.cleveard.bibliotech.print.PDFPrinter
 import kotlinx.coroutines.*
 import java.io.FileOutputStream
 import java.lang.Exception
 
-class BookPrintAdapter(private val context: Context, private val scope: CoroutineScope): PrintDocumentAdapter() {
-    val pdfPrinter: PDFPrinter = PDFPrinter()
-
+class BookPrintAdapter(private val pdfPrinter: PDFPrinter, private val context: Context, private val scope: CoroutineScope): PrintDocumentAdapter() {
     override fun onLayout(oldAttributes: PrintAttributes?, newAttributes: PrintAttributes, cancellationSignal: CancellationSignal?, callback: LayoutResultCallback, extras: Bundle?) {
         val job = scope.launch {
             try {

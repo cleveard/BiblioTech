@@ -195,4 +195,6 @@
     <string name="import_undo_desc">Import</string>
     <string name="can_clear_undo">\nIs it OK to clear all undo information?</string>
     <string name="undo_clear_summary">Press to clear all undo information.</string>
+    <string name="save_pdf">Save PDF</string>
+    <string name="print">Print</string>
 </resources>

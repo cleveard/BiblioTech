@@ -5,6 +5,7 @@ import android.database.Cursor
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.R
+import java.lang.StringBuilder
 import java.text.DateFormat
 import java.util.*
 import kotlin.collections.ArrayList
@@ -304,6 +305,10 @@ abstract class ColumnDataDescriptor(
         throw UnsupportedOperationException("Column does not support auto-complete")
     }
 
+    open fun getDisplayValue(book: BookAndAuthors): String {
+        return getValue(book)
+    }
+
     companion object {
         /** format for dates */
         private var format: DateFormat? = null
@@ -439,6 +444,15 @@ private val lastFirst = object: SubQueryColumnDataDescriptor(
     override fun getValue(book: BookAndAuthors): String {
         return "${book.sortLast?: ""}, ${book.sortFirst?: ""}"
     }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.authors.asSequence().fold(StringBuilder()) {acc, v ->
+            if (!acc.isEmpty())
+                acc.append(", ")
+            acc.append("${v.lastName}, ${v.remainingName}")
+        }.toString()
+    }
 }
 
 /** Author - First Last */
@@ -464,6 +478,15 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors): String {
         return "${book.sortFirst?: ""} ${book.sortLast?: ""}"
+    }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.authors.asSequence().fold(StringBuilder()) {acc, v ->
+            if (!acc.isEmpty())
+                acc.append(", ")
+            acc.append("${v.remainingName} ${v.lastName}")
+        }.toString()
     }
 
     /** @inheritDoc */
@@ -652,6 +675,15 @@ private val tags = object: SubQueryColumnDataDescriptor(
     }
 
     /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.tags.asSequence().fold(StringBuilder()) {acc, v ->
+            if (!acc.isEmpty())
+                acc.append(", ")
+            acc.append(v.name)
+        }.toString()
+    }
+
+    /** @inheritDoc */
     override fun hasAutoComplete(): Boolean {
         return true
     }
@@ -686,6 +718,15 @@ private val categories = object: SubQueryColumnDataDescriptor(
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors): String {
         return book.sortCategory?: ""
+    }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.categories.asSequence().fold(StringBuilder()) {acc, v ->
+            if (!acc.isEmpty())
+                acc.append(", ")
+            acc.append(v.category)
+        }.toString()
     }
 
     /** @inheritDoc */
@@ -768,6 +809,15 @@ private val isbns = object: SubQueryColumnDataDescriptor(
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors): String {
         return book.sortIsbn?: ""
+    }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.isbns.asSequence().fold(StringBuilder()) {acc, v ->
+            if (!acc.isEmpty())
+                acc.append(", ")
+            acc.append(v.isbn)
+        }.toString()
     }
 
     /** @inheritDoc */

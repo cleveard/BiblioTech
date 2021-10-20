@@ -1,8 +1,12 @@
 package com.github.cleveard.bibliotech.print
 
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
 import com.github.cleveard.bibliotech.db.BookAndAuthors
+
+const val EPSILON = 1.0e-3
 
 /**
  * The class that calculates the layouts of books
@@ -13,18 +17,56 @@ class PageLayoutHandler(
     private val rtl: Boolean = false
 ) {
 
-    data class BookPosition(
-        val bookIndex: Int,
-        val position: PointF,
-        val clip: RectF
-    )
+    abstract class DrawPosition(
+        val position: PointF
+    ) {
+        abstract fun draw(canvas: Canvas, bookList: List<BookAndAuthors>)
+    }
+
+    inner class BookPosition(
+        private val bookIndex: Int,
+        position: PointF,
+        clip: RectF
+    ): DrawPosition(position) {
+        private val clipRect: RectF = RectF(clip)
+        override fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+            // Save the current canvas state
+            canvas.save()
+            // Set the clip rectangle and location
+            canvas.translate(position.x, position.y)
+            canvas.clipRect(clipRect)
+            // Print the book
+            layoutBook(bookList[bookIndex])
+                .verticalClip(position.y, pageHeight)
+                .draw(canvas)
+            // Restore the canvas
+            canvas.restore()
+        }
+    }
+
+    inner class SeparatorPosition(
+        private val paint: Paint,
+        position: PointF
+    ): DrawPosition(position) {
+        override fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+            // Save the current canvas state
+            canvas.save()
+            // Set the clip rectangle and location
+            canvas.translate(position.x, position.y)
+            // Print the book
+            paint.style = Paint.Style.FILL
+            canvas.drawRect(0.0f, 0.0f, columnWidth, printer.separatorLineWidth, paint)
+            // Restore the canvas
+            canvas.restore()
+        }
+    }
 
     data class Page(
-        val books: List<BookPosition>
+        val books: List<DrawPosition>
     )
 
     private val pages = ArrayList<Page>()
-    private var page = ArrayList<BookPosition>()
+    private var page = ArrayList<DrawPosition>()
     val pageHeight = pageDrawBounds.height()
     private val pageWidth = pageDrawBounds.width()
     private val columnStride = (pageWidth + printer.layoutDescription.horizontalSeparation) / printer.numberOfColumns
@@ -109,8 +151,8 @@ class PageLayoutHandler(
 
         // Bump to the next column and next page if needed
         fun nextColumn(newY: Float) {
-            x += columnWidth
-            if (x >= pageWidth) {
+            x += columnStride
+            if (x + EPSILON >= pageWidth) {
                 nextPage()
                 x = 0.0f
             }
@@ -120,6 +162,7 @@ class PageLayoutHandler(
 
         // Clip the book to the column height
         layout.verticalClip(y + separatorSize, pageHeight)
+        layout.handleOrphans(y + separatorSize, columnStart)
         // No space for anything, go to next column
         if (layout.clip.isEmpty) {
             // Go to next column
@@ -127,30 +170,43 @@ class PageLayoutHandler(
             separatorSize = -layout.marginBounds.top
             // Clip the height for the new column
             layout.verticalClip(y + separatorSize, pageHeight)
+            layout.handleOrphans(y + separatorSize, columnStart)
+        }
+        if (!columnStart && printer.separatorLineWidth > 0) {
+            page.add(
+                SeparatorPosition(
+                    printer.basePaint,
+                    PointF(x, y + layout.description.verticalSeparation / 2.0f)
+                )
+            )
         }
         y += separatorSize
 
         // Break the book layout over the columns and pages
         while (true) {
+            if (columnStart && layout.clip.top + y > 0) {
+                y = -layout.clip.top
+                layout.verticalClip(y, pageHeight)
+                layout.handleOrphans(y + separatorSize, columnStart)
+            }
+
             // Get the current print position and clip rectangle
-            y -= layout.clip.top
             val pos = PointF(x, y)
-            val clip = RectF(layout.clip)
-            clip.offset(0.0f, clip.top)
             // Add the printout to the page
-            page.add(BookPosition(index, pos, clip))
+            page.add(BookPosition(index, pos, layout.clip))
             columnStart = false
 
             // Is this the end of the book
-            val height = clip.height()
-            if (height >= layout.bounds.bottom)
+            val bottom = layout.clip.bottom
+            if (bottom + EPSILON >= layout.bounds.bottom)
                 break       // Yes
 
             // Go to the next column and set the position
             // where the layout will be printed
-            nextColumn(y - height)
+            nextColumn(-bottom)
             // How much can we fit in this column
             layout.verticalClip(y, pageHeight)
+            layout.handleOrphans(y + separatorSize, columnStart)
         }
 
         // Set the location to the end of the book
@@ -160,6 +216,7 @@ class PageLayoutHandler(
 
     private fun clear() {
         calculated.clear()
+        calculated.add(layout.layoutBounds)
     }
 
     /**
@@ -173,12 +230,24 @@ class PageLayoutHandler(
      * Calculate the positions for the fields in the layout
      */
     private fun calculateLayout() {
+        layout.bounds.setEmpty()
+        layout.marginBounds.setEmpty()
         for (dl in layout.columns) {
             calculateLayout(dl)
+            if (!dl.bounds.isEmpty) {
+                dl.bounds.offset(dl.margins.left, dl.margins.top)
+                layout.bounds.union(dl.bounds)
+                layout.marginBounds.union(
+                    dl.bounds.left - dl.margins.left,
+                    dl.bounds.top - dl.margins.top,
+                    dl.bounds.right + dl.margins.right,
+                    dl.bounds.bottom + dl.margins.bottom
+                )
+            }
         }
     }
 
-    fun alignBounds(min: Float, max: Float, alignMin: Float?, alignMax: Float?): Float {
+    private fun alignBounds(min: Float, max: Float, alignMin: Float?, alignMax: Float?): Float {
         return if (alignMin == null) {
             if (alignMax == null) {
                 if (rtl)
@@ -204,8 +273,8 @@ class PageLayoutHandler(
             return dl
 
         calculated.add(dl)
-        dl.alignment.asSequence().map { it.value.asSequence() }.flatten().forEach { calculateLayout(it.bounds, target) }
         dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
+        dl.alignment.asSequence().map { it.value.asSequence() }.flatten().forEach { calculateLayout(it.bounds, target) }
         target.clear(dl.baseline, dl.rtl)
         dl.alignment.forEach { it.key.calculateAlignemt(target, it.value.asSequence()) }
 

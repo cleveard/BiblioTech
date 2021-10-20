@@ -474,6 +474,11 @@ class BooksFragment : Fragment() {
                     BooksFragmentDirections.actionNavBooksToSettingsFragment()
                 )
             }
+            R.id.action_to_print_fragment -> {
+                (activity as? ManageNavigation)?.navigate(
+                    BooksFragmentDirections.actionNavBooksToPrintFragment(booksViewModel.filterName)
+                )
+            }
             else -> return false
         }
         return true
