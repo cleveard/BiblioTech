@@ -21,8 +21,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.print.PDFPrinter
-import com.github.cleveard.bibliotech.ui.interchange.ExportImportFragment
-import com.github.cleveard.bibliotech.ui.interchange.ExportImportFragmentArgs
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.launch
 
@@ -183,9 +181,9 @@ class PrintFragment : Fragment() {
             val jobName = "${context.getString(R.string.app_name)} Document"
             val pdfPrinter = PDFPrinter().also {
                 // Get the book filter for the export
-                val bookFilter = filter.name?.let { viewModel.repo.findViewByName(it) }?.filter
+                val bookFilter = filter.name?.let {name -> viewModel.repo.findViewByName(name) }?.filter
                 // Get the PageSource for the books
-                val source = bookFilter?.let { viewModel.repo.getBookList(it, requireContext()) } ?: viewModel.repo.getBookList()
+                val source = bookFilter?.let {filter -> viewModel.repo.getBookList(filter, requireContext()) } ?: viewModel.repo.getBookList()
                 it.bookList = source.getLive()?: return@launch
             }
             printManager.print(jobName, BookPrintAdapter(pdfPrinter, context, viewModel.viewModelScope), null)
