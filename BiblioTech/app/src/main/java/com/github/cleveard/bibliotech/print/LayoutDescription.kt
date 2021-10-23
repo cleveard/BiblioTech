@@ -2,13 +2,9 @@ package com.github.cleveard.bibliotech.print
 
 import android.graphics.PointF
 import android.graphics.RectF
-import android.text.DynamicLayout
-import android.text.Layout
-import android.text.SpannableStringBuilder
-import android.text.StaticLayout
 import com.github.cleveard.bibliotech.db.Column
-import java.util.*
 import kotlin.collections.HashMap
+import kotlin.collections.HashSet
 
 /**
  * Class to hold the description of a book layout
@@ -66,29 +62,16 @@ data class LayoutDescription(
         for (dl in bookLayout.columns) {
             // Get the alignment for the field in a local variable
             val align = dl.alignment
-            // For each horizontal layout description
-            for (entry in dl.description.horizontalLayout) {
+            // For each layout alignment description
+            for (entry in dl.description.layoutAlignment) {
                 // Take the alignment dependencies
-                entry.value.asSequence().map {
+                entry.dimensions.asSequence().map {
                     // A map them to a layout dimension on the field
                     map[it.alignTo]?.let {b -> it.align.createAlignment(b) }
                 }.filterNotNull().toList().also {list ->
                     // If the list isn't empty add it to the field alignment
                     if (list.isNotEmpty())
-                        align[entry.key] = list
-                }
-            }
-
-            // For each vertical layout description
-            for (entry in dl.description.verticalLayout) {
-                // Take the alignment dependencies
-                entry.value.asSequence().map {
-                    // A map them to a layout dimension on the field
-                    map[it.alignTo]?.let {b -> it.align.createAlignment(b) }
-                }.filterNotNull().toList().also {list ->
-                    // If the list isn't empty add it to the field alignment
-                    if (list.isNotEmpty())
-                        align[entry.key] = list
+                        align[entry.align] = list
                 }
             }
         }
@@ -98,7 +81,10 @@ data class LayoutDescription(
     }
 
     /** Interface for alignment types */
-    interface LayoutAlignmentType {
+    sealed interface LayoutAlignmentType {
+        /** This is a horizontal alignment */
+        val horizontal: Boolean
+
         /**
          * Create an object to return a fields current dimension
          * @param bounds The layout bounds for the field
@@ -109,17 +95,28 @@ data class LayoutDescription(
          * Calculate the alignment for a dimensions type
          * @param target The object where the result is stored
          * @param sources The dimensions used to calculate the alignment
+         * The alignment calculation depends on what is being aligned
+         * Vertical dimensions are aligned like this:
+         *    Top - align to maximum
+         *    Bottom - align to minimum
+         *    Baseline - align to maximum
+         *    Center - align to midpoint of minimum and maximum
+         * Horizontal dimensions are aligned like this:
+         *    Start, LTR - align left to maximum
+         *    Start, RTL - align right to minimum
+         *    End, LTR - align right to minimum
+         *    End, RTL - align left to maximum
+         *    Center - align to midpoint of minimum and maximum
          */
         fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>)
     }
 
-    /** Interface to an alignment description */
-    interface LayoutAlignmentDescription {
-        /**
-         * Create an object to return a fields current dimension for this description
-         * @param bounds The layout bounds for the field
-         */
-        fun createAlignment(bounds: BookLayout.LayoutBounds): BookLayout.LayoutDimension
+    /** Interface to a dimension description */
+    sealed interface LayoutDimensionDescription {
+        /** The dimension type */
+        val align: LayoutAlignmentType
+        /** The field with the dimension. Null is the field parent */
+        val alignTo: FieldLayoutDescription?
     }
 
     /**
@@ -138,12 +135,16 @@ data class LayoutDescription(
         var rtl: Boolean = false,
         /** The resolved top alignment. Null means it wasn't specified */
         var top: Float? = null,
-        /** The resolved left alignment. Null means it wasn't specified */
+        /** The resolved start alignment. Null means it wasn't specified */
         var left: Float? = null,
-        /** The resolved right alignment. Null means it wasn't specified */
+        /** The resolved end alignment. Null means it wasn't specified */
         var right: Float? = null,
         /** The resolved bottom alignment. Null means it wasn't specified */
-        var bottom: Float? = null
+        var bottom: Float? = null,
+        /** The resolved horizontal center alignment. Null means it wasn't specified */
+        var hCenter: Float? = null,
+        /** The resolved vertical center alignment. Null means it wasn't specified */
+        var vCenter: Float? = null
     ) {
         /**
          * Clear the collected result
@@ -157,20 +158,22 @@ data class LayoutDescription(
             left = null
             right = null
             bottom = null
+            hCenter = null
+            vCenter = null
         }
     }
 
     /**
-     * Vertical alignment description for layout
+     * Vertical alignment dimension description for layout
      * @param align The dimension we want to align to
      * @param alignTo The field we want to align to
      */
-    data class VerticalLayoutAlignment(
+    data class VerticalLayoutDimension(
         /** The alignmentType */
-        val align: Type,
+        override val align: Type,
         /** Field aligned to */
-        val alignTo: FieldLayoutDescription?
-    ): LayoutAlignmentDescription {
+        override val alignTo: FieldLayoutDescription?
+    ): LayoutDimensionDescription {
         /** The different vertical dimensions we can align to */
         enum class Type: LayoutAlignmentType {
             /** Align to top */
@@ -225,39 +228,66 @@ data class LayoutDescription(
 
                 /** @inheritDoc */
                 override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
-                    // Center aligns the top to the min of the dimensions and the bottom to the max
-                    // This will align the field to the center of the vertical bounds of the fields
-                    data class Center(var min: Float = Float.POSITIVE_INFINITY, var max: Float = Float.NEGATIVE_INFINITY)
-                    return sources.fold(Center()) { acc, layoutDimension ->
-                        acc.min = acc.min.coerceAtMost(layoutDimension.dimension)
-                        acc.max = acc.max.coerceAtLeast(layoutDimension.dimension)
-                        acc
-                    }.let {
-                        target.top = it.min
-                        target.bottom = it.max
-                    }
+                    // Align center to center of bounds of sources
+                    target.vCenter = (sources.minOf { it.dimension } + sources.maxOf { it.dimension }) / 2.0f
                 }
             };
+
+            /** @inheritDoc */
+            override val horizontal: Boolean = false
+        }
+    }
+
+    /** Interface for alignment specification */
+    sealed interface LayoutAlignment {
+        /** The dimension we are aligning */
+        val align: LayoutAlignmentType
+        /** Dimensions used to calculate the alignment */
+        val dimensions: List<LayoutDimensionDescription>
+    }
+
+    /**
+     * Description for vertical alignment
+     * @param align The dimension this description aligns
+     * @param dimensions The dimensions used to calculate the alignment
+     */
+    class VerticalLayoutAlignment(
+        /** The dimension this description aligns */
+        override val align: VerticalLayoutDimension.Type,
+        /** The dimensions used to calculate the alignment */
+        override val dimensions: List<VerticalLayoutDimension>
+    ): LayoutAlignment {
+        /**
+         * @inheritDoc
+         * Override to prevent duplicates of align in a set
+         */
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as VerticalLayoutAlignment
+            return align == other.align
         }
 
-        /** @inheritDoc */
-        override fun createAlignment(bounds: BookLayout.LayoutBounds): BookLayout.LayoutDimension {
-            // Create the dimension object for the alignment in this description
-            return align.createAlignment(bounds)
+        /**
+         * @inheritDoc
+         * Override to prevent duplicates of align in a set
+         */
+        override fun hashCode(): Int {
+            return align.hashCode()
         }
     }
 
     /**
-     * Horizontal alignment description for layout
+     * Horizontal alignment dimension description for layout
      * @param align The dimension we want to align to
      * @param alignTo The field we want to align to
      */
-    data class HorizontalLayoutAlignment(
+    data class HorizontalLayoutDimension(
         /** The alignmentType */
-        val align: Type,
+        override val align: Type,
         /** Field aligned to */
-        val alignTo: FieldLayoutDescription?
-    ): LayoutAlignmentDescription {
+        override val alignTo: FieldLayoutDescription?
+    ): LayoutDimensionDescription {
         /** The different horizontal dimensions we can align to */
         enum class Type: LayoutAlignmentType {
             /** Align to start */
@@ -306,67 +336,65 @@ data class LayoutDescription(
 
                 /** @inheritDoc */
                 override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
-                    // Center aligns the left to the min of the dimensions and the right to the max
-                    // This will align the field to the center of the horizontal bounds of the fields
-                    data class Center(var min: Float = Float.POSITIVE_INFINITY, var max: Float = Float.NEGATIVE_INFINITY)
-                    return sources.fold(Center()) { acc, layoutDimension ->
-                        acc.min = acc.min.coerceAtMost(layoutDimension.dimension)
-                        acc.max = acc.max.coerceAtLeast(layoutDimension.dimension)
-                        acc
-                    }.let {
-                        target.left = it.min
-                        target.right = it.max
-                    }
+                    // Align center to center of bounds of sources
+                    target.hCenter = (sources.minOf { it.dimension } + sources.maxOf { it.dimension }) / 2.0f
                 }
-            }
+            };
+
+            /** @inheritDoc */
+            override val horizontal: Boolean = true
+        }
+    }
+
+    /**
+     * Description for horizontal alignment
+     * @param align The dimension this description aligns
+     * @param dimensions The dimensions used to calculate the alignment
+     */
+    class HorizontalLayoutAlignment(
+        /** The dimension this description aligns */
+        override val align: HorizontalLayoutDimension.Type,
+        /** The dimensions used to calculate the alignment */
+        override val dimensions: List<HorizontalLayoutDimension>
+    ): LayoutAlignment {
+        /**
+         * @inheritDoc
+         * Override to prevent duplicates of align in a set
+         */
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as HorizontalLayoutAlignment
+            return align == other.align
         }
 
-        /** @inheritDoc */
-        override fun createAlignment(bounds: BookLayout.LayoutBounds): BookLayout.LayoutDimension {
-            // Create the dimension object for the alignment in this description
-            return align.createAlignment(bounds)
+        /**
+         * @inheritDoc
+         * Override to prevent duplicates of align in a set
+         */
+        override fun hashCode(): Int {
+            return align.hashCode()
         }
     }
 
     /**
      * Layout description for a column from the database
      * @param margin Additional padding in points
-     * @param minSize The minimum size in points used by the column
-     * @param maxSize The maximum size in points used by the column
-     * @param horizontalLayout The horizontal layout for the column
-     * @param verticalLayout The vertical layout for the column
+     * @param minSize The minimum size in points used by the field
+     * @param maxSize The maximum size in points used by the field
+     * @param layoutAlignment The layout alignment for the field
      */
     abstract class FieldLayoutDescription(
         /** Additional padding in points */
         val margin: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f),
-        /** The minimum size in points used by the column */
+        /** The minimum size in points used by the field */
         val minSize: PointF = PointF(0.0f, 0.0f),
-        /** The maximum size in points used by the column */
-        val maxSize: PointF = PointF(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
-        /**
-         * The horizontal layout for the column
-         * The map key is the dimension of column we are aligning
-         * The map value contains the dimensions of other columns it is aligned to
-         * The value we align to depends on the key:
-         *    Top - align to maximum
-         *    Bottom - align to minimum
-         *    Baseline - align to maximum
-         *    Center - align to midpoint of minimum and maximum
-         */
-        val horizontalLayout: MutableMap<HorizontalLayoutAlignment.Type, List<HorizontalLayoutAlignment>> = EnumMap(HorizontalLayoutAlignment.Type::class.java),
-        /**
-         * The vertical layout for the column
-         * The map key is the dimension of column we are aligning
-         * The map value contains the dimensions of other columns it is aligned to
-         * The value we align to depends on the key and left-to-right setting:
-         *    Start, LTR - align to maximum
-         *    Start, RTL - align to minimum
-         *    End, LTR - align to minimum
-         *    End, RTL - align to maximum
-         *    Center - align to midpoint of minimum and maximum
-         */
-        val verticalLayout: MutableMap<VerticalLayoutAlignment.Type, List<VerticalLayoutAlignment>> = EnumMap(VerticalLayoutAlignment.Type::class.java)
+        /** The maximum size in points used by the field */
+        val maxSize: PointF = PointF(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
     ) {
+        /** The layout alignment for the field */
+        lateinit var layoutAlignment: Set<LayoutAlignment>
+
         /**
          * Get/Fill the layout for a field
          * @param printer The printer we are using
@@ -382,14 +410,10 @@ data class LayoutDescription(
     class TextFieldLayoutDescription(private val text: String): FieldLayoutDescription() {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
-            // Create a StaticLayout to format the text
-            val textLayout = StaticLayout.Builder.obtain(
-                text, 0, text.length, printer.basePaint,
-                printer.pointsToHorizontalPixels(columnWidth)
-            )
-                .build()
             // Return a text field with the StaticLayout
-            return BookLayout.TextLayout(printer, this, textLayout)
+            return BookLayout.TextLayout(printer, columnWidth, this, text).apply {
+                setContent()
+            }
         }
     }
 
@@ -400,21 +424,8 @@ data class LayoutDescription(
     class ColumnFieldLayoutDescription(private val column: Column): FieldLayoutDescription() {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
-            // Create a DynamicLayout with a spannable string builder we can use to update the text
-            val content = SpannableStringBuilder()
-            // DynamicLayout.Builder was introduced in API 28
-            val textLayout = if (android.os.Build.VERSION.SDK_INT < 28) {
-                @Suppress("DEPRECATION")
-                (DynamicLayout(
-                    content, printer.basePaint, printer.pointsToHorizontalPixels(columnWidth),
-                    Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, true
-                ))
-            } else {
-                DynamicLayout.Builder.obtain(content, printer.basePaint, printer.pointsToHorizontalPixels(columnWidth))
-                    .build()
-            }
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnLayout(printer, this, column, content, textLayout)
+            return BookLayout.ColumnLayout(printer, columnWidth, this, column)
         }
     }
 }

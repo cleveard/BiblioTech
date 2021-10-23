@@ -2,9 +2,7 @@ package com.github.cleveard.bibliotech.print
 
 import android.graphics.Canvas
 import android.graphics.RectF
-import android.text.DynamicLayout
-import android.text.Layout
-import android.text.SpannableStringBuilder
+import android.text.*
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
 import kotlin.math.ceil
@@ -28,6 +26,10 @@ data class BookLayout(
     /** Right-to-left text */
     val rtl: Boolean
 ) {
+    companion object {
+        const val MAX_HEIGHT = Float.MAX_VALUE / 4.0f
+    }
+
     /** Interface for fields and the parent to calculate a layout */
     sealed interface LayoutBounds {
         /** The bounds of the field/parent */
@@ -40,6 +42,12 @@ data class BookLayout(
         val alignment: MutableMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
         /** The field/parent margins */
         val margins: RectF
+        /** The description of the field. Null means the BookLayout */
+        val description: LayoutDescription.FieldLayoutDescription?
+        /** The maximum width of the field */
+        var width: Float
+        /** The maximum height of the field */
+        var height: Float
     }
 
     /**
@@ -119,6 +127,7 @@ data class BookLayout(
                 else {
                     l.textLayout?.let { t ->
                         (0 until t.lineCount).asSequence()
+                            .filter { l.bounds.top + printer.verticalPixelsToPoints(t.getLineTop(it)) >= l.clip.top }
                             .map {
                                 Pair(
                                     l.bounds.top + printer.verticalPixelsToPoints(t.getLineTop(it)),
@@ -131,7 +140,7 @@ data class BookLayout(
             .filterNotNull()                        // Filter out fields without a text layout
             .flatten()                              // Flatten the sequences to a list of vertical bounds
             .toMutableList().apply {
-                sortBy { it.first }                 // Sort by the top of the bounds
+                sortWith(compareBy({ it.first }, { it.second }))    // Sort by the top of the bounds, then the bottom
             }
 
         // Keep track of lines we move from the current column to the next
@@ -142,8 +151,23 @@ data class BookLayout(
             // Also don't worry if we aren't displaying the top of the layout
             // in this draw, because it should have been handled before
             if (!columnStart && clip.top <= bounds.top && clip.bottom > bounds.top) {
-                // Count the visible lines
-                val visibleCount = lines.count { it.second > clip.top && it.first < clip.bottom }
+                // Count the visible lines. We count fields, and discard
+                // fields that share the same line
+                var visibleCount = 0
+                var bottom = clip.top
+                for (line in lines) {
+                    if (line.first >= clip.bottom)
+                        break                           // At the bottom, stop
+                    // Skip lines that aren't fully visible
+                    if (line.second <= clip.bottom) {
+                        // Is this the first field on a different line
+                        if (line.first >= bottom) {
+                            // Yes, count it and mark the bottom of the line
+                            ++visibleCount
+                            bottom = line.second
+                        }
+                    }
+                }
                 if (visibleCount < printer.orphans) {
                     // Not enough visible lines force next column, by making the clip rectangle empty
                     clip.top = bounds.top
@@ -155,7 +179,21 @@ data class BookLayout(
             // We return above when the bottom of the layout is being displayed
             // So when we get here we need to check the number of lines at the
             // bottom going to the next column
-            val nextCount = lines.count { it.first >= clip.bottom }
+            // Count the lines after the visible lines. We count fields, and discard
+            // fields that share the same line
+            var nextCount = 0
+            var bottom = clip.top
+            for (line in lines) {
+                // Skip visible lines
+                if (line.second > clip.bottom) {
+                    // Is this the first field on a different line
+                    if (line.first >= bottom) {
+                        // Yes, count it and mark the bottom of the line
+                        ++nextCount
+                        bottom = line.second
+                    }
+                }
+            }
             // If there are no lines for the next column, or there are enough lines,
             // then it is OK
             if (nextCount <= 0 || nextCount >= printer.orphans)
@@ -206,6 +244,14 @@ data class BookLayout(
             get() = this@BookLayout.rtl
         override val alignment = HashMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>()
         override val margins: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
+        override val description: LayoutDescription.FieldLayoutDescription?
+            get() = null
+        override var width: Float
+            get() = columnWidth
+            set(@Suppress("UNUSED_PARAMETER")v) {}
+        override var height: Float
+            get() = MAX_HEIGHT
+            set(@Suppress("UNUSED_PARAMETER")v) {}
     }
 
     /** Interface for getting a dimension from a field */
@@ -219,31 +265,32 @@ data class BookLayout(
     /** Get the start of the field */
     class StartDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = if (bounds.rtl) bounds.bounds.right else bounds.bounds.left
+            get() = bounds.margins.left - if (bounds.rtl) bounds.bounds.right else bounds.bounds.left
     }
 
     /** Get the end of the field */
     class EndDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = if (bounds.rtl) bounds.bounds.left else bounds.bounds.right
+            get() = bounds.margins.right + if (bounds.rtl) bounds.bounds.left else bounds.bounds.right
     }
 
     /** Get the horizontal center of the field */
     class HCenterDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = (bounds.bounds.left + bounds.bounds.right) / 2.0f
+            get() = (bounds.bounds.left - bounds.margins.left
+                + bounds.bounds.right + bounds.margins.right) / 2.0f
     }
 
     /** Get the top of the field */
     class TopDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = bounds.bounds.top
+            get() = bounds.bounds.top - bounds.margins.top
     }
 
     /** Get the bottom of the field */
     class BottomDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = bounds.bounds.bottom
+            get() = bounds.bounds.bottom + bounds.margins.bottom
     }
 
     /** Get the baseline of the field */
@@ -255,7 +302,8 @@ data class BookLayout(
     /** Get the vertical center of the field */
     class VCenterDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = (bounds.bounds.top + bounds.bounds.bottom) / 2.0f
+            get() = (bounds.bounds.top - bounds.margins.top
+                + bounds.bounds.bottom + bounds.margins.bottom) / 2.0f
     }
 
     /**
@@ -267,12 +315,15 @@ data class BookLayout(
         /** The printer */
         val printer: PDFPrinter,
         /** The field description */
-        val description: LayoutDescription.FieldLayoutDescription,
+        override val description: LayoutDescription.FieldLayoutDescription,
+        /** The maximum width of the field */
+        override var width: Float
     ): LayoutBounds {
         /** The bounds on the page */
         override var bounds: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** Text layout for text. Null for non-text fields */
         open val textLayout: Layout? = null
+        override var height: Float = MAX_HEIGHT
         /** Current clip rectangle */
         var clip: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** Baseline location of the first line */
@@ -326,17 +377,26 @@ data class BookLayout(
     /**
      * Class for static text
      * @param printer The PDFPrinter we are using. Several attributes are kept there
+     * @param width Maximum width of the field
      * @param description The description of the field layout
-     * @param textLayout The layout for the text in the field
+     * @param text The contents of the field
+     * @param paint The paint used to draw the contents
      */
     open class TextLayout(
         /** The printer */
         printer: PDFPrinter,
+        /** Maximum width of the field */
+        width: Float,
         /** The field description */
         description: LayoutDescription.FieldLayoutDescription,
         /** The column in the database */
-        override var textLayout: Layout
-    ): DrawLayout(printer, description) {
+        protected var text: String,
+        /** The paint used to draw the text */
+        private var paint: TextPaint = printer.basePaint
+    ): DrawLayout(printer, description, width) {
+        /** Create a StaticLayout to format the text */
+        override var textLayout = createLayout()
+
         /** @inheritDoc */
         override fun draw(canvas: Canvas) {
             if (!clip.isEmpty) {
@@ -347,6 +407,57 @@ data class BookLayout(
                 canvas.restore()
             }
         }
+
+        /**
+         * Create the StaticLayout from the current values
+         */
+        protected fun createLayout(): StaticLayout {
+            val layout = StaticLayout.Builder.obtain(
+                text, 0, text.length, paint,
+                printer.pointsToHorizontalPixels(width)
+            ).build()
+            if (layout.height < height)
+                return layout
+            var lines = layout.getLineForVertical(printer.pointsToVerticalPixels(height))
+            if (printer.verticalPixelsToPoints(layout.getLineTop(lines)) > height)
+                --lines
+            return (
+                if (lines > 0)
+                    StaticLayout.Builder.obtain(
+                        text, 0, text.length, paint,
+                        printer.pointsToHorizontalPixels(width)
+                    ).setMaxLines(lines)
+                else
+                    StaticLayout.Builder.obtain(
+                        "", 0, 0, paint,
+                        printer.pointsToHorizontalPixels(width)
+                    )
+            ).build()
+        }
+
+        /** @inheritDoc */
+        override var width: Float
+            get() = super.width
+            set(v) {
+                super.width.let {
+                    super.width = v
+                    // Create a new StaticLayout
+                    if (it != v)
+                        textLayout = createLayout()
+                }
+            }
+
+        /** @inheritDoc */
+        override var height: Float
+            get() = super.height
+            set(v) {
+                super.height.let {
+                    super.height = v
+                    // Create a new StaticLayout
+                    if (it != v)
+                        textLayout = createLayout()
+                }
+            }
 
         /**
          * Find the top or bottom of the line on a clip boundary
@@ -407,6 +518,13 @@ data class BookLayout(
 
         /** @inheritDoc */
         override fun setContent(book: BookAndAuthors) {
+            setContent()
+        }
+
+        /**
+         * Set the bounds of the field from the content
+         */
+        fun setContent() {
             // The text is static, but reset the bounding rectangle of the field
             bounds.set(0.0f, 0.0f, maxLineEnd, printer.verticalPixelsToPoints(textLayout.height))
             // Set the baseline, and set the bounds empty if there are no lines
@@ -424,28 +542,24 @@ data class BookLayout(
      * @param printer The PDFPrinter we are using. Several attributes are kept there
      * @param description The description of the field layout
      * @param column The database column with the field value
-     * @param content The content value holder in the text layout
-     * @param layout The text layout for the field
      */
     open class ColumnLayout(
         /** The printer */
         printer: PDFPrinter,
+        /** Maximum width of the field */
+        width: Float,
         /** The field description */
         description: LayoutDescription.FieldLayoutDescription,
         val column: Column,
-        /** Content holder for the text layout */
-        val content: SpannableStringBuilder,
-        /** The column in the database */
-        layout: DynamicLayout
-    ): TextLayout(printer, description, layout) {
+    ): TextLayout(printer, width, description, "") {
         /** @inheritDoc */
         override fun setContent(book: BookAndAuthors) {
             // Get the column value
-            val value = column.desc.getDisplayValue(book)
-            // Put it into the content holder, which will layout the text layout again
-            content.replace(0, content.length, value)
+            text = column.desc.getDisplayValue(book)
+            // Create the StaticLayout
+            textLayout = createLayout()
             // Fill in the bounds and baseline of the field
-            super.setContent(book)
+            super.setContent()
         }
     }
 }

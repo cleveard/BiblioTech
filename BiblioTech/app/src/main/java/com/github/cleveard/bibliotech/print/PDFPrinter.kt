@@ -6,57 +6,18 @@ import android.print.PageRange
 import android.print.PrintAttributes
 import android.print.pdf.PrintedPdfDocument
 import android.text.*
+import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
+import com.github.cleveard.bibliotech.ui.print.PrintLayouts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.lang.IllegalStateException
 import kotlin.math.roundToInt
 
-/** A simple layout, Title, subtitle and authors */
-private val simpleLayout = LayoutDescription(
-    listOf(
-        LayoutDescription.ColumnFieldLayoutDescription(Column.TITLE),
-        LayoutDescription.ColumnFieldLayoutDescription(Column.SUBTITLE).apply {
-            margin.top = 4.5f
-        },
-        LayoutDescription.ColumnFieldLayoutDescription(Column.FIRST_NAME).apply {
-            margin.top = 4.5f
-        }
-    ),
-    emptyList(),                // No headers
-    18.0f,      // Separation between print columns
-    9.0f            // Separation between books
-).apply {
-    // Title is at the top
-    LayoutDescription.VerticalLayoutAlignment(LayoutDescription.VerticalLayoutAlignment.Type.Top, null).also {
-        inColumns[0].verticalLayout[LayoutDescription.VerticalLayoutAlignment.Type.Top] = listOf(it)
-    }
-    // Title is at the start
-    LayoutDescription.HorizontalLayoutAlignment(LayoutDescription.HorizontalLayoutAlignment.Type.Start, null).also {
-        inColumns[0].horizontalLayout[LayoutDescription.HorizontalLayoutAlignment.Type.Start] = listOf(it)
-    }
-    // Subtitle is below the title
-    LayoutDescription.VerticalLayoutAlignment(LayoutDescription.VerticalLayoutAlignment.Type.Bottom, inColumns[0]).also {
-        inColumns[1].verticalLayout[LayoutDescription.VerticalLayoutAlignment.Type.Top] = listOf(it)
-    }
-    // Subtitle start is aligned with title start
-    LayoutDescription.HorizontalLayoutAlignment(LayoutDescription.HorizontalLayoutAlignment.Type.Start, inColumns[0]).also {
-        inColumns[1].horizontalLayout[LayoutDescription.HorizontalLayoutAlignment.Type.Start] = listOf(it)
-    }
-    // Authors is below the subtitle
-    LayoutDescription.VerticalLayoutAlignment(LayoutDescription.VerticalLayoutAlignment.Type.Bottom, inColumns[1]).also {
-        inColumns[2].verticalLayout[LayoutDescription.VerticalLayoutAlignment.Type.Top] = listOf(it)
-    }
-    // Authors is aligned with title start
-    LayoutDescription.HorizontalLayoutAlignment(LayoutDescription.HorizontalLayoutAlignment.Type.Start, inColumns[0]).also {
-        inColumns[2].horizontalLayout[LayoutDescription.HorizontalLayoutAlignment.Type.Start] = listOf(it)
-    }
-}
-
 /** Class for printing to a PDF */
-class PDFPrinter: Closeable {
+class PDFPrinter(layouts: PrintLayouts): Closeable {
     /** The pdf document we are printing to */
     private var pdf: PrintedPdfDocument? = null
         private set(v) {
@@ -93,7 +54,7 @@ class PDFPrinter: Closeable {
     val pageCount: Int
         get() = pages?.size?: 0
     /** The description of the book layout */
-    var layoutDescription: LayoutDescription = simpleLayout
+    var layoutDescription: LayoutDescription = layouts.simpleLayout
         // If the book layout changes, reprint the document
         set(v) { if (v != field) pdf = null; field = v }
     /**

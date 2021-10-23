@@ -179,7 +179,7 @@ class PrintFragment : Fragment() {
             val context = requireContext()
             val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val jobName = "${context.getString(R.string.app_name)} Document"
-            val pdfPrinter = PDFPrinter().also {
+            val pdfPrinter = PDFPrinter(PrintLayouts(requireContext())).also {
                 // Get the book filter for the export
                 val bookFilter = filter.name?.let {name -> viewModel.repo.findViewByName(name) }?.filter
                 // Get the PageSource for the books

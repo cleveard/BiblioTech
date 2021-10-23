@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
 import com.github.cleveard.bibliotech.db.BookAndAuthors
+import kotlin.math.abs
 
 const val EPSILON = 1.0e-3
 
@@ -172,11 +173,12 @@ class PageLayoutHandler(
         // Set the book contents to the layout
         layout.setContent(book)
 
-        do {
-            // Calculate the layout
-            calculateLayout()
-            // until all overlaps are resolved
-        } while (resolveOverlaps())
+        while (true) {
+            // Calculate the layout. Stop when we don't need to recalculate
+            // and there are no overlaps
+            if (!calculateLayout() && !resolveOverlaps())
+                break
+        }
 
         // Return the layout
         return layout
@@ -314,16 +316,30 @@ class PageLayoutHandler(
     /**
      * Calculate the positions for the fields in the layout
      */
-    private fun calculateLayout() {
-        // Clear the layout working variables
-        clear()
+    private fun calculateLayout(): Boolean {
         // Set the bounds of the layout as empty
         layout.bounds.setEmpty()
         layout.marginBounds.setEmpty()
-        // Position each field in the layout
+
+        var recalculate = false
+        // Work area for keeping alignment information
+        val target = LayoutDescription.AlignmentTarget()
+        // Clear the layout working variables
+        clear()
+        // Horizontally position each field in the layout
+        for (dl in layout.columns) {
+            // Start with the bounds at (0, 0)
+            dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
+            // Calculate the layout for a field in the book
+            recalculate = calculateLayout(dl, true, target) || recalculate
+        }
+
+        // Clear the layout working variables
+        clear()
+        // Vertically position each field in the layout
         for (dl in layout.columns) {
             // Calculate the layout for a field in the book
-            calculateLayout(dl)
+            recalculate = calculateLayout(dl, false, target) || recalculate
             // If the bounds are empty, don't include margins
             if (!dl.bounds.isEmpty) {
                 // Add in the margins
@@ -339,34 +355,72 @@ class PageLayoutHandler(
                 )
             }
         }
+
+        return recalculate
     }
 
     /**
      * Calculate the offset to align a field
-     * @param min The current top/left of the field including margins
-     * @param max The current bottom/right of the field including margins
-     * @param alignMin The specified top/left of the field. Null means it wasn't specified
-     * @param alignMax The specified bottom/right of the field. Null means it wasn't specified
-     * @param columnRight True to position unspecified alignment at the right side of the layout.
+     * @param dl The layout bounds being aligned
+     * @param minSpec The specified top/left of the field. Null means it wasn't specified
+     * @param maxSpec The specified bottom/right of the field. Null means it wasn't specified
+     * @param centerSpec The specified center of the field. Null means it wasn't specified
+     * @param rtl True to position unspecified alignment at the right side of the layout.
      *                    False to position unspecified alignment at the top or left side of the layout
-     * @return The offset to reposition the field according to the specification
+     * @return True if the layout needs to be recalculated
      */
-    private fun alignBounds(min: Float, max: Float, alignMin: Float?, alignMax: Float?, columnRight: Boolean): Float {
-        return if (alignMin == null) {
-            if (alignMax == null) {
-                // Field doesn't have any specification
-                if (columnRight)
-                    columnWidth - max   // Right side of the layout
-                else
-                    -min                // Top/left side of the layout
-            } else
-                alignMax - max          // Adjust to place max at alignMax
-        } else if (alignMax == null)
-            alignMin - min              // Adjust to place min at alignMin
-        else {
-            // Adjust to place center of min, max at center of alignMin, alignMax
-            (alignMin + alignMax - min - max) / 2.0f
+    private fun alignHorizontalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?, rtl: Boolean): Boolean {
+        // Set min to specified value, or the value of the parent
+        var min: Float = minSpec?: if (rtl) columnWidth else 0.0f
+        // Set max to specified value, or the value of the parent
+        var max: Float = maxSpec?: if (rtl) 0.0f else columnWidth
+        // If we the center was specified, then
+        centerSpec?.let centerOnly@{center ->
+            if (rtl)
+                max = center + dl.bounds.width() / 2.0f
+            else
+                min = center - dl.bounds.width() / 2.0f
         }
+
+        val adjust = if (rtl) max - dl.bounds.right else min - dl.bounds.left
+        dl.bounds.left += adjust
+        dl.bounds.right += adjust
+
+        // Calculate the width
+        var width = max - min
+        dl.description?.let { width = width.coerceAtLeast(it.minSize.x).coerceAtMost(it.maxSize.x) }
+        return if (abs(width - dl.width) >= EPSILON) {
+            dl.width = width
+            true
+        } else
+            false
+    }
+
+    /**
+     * Calculate the offset to align a field
+     * @param dl The layout bounds being aligned
+     * @param minSpec The specified top/left of the field. Null means it wasn't specified
+     * @param maxSpec The specified bottom/right of the field. Null means it wasn't specified
+     * @param centerSpec The specified center of the field. Null means it wasn't specified
+     * @return True if the layout should be recalculated
+     */
+    private fun alignVerticalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?): Boolean {
+        var min: Float = minSpec?: 0.0f
+        val max: Float = maxSpec?: BookLayout.MAX_HEIGHT
+        centerSpec?.let centerOnly@{center ->
+            min = center - dl.bounds.height() / 2.0f
+        }
+
+        dl.bounds.bottom += min - dl.bounds.top
+        dl.bounds.top = min
+
+        var height = max - min
+        dl.description?.let { height = height.coerceAtLeast(it.minSize.y).coerceAtMost(it.maxSize.y) }
+        return if (abs(height - dl.height) >= EPSILON) {
+            dl.height = height
+            true
+        } else
+            false
     }
 
     /**
@@ -381,39 +435,31 @@ class PageLayoutHandler(
      */
     private fun calculateLayout(
         dl: BookLayout.LayoutBounds,
-        target: LayoutDescription.AlignmentTarget = LayoutDescription.AlignmentTarget(dl.baseline, dl.rtl)
-    ): BookLayout.LayoutBounds {
+        horizontal: Boolean,
+        target: LayoutDescription.AlignmentTarget
+    ): Boolean {
         // If the layout has already been calculated, then just return its bounds
         if (calculated.contains(dl))
-            return dl
+            return false
 
+        var recalculate = false
         // Mark the layout as calculated. This is used to prevent infinite cycles
         calculated.add(dl)
-        // Start with the bounds at (0, 0)
-        dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
         // Calculate all of the dependencies
-        dl.alignment.asSequence().map { it.value.asSequence() }.flatten().forEach { calculateLayout(it.bounds, target) }
+        dl.alignment.asSequence().map { it.value.asSequence() }.flatten().forEach {
+            recalculate = calculateLayout(it.bounds, horizontal, target) || recalculate
+        }
         // Clear the combined result for this field
         target.clear(dl.baseline, dl.rtl)
         // Calculate all of the alignments and store the results in target
-        dl.alignment.forEach { it.key.calculateAlignment(target, it.value.asSequence()) }
-
-        // Calculate vertical alignment
-        alignBounds(dl.bounds.top - dl.margins.top, dl.bounds.bottom + dl.margins.bottom,
-            target.top?.minus(dl.margins.top), target.bottom?.plus(dl.margins.bottom), false).let {
-            // Make the adjustment
-            dl.bounds.top += it
-            dl.bounds.bottom += it
-        }
-        // Calculate the horizontal alignment
-        alignBounds(dl.bounds.left - dl.margins.left, dl.bounds.right + dl.margins.right,
-            target.left?.minus(dl.margins.left), target.right?.plus(dl.margins.right), rtl).let {
-            // Make the adjustment
-            dl.bounds.left += it
-            dl.bounds.right += it
+        dl.alignment.forEach {
+            if (it.key.horizontal == horizontal)
+                it.key.calculateAlignment(target, it.value.asSequence())
         }
 
-        // Return the layout
-        return dl
+        return if (horizontal)
+            alignHorizontalBounds(dl, target.left, target.right, target.hCenter, rtl) || recalculate
+        else
+            alignVerticalBounds(dl, target.top, target.bottom, target.vCenter) || recalculate
     }
 }
