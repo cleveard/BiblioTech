@@ -1,5 +1,6 @@
 package com.github.cleveard.bibliotech.print
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.RectF
 import android.text.*
@@ -40,7 +41,7 @@ data class BookLayout(
         val rtl: Boolean
         /** alignment criteria for the field */
         val alignment: MutableMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
-        /** The field/parent margins */
+        /** The field/parent margins. Left is the start margin and right is the end. */
         val margins: RectF
         /** The description of the field. Null means the BookLayout */
         val description: LayoutDescription.FieldLayoutDescription?
@@ -62,6 +63,17 @@ data class BookLayout(
      * @param columnHeight The height of the column
      */
     fun verticalClip(y: Float, columnHeight: Float): BookLayout {
+        var breakPosition: Float
+        var pos = columnHeight
+        do {
+            breakPosition = pos
+            for (dl in columns) {
+                pos = dl.getBreakPosition(y, breakPosition)
+                if (pos < breakPosition)
+                    break
+            }
+        } while (pos < breakPosition)
+
         // Initialize the clip rectangles
         columns.forEach { it.clip.set(it.bounds) }
 
@@ -69,11 +81,11 @@ data class BookLayout(
         val bookTop = y + bounds.top
         val bookBottom = y + bounds.bottom
         val clipTop = bookTop.coerceAtLeast(0.0f) - bookTop
-        val clipBottom = bookBottom.coerceAtMost(columnHeight) -  bookTop
+        val clipBottom = bookBottom.coerceAtMost(breakPosition) -  bookTop
         clip.set(bounds.left, clipTop, bounds.right, clipBottom)
 
         // If the book is completely visible, then return the layout
-        if (bookTop >= 0 && bookBottom <= columnHeight)
+        if (bookTop >= 0 && bookBottom <= breakPosition)
             return this
 
         // Not completely visible. We need to make sure fields are clipped
@@ -218,7 +230,7 @@ data class BookLayout(
      * Set the content of the layout from a book
      * @param book The book to set the content from
      */
-    fun setContent(book: BookAndAuthors) {
+    suspend fun setContent(book: BookAndAuthors) {
         // Set the content of each field
         for (d in columns)
             d.setContent(book)
@@ -228,7 +240,7 @@ data class BookLayout(
      * Draw the book on a canvas
      * @param canvas The canvas
      */
-    fun draw(canvas: Canvas) {
+    suspend fun draw(canvas: Canvas) {
         // Draw each field
         for (dl in columns)
             dl.draw(canvas)
@@ -236,19 +248,27 @@ data class BookLayout(
 
     /** Object to handle the bounds of the entire layout */
     private inner class BookLayoutBounds: LayoutBounds {
+        /** @inheritDoc */
         override val bounds: RectF
             get() = this@BookLayout.bounds
+        /** @inheritDoc */
         override val baseline: Float
             get() = 0.0f
+        /** @inheritDoc */
         override val rtl: Boolean
             get() = this@BookLayout.rtl
+        /** @inheritDoc */
         override val alignment = HashMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>()
+        /** @inheritDoc */
         override val margins: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
+        /** @inheritDoc */
         override val description: LayoutDescription.FieldLayoutDescription?
             get() = null
+        /** @inheritDoc */
         override var width: Float
             get() = columnWidth
             set(@Suppress("UNUSED_PARAMETER")v) {}
+        /** @inheritDoc */
         override var height: Float
             get() = MAX_HEIGHT
             set(@Suppress("UNUSED_PARAMETER")v) {}
@@ -265,20 +285,30 @@ data class BookLayout(
     /** Get the start of the field */
     class StartDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = bounds.margins.left - if (bounds.rtl) bounds.bounds.right else bounds.bounds.left
+            get() = if (bounds.rtl)
+                bounds.bounds.right + bounds.margins.left
+            else
+                bounds.bounds.left - bounds.margins.left
     }
 
     /** Get the end of the field */
     class EndDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = bounds.margins.right + if (bounds.rtl) bounds.bounds.left else bounds.bounds.right
+            get() = if (bounds.rtl)
+                bounds.bounds.left - bounds.margins.right
+            else
+                bounds.bounds.right + bounds.margins.right
     }
 
     /** Get the horizontal center of the field */
     class HCenterDimension(override val bounds: LayoutBounds): LayoutDimension {
         override val dimension: Float
-            get() = (bounds.bounds.left - bounds.margins.left
-                + bounds.bounds.right + bounds.margins.right) / 2.0f
+            get() = (bounds.bounds.left + bounds.bounds.right +
+                        if (bounds.rtl)
+                            bounds.margins.left - bounds.margins.right
+                        else
+                            bounds.margins.right - bounds.margins.left
+                    ) / 2.0f
     }
 
     /** Get the top of the field */
@@ -340,7 +370,7 @@ data class BookLayout(
          * Draw the layout
          * @param canvas The canvas to use
          */
-        abstract fun draw(canvas: Canvas)
+        abstract suspend fun draw(canvas: Canvas)
 
         /**
          * Clip the top of the field to the print area
@@ -354,10 +384,21 @@ data class BookLayout(
         abstract fun verticalClip(y: Float, columnHeight: Float, exclusive: Boolean): Boolean
 
         /**
+         * Get the position where this field wants to break the layout
+         * @param y The position of the book layout
+         * @param columnHeight The height of the column
+         * @return The position
+         * Allows a field that cannot be moved to the next column to break above itself
+         */
+        open fun getBreakPosition(y: Float, columnHeight: Float): Float {
+            return columnHeight
+        }
+
+        /**
          * Set the content of the layout from a book
          * @param book The book to set the content from
          */
-        abstract fun setContent(book: BookAndAuthors)
+        abstract suspend fun setContent(book: BookAndAuthors)
 
         /**
          * Clip vertical bounds by y and columnHeight
@@ -398,7 +439,7 @@ data class BookLayout(
         override var textLayout = createLayout()
 
         /** @inheritDoc */
-        override fun draw(canvas: Canvas) {
+        override suspend fun draw(canvas: Canvas) {
             if (!clip.isEmpty) {
                 canvas.save()
                 canvas.clipRect(clip)
@@ -412,16 +453,21 @@ data class BookLayout(
          * Create the StaticLayout from the current values
          */
         protected fun createLayout(): StaticLayout {
+            // Build the static layout
             val layout = StaticLayout.Builder.obtain(
                 text, 0, text.length, paint,
                 printer.pointsToHorizontalPixels(width)
             ).build()
-            if (layout.height < height)
+            // If the field isn't vertically constrained, then return it
+            if (layout.height <= height)
                 return layout
+            // Calculate how many lines we need to be smaller than height
             var lines = layout.getLineForVertical(printer.pointsToVerticalPixels(height))
             if (printer.verticalPixelsToPoints(layout.getLineTop(lines)) > height)
                 --lines
             return (
+                // If we can have some lines, then limit the layout. Otherwise
+                // make the layout an empty string.
                 if (lines > 0)
                     StaticLayout.Builder.obtain(
                         text, 0, text.length, paint,
@@ -517,7 +563,7 @@ data class BookLayout(
             get() = printer.horizontalPixelsToPoints(ceil((0 until textLayout.lineCount).maxOf { textLayout.getLineMax(it) }).toInt())
 
         /** @inheritDoc */
-        override fun setContent(book: BookAndAuthors) {
+        override suspend fun setContent(book: BookAndAuthors) {
             setContent()
         }
 
@@ -543,7 +589,7 @@ data class BookLayout(
      * @param description The description of the field layout
      * @param column The database column with the field value
      */
-    open class ColumnLayout(
+    open class ColumnTextLayout(
         /** The printer */
         printer: PDFPrinter,
         /** Maximum width of the field */
@@ -553,13 +599,108 @@ data class BookLayout(
         val column: Column,
     ): TextLayout(printer, width, description, "") {
         /** @inheritDoc */
-        override fun setContent(book: BookAndAuthors) {
+        override suspend fun setContent(book: BookAndAuthors) {
             // Get the column value
             text = column.desc.getDisplayValue(book)
             // Create the StaticLayout
             textLayout = createLayout()
             // Fill in the bounds and baseline of the field
             super.setContent()
+        }
+    }
+
+    /**
+     * Class for a field with a book database value
+     * @param printer The PDFPrinter we are using. Several attributes are kept there
+     * @param description The description of the field layout
+     * @param large True to display the large thumbnail
+     */
+    open class ColumnBitmapLayout(
+        /** The printer */
+        printer: PDFPrinter,
+        /** The field description */
+        description: LayoutDescription.FieldLayoutDescription,
+        private val columnWidth: Float,
+        val large: Boolean,
+    ): DrawLayout(printer, description, description.maxSize.x) {
+        /** @inheritDoc */
+        override var height: Float = description.maxSize.y
+            set(v) {
+                // Set the bounds bottom when the height changes
+                if (v != field)
+                    bounds.bottom = bounds.top + v
+                field = v
+            }
+        /** @inheritDoc */
+        override var width: Float
+            get() = super.width
+            set(v) {
+                super.width.let {
+                    super.width = v
+                    // Set the bounds right when the width changes
+                    if (v != it)
+                        bounds.right = bounds.left + v
+                }
+            }
+        /** The book id used to load the bitmap when drawing */
+        var bookId: Long = 0
+        /** The bitmap */
+        var bitmap: Bitmap? = null
+
+        /** @inheritDoc */
+        override suspend fun draw(canvas: Canvas) {
+            // If the bitmap us null, then load it.
+            (bitmap?: printer.getThumbnail(bookId, large))?.let {bitmap ->
+                this.bitmap = bitmap
+                // Scale the bitmap to fit the bounds.
+                val dst = RectF(0.0f, 0.0f, bitmap.width.toFloat(), bitmap.height.toFloat())
+                if (dst.right * bounds.height() > dst.bottom * bounds.width()) {
+                    dst.bottom = dst.bottom * bounds.width() / dst.right
+                    dst.right = bounds.width()
+                } else {
+                    dst.right = dst.right * bounds.height() / dst.bottom
+                    dst.bottom = bounds.height()
+                }
+                // Center the bitmap in the bounds
+                dst.offset(bounds.left + (bounds.width() - dst.right) / 2.0f,
+                    bounds.top + (bounds.height() - dst.bottom) / 2.0f)
+                // Draw the bitmap
+                canvas.save()
+                canvas.clipRect(clip)
+                canvas.drawBitmap(bitmap, null, dst, printer.basePaint)
+                canvas.restore()
+            }
+        }
+
+        /** @inheritDoc */
+        override suspend fun setContent(book: BookAndAuthors) {
+            // Set the bookId and clear the bitmap
+            bookId = book.book.id
+            bitmap = null
+            // Set the bounds to the width and height.
+            bounds.set(0.0f, 0.0f,
+                width.coerceAtMost(columnWidth), height.coerceAtMost(printer.pageDrawBounds.height()))
+            baseline = 0.0f
+        }
+
+        /** @inheritDoc */
+        override fun verticalClip(y: Float, columnHeight: Float, exclusive: Boolean): Boolean {
+            // If the bitmap isn't fully visible, then make the clip rectangle empty
+            if (y > bounds.top || columnHeight < bounds.bottom) {
+                clip.bottom = clip.top
+                return false
+            }
+            return true
+        }
+
+        /** @inheritDoc */
+        override fun getBreakPosition(y: Float, columnHeight: Float): Float {
+            // If the bottom of the column overlaps the bitmap,
+            // then force it to the top of the next column
+            return if (columnHeight > bounds.top && columnHeight < bounds.bottom)
+                bounds.top
+            else
+                columnHeight
         }
     }
 }

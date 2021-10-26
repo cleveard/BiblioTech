@@ -1,14 +1,13 @@
 package com.github.cleveard.bibliotech.print
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.RectF
 import android.print.PageRange
 import android.print.PrintAttributes
 import android.print.pdf.PrintedPdfDocument
 import android.text.*
-import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
-import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.ui.print.PrintLayouts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +16,7 @@ import java.lang.IllegalStateException
 import kotlin.math.roundToInt
 
 /** Class for printing to a PDF */
-class PDFPrinter(layouts: PrintLayouts): Closeable {
+class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?): Closeable {
     /** The pdf document we are printing to */
     private var pdf: PrintedPdfDocument? = null
         private set(v) {
@@ -73,7 +72,7 @@ class PDFPrinter(layouts: PrintLayouts): Closeable {
         // If the orphan count changes, reprint the document
         set(v) { if (v != field) pdf = null; field = v }
     /** The bounds of the drawing area on the page */
-    private val pageDrawBounds = RectF()
+    val pageDrawBounds = RectF()
     /** The layout handler for the document */
     private var pageLayoutHandler: PageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
     /** The base paint for printing the document */
@@ -205,7 +204,7 @@ class PDFPrinter(layouts: PrintLayouts): Closeable {
     /**
      * Layout the pages
      */
-    private fun layoutPages(): List<PageLayoutHandler.Page> {
+    private suspend fun layoutPages(): List<PageLayoutHandler.Page> {
         // Only layout if there are some books
         return bookList?.let {books ->
             // If pages is not null, the previous layout is valid, return it
@@ -232,7 +231,7 @@ class PDFPrinter(layouts: PrintLayouts): Closeable {
      * @param pageRanges The ranges for the pages to be printed
      * @param writtenRanges The ranges for the pages actually written
      */
-    private fun processPages(pages: List<PageLayoutHandler.Page>, pageRanges: Array<PageRange>, writtenRanges: MutableList<PageRange>) {
+    private suspend fun processPages(pages: List<PageLayoutHandler.Page>, pageRanges: Array<PageRange>, writtenRanges: MutableList<PageRange>) {
         // If pdf is not null, the the document is valid, just return it
         pdf?.let { doc ->
             // We had better have some books
@@ -286,6 +285,15 @@ class PDFPrinter(layouts: PrintLayouts): Closeable {
                     writtenRanges.add(PageRange(start, end))
             }
         }
+    }
+
+    /**
+     * Get a thumbnail for a book
+     * @param bookId The id of the book
+     * @param large True to get the large thumbnail. False for the small one.
+     */
+    suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+        return getThumbnailCallback(bookId, large)
     }
 
     companion object {

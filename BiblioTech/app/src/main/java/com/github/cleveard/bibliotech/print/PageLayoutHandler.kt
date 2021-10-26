@@ -36,7 +36,7 @@ class PageLayoutHandler(
          * @param canvas The canvas to draw on
          * @param bookList The list of books to draw
          */
-        abstract fun draw(canvas: Canvas, bookList: List<BookAndAuthors>)
+        abstract suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>)
     }
 
     /**
@@ -55,7 +55,7 @@ class PageLayoutHandler(
         private val clipRect: RectF = RectF(clip)
 
         /** @inheritDoc */
-        override fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
             // Save the current canvas state
             canvas.save()
             // Set the clip rectangle and location
@@ -81,7 +81,7 @@ class PageLayoutHandler(
         position: PointF
     ): DrawPosition(position) {
         /** @inheritDoc */
-        override fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
             // Save the current canvas state
             canvas.save()
             // Set the location
@@ -146,7 +146,7 @@ class PageLayoutHandler(
      * @param books The list of books
      * @return The list of laid out pages
      */
-    fun layoutPages(books: List<BookAndAuthors>): List<Page> {
+    suspend fun layoutPages(books: List<BookAndAuthors>): List<Page> {
         // For each book in the list place its layout on a page
         for (i in books.indices) {
             placeBook(i, layoutBook(books[i]))
@@ -164,7 +164,7 @@ class PageLayoutHandler(
      * @param book The book to layout
      * @return The layout for the book. All layouts share a single object
      */
-    fun layoutBook(book: BookAndAuthors): BookLayout {
+    suspend fun layoutBook(book: BookAndAuthors): BookLayout {
         // If we ask for the book again, return the previous layout
         if (book == laidOutBook)
             return layout
@@ -324,15 +324,20 @@ class PageLayoutHandler(
         var recalculate = false
         // Work area for keeping alignment information
         val target = LayoutDescription.AlignmentTarget()
+        // Move all of the bounds to (0,0)
+        for (dl in layout.columns) {
+            dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
+        }
+
         // Clear the layout working variables
         clear()
         // Horizontally position each field in the layout
         for (dl in layout.columns) {
-            // Start with the bounds at (0, 0)
-            dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
             // Calculate the layout for a field in the book
             recalculate = calculateLayout(dl, true, target) || recalculate
         }
+        if (recalculate)
+            return true
 
         // Clear the layout working variables
         clear()
@@ -342,15 +347,13 @@ class PageLayoutHandler(
             recalculate = calculateLayout(dl, false, target) || recalculate
             // If the bounds are empty, don't include margins
             if (!dl.bounds.isEmpty) {
-                // Add in the margins
-                dl.bounds.offset(dl.margins.left, dl.margins.top)
                 // Add the field bounds to the layout bounds
                 layout.bounds.union(dl.bounds)
                 // Add the field with margin bounds to the margin bounds
                 layout.marginBounds.union(
-                    dl.bounds.left - dl.margins.left,
+                    dl.bounds.left - if (dl.rtl) dl.margins.right else dl.margins.left,
                     dl.bounds.top - dl.margins.top,
-                    dl.bounds.right + dl.margins.right,
+                    dl.bounds.right + if (dl.rtl) dl.margins.left else dl.margins.right,
                     dl.bounds.bottom + dl.margins.bottom
                 )
             }
@@ -370,19 +373,46 @@ class PageLayoutHandler(
      * @return True if the layout needs to be recalculated
      */
     private fun alignHorizontalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?, rtl: Boolean): Boolean {
-        // Set min to specified value, or the value of the parent
-        var min: Float = minSpec?: if (rtl) columnWidth else 0.0f
-        // Set max to specified value, or the value of the parent
-        var max: Float = maxSpec?: if (rtl) 0.0f else columnWidth
-        // If we the center was specified, then
-        centerSpec?.let centerOnly@{center ->
-            if (rtl)
-                max = center + dl.bounds.width() / 2.0f
-            else
-                min = center - dl.bounds.width() / 2.0f
-        }
+        var min: Float
+        var max: Float
+        var adjust: Float
 
-        val adjust = if (rtl) max - dl.bounds.right else min - dl.bounds.left
+        if (rtl) {
+            // Set min to specified value, or the value of the parent
+            min = minSpec?: columnWidth
+            // Set max to specified value, or the value of the parent
+            max = maxSpec?: 0.0f
+            // If we the center was specified, then center the field
+            centerSpec?.let{center ->
+                max = center + dl.bounds.width() / 2.0f
+            }
+            // Include the margins
+            min += dl.margins.right
+            max -= dl.margins.left
+            // Calculate the adjust to move bounds.right to max
+            adjust = max - dl.bounds.right
+            // If the bounds are empty to include the margins
+            if (dl.bounds.isEmpty)
+                adjust += dl.margins.left
+        } else {
+            // Set min to specified value, or the value of the parent
+            min = minSpec?: 0.0f
+            // Set max to specified value, or the value of the parent
+            max = maxSpec?: columnWidth
+            // If we the center was specified, then center the field
+            centerSpec?.let {center ->
+                min = center - dl.bounds.width() / 2.0f
+            }
+            // Include the margins
+            min += dl.margins.left
+            max -= dl.margins.right
+            // Calculate the adjust to move bounds.left to min
+            adjust = min - dl.bounds.left
+            // If the bounds are empty to include the margins
+            if (dl.bounds.isEmpty)
+                adjust -= dl.margins.left
+        }
+        // Move the bounds
         dl.bounds.left += adjust
         dl.bounds.right += adjust
 
@@ -405,15 +435,24 @@ class PageLayoutHandler(
      * @return True if the layout should be recalculated
      */
     private fun alignVerticalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?): Boolean {
+        // Set min to specified value or the value of the parent
         var min: Float = minSpec?: 0.0f
-        val max: Float = maxSpec?: BookLayout.MAX_HEIGHT
+        // Set max to specified value or the value of the parent including margins
+        val max: Float = if (maxSpec == null) BookLayout.MAX_HEIGHT else maxSpec - dl.margins.bottom
+        // If we have a center spec, then center the field
         centerSpec?.let centerOnly@{center ->
-            min = center - dl.bounds.height() / 2.0f
+            min = center - dl.bounds.height()
         }
+        // Include the top margin.
+        min += dl.margins.top
 
-        dl.bounds.bottom += min - dl.bounds.top
-        dl.bounds.top = min
+        // Calculate the adjustment to move the top to min. If the bounds are empty
+        // make sure the margins are not included
+        val adjust = (if (dl.bounds.isEmpty) min - dl.margins.top else min) - dl.bounds.top
+        dl.bounds.bottom += adjust
+        dl.bounds.top += adjust
 
+        // Calculate the height
         var height = max - min
         dl.description?.let { height = height.coerceAtLeast(it.minSize.y).coerceAtMost(it.maxSize.y) }
         return if (abs(height - dl.height) >= EPSILON) {
@@ -446,9 +485,13 @@ class PageLayoutHandler(
         // Mark the layout as calculated. This is used to prevent infinite cycles
         calculated.add(dl)
         // Calculate all of the dependencies
-        dl.alignment.asSequence().map { it.value.asSequence() }.flatten().forEach {
-            recalculate = calculateLayout(it.bounds, horizontal, target) || recalculate
-        }
+        dl.alignment.asSequence()
+            .filter { it.key.horizontal == horizontal }
+            .map { it.value.asSequence() }
+            .flatten()
+            .forEach {
+                recalculate = calculateLayout(it.bounds, horizontal, target) || recalculate
+            }
         // Clear the combined result for this field
         target.clear(dl.baseline, dl.rtl)
         // Calculate all of the alignments and store the results in target
@@ -457,6 +500,7 @@ class PageLayoutHandler(
                 it.key.calculateAlignment(target, it.value.asSequence())
         }
 
+        // Align the field and return whether the alignment needs recalculating
         return if (horizontal)
             alignHorizontalBounds(dl, target.left, target.right, target.hCenter, rtl) || recalculate
         else

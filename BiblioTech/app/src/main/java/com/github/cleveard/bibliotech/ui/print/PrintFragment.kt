@@ -19,8 +19,10 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
+import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.print.PDFPrinter
+import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.launch
 
@@ -107,6 +109,7 @@ class PrintFragment : Fragment() {
         }
 
     private lateinit var viewModel: PrintViewModel
+    private lateinit var booksViewModel: BooksViewModel
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -118,6 +121,7 @@ class PrintFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         viewModel = ViewModelProvider(this).get(PrintViewModel::class.java)
+        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Create the ViewName for the filter from the arguments
         filter = ViewName.makeDisplay(args.filterName, requireContext().resources)
@@ -179,7 +183,9 @@ class PrintFragment : Fragment() {
             val context = requireContext()
             val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val jobName = "${context.getString(R.string.app_name)} Document"
-            val pdfPrinter = PDFPrinter(PrintLayouts(requireContext())).also {
+            val pdfPrinter = PDFPrinter(PrintLayouts(requireContext())) {id, large ->
+                booksViewModel.getThumbnail(id, large)
+            }.also {
                 // Get the book filter for the export
                 val bookFilter = filter.name?.let {name -> viewModel.repo.findViewByName(name) }?.filter
                 // Get the PageSource for the books

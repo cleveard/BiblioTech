@@ -4,7 +4,6 @@ import android.graphics.PointF
 import android.graphics.RectF
 import com.github.cleveard.bibliotech.db.Column
 import kotlin.collections.HashMap
-import kotlin.collections.HashSet
 
 /**
  * Class to hold the description of a book layout
@@ -421,11 +420,27 @@ data class LayoutDescription(
      * Text field from a book database column
      * @param column The database column description
      */
-    class ColumnFieldLayoutDescription(private val column: Column): FieldLayoutDescription() {
+    class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription() {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnLayout(printer, columnWidth, this, column)
+            return BookLayout.ColumnTextLayout(printer, columnWidth, this, column)
+        }
+    }
+
+    /**
+     * Text field from a book database column
+     * @param column The database column description
+     */
+    class ColumnBitmapFieldLayoutDescription(val large: Boolean, size: PointF): FieldLayoutDescription() {
+        init {
+            maxSize.set(size)
+        }
+
+        /** @inheritDoc */
+        override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
+            // Create the field with the column description, the content holder and the DynamicLayout
+            return BookLayout.ColumnBitmapLayout(printer, this, columnWidth, large)
         }
     }
 }
