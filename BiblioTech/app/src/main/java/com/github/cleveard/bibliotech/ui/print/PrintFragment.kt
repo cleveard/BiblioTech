@@ -120,7 +120,12 @@ class PrintFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        viewModel = ViewModelProvider(this).get(PrintViewModel::class.java)
+        viewModel = ViewModelProvider(this).get(PrintViewModel::class.java).apply {
+            // Create the print layouts and the PDF printer
+            initialize(requireContext()) {id, large ->
+                booksViewModel.getThumbnail(id, large)
+            }
+        }
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Create the ViewName for the filter from the arguments
@@ -145,7 +150,7 @@ class PrintFragment : Fragment() {
         }
         viewSpinner.adapter = adapter
         // Add the view names to the spinner
-        viewModel.repo.getViewNames().also {live ->
+        booksViewModel.repo.getViewNames().also {live ->
             // Observe the view names for changes
             live.observe(viewLifecycleOwner) {list ->
                 // Set the current set of view names
@@ -183,16 +188,14 @@ class PrintFragment : Fragment() {
             val context = requireContext()
             val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val jobName = "${context.getString(R.string.app_name)} Document"
-            val pdfPrinter = PDFPrinter(PrintLayouts(requireContext())) {id, large ->
-                booksViewModel.getThumbnail(id, large)
-            }.also {
-                // Get the book filter for the export
-                val bookFilter = filter.name?.let {name -> viewModel.repo.findViewByName(name) }?.filter
-                // Get the PageSource for the books
-                val source = bookFilter?.let {filter -> viewModel.repo.getBookList(filter, requireContext()) } ?: viewModel.repo.getBookList()
-                it.bookList = source.getLive()?: return@launch
-            }
-            printManager.print(jobName, BookPrintAdapter(pdfPrinter, context, viewModel.viewModelScope), null)
+
+            // Get the book filter for the export
+            val bookFilter = filter.name?.let {name -> booksViewModel.repo.findViewByName(name) }?.filter
+            // Get the PageSource for the books
+            val source = bookFilter?.let {filter -> booksViewModel.repo.getBookList(filter, requireContext()) } ?: booksViewModel.repo.getBookList()
+            viewModel.pdfPrinter.bookList = source.getLive()?: return@launch
+
+            printManager.print(jobName, BookPrintAdapter(viewModel.pdfPrinter, context, viewModel.viewModelScope), null)
         }
     }
 }
