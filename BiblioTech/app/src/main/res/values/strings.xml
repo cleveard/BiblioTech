@@ -116,6 +116,8 @@
     <string name="rating">Rating</string>
     <string name="date_added">Date Added</string>
     <string name="date_changed">Date Changed</string>
+    <string name="small_thumb">Icon</string>
+    <string name="large_thumb">Cover</string>
     <string name="filter_by">Filter</string>
     <string name="predicate">By</string>
     <string name="one_of">is</string>
@@ -201,4 +203,5 @@
     <string name="columns">Columns:</string>
     <string name="separator">Separator:</string>
     <string name="orphans">Orphan Lines:</string>
+    <string name="visible_fields">Visible Fields:</string>
 </resources>

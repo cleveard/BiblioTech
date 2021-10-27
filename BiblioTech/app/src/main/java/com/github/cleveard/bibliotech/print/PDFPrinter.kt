@@ -8,6 +8,7 @@ import android.print.PrintAttributes
 import android.print.pdf.PrintedPdfDocument
 import android.text.*
 import com.github.cleveard.bibliotech.db.BookAndAuthors
+import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.ui.print.PrintLayouts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +74,13 @@ class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspen
         set(v) { if (v != field) pdf = null; field = v }
     /** The bounds of the drawing area on the page */
     val pageDrawBounds = RectF()
+    /** Set of visible fields in layout */
+    val visibleFields: MutableSet<String> = mutableSetOf(
+        "SmallThumb",
+        Column.TITLE.name,
+        Column.SUBTITLE.name,
+        Column.FIRST_NAME.name
+    )
     /** The layout handler for the document */
     private var pageLayoutHandler: PageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
     /** The base paint for printing the document */

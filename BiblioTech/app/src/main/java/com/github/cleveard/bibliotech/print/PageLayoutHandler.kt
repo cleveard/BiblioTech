@@ -125,7 +125,7 @@ class PageLayoutHandler(
     private var laidOutBook: BookAndAuthors? = null
     /** The layout of the last book we laid out. This layout is shared by all books */
     private val layout: BookLayout by lazy {
-        printer.layoutDescription.createLayout(printer, columnWidth, rtl)
+        printer.layoutDescription.createLayout(printer, columnWidth, printer.visibleFields, rtl)
     }
 
     /**
@@ -318,7 +318,7 @@ class PageLayoutHandler(
      */
     private fun calculateLayout(): Boolean {
         // Set the bounds of the layout as empty
-        layout.bounds.setEmpty()
+        layout.bounds.set(0.0f, 0.0f, columnWidth, 0.0f)
         layout.marginBounds.setEmpty()
 
         var recalculate = false
@@ -373,22 +373,25 @@ class PageLayoutHandler(
      * @return True if the layout needs to be recalculated
      */
     private fun alignHorizontalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?, rtl: Boolean): Boolean {
-        var min: Float
-        var max: Float
+        val min: Float
+        val max: Float
         var adjust: Float
 
         if (rtl) {
             // Set min to specified value, or the value of the parent
-            min = minSpec?: columnWidth
+            max = when {
+                centerSpec != null -> centerSpec + dl.bounds.width() / 2.0f
+                maxSpec != null -> maxSpec
+                minSpec != null -> (minSpec + dl.width).coerceAtMost(columnWidth)
+                else -> columnWidth
+            } - dl.margins.left
             // Set max to specified value, or the value of the parent
-            max = maxSpec?: 0.0f
-            // If we the center was specified, then center the field
-            centerSpec?.let{center ->
-                max = center + dl.bounds.width() / 2.0f
-            }
-            // Include the margins
-            min += dl.margins.right
-            max -= dl.margins.left
+            min = when {
+                centerSpec != null -> max - dl.width
+                minSpec != null -> minSpec
+                maxSpec != null -> (max - dl.width).coerceAtLeast(0.0f)
+                else -> 0.0f
+            } + dl.margins.right
             // Calculate the adjust to move bounds.right to max
             adjust = max - dl.bounds.right
             // If the bounds are empty to include the margins
@@ -396,16 +399,19 @@ class PageLayoutHandler(
                 adjust += dl.margins.left
         } else {
             // Set min to specified value, or the value of the parent
-            min = minSpec?: 0.0f
+            min = when {
+                centerSpec != null -> centerSpec - dl.bounds.width() / 2.0f
+                minSpec != null -> minSpec
+                maxSpec != null -> (maxSpec - dl.width).coerceAtLeast(0.0f)
+                else -> 0.0f
+            } + dl.margins.left
             // Set max to specified value, or the value of the parent
-            max = maxSpec?: columnWidth
-            // If we the center was specified, then center the field
-            centerSpec?.let {center ->
-                min = center - dl.bounds.width() / 2.0f
-            }
-            // Include the margins
-            min += dl.margins.left
-            max -= dl.margins.right
+            max = when {
+                centerSpec != null -> min + dl.width
+                maxSpec != null -> maxSpec
+                minSpec != null -> min + dl.width
+                else -> columnWidth
+            } - dl.margins.right
             // Calculate the adjust to move bounds.left to min
             adjust = min - dl.bounds.left
             // If the bounds are empty to include the margins
@@ -415,6 +421,10 @@ class PageLayoutHandler(
         // Move the bounds
         dl.bounds.left += adjust
         dl.bounds.right += adjust
+
+        // Don't change the width unless both min and max spec are given
+        if (minSpec == null || maxSpec == null)
+            return false
 
         // Calculate the width
         var width = max - min
@@ -435,16 +445,12 @@ class PageLayoutHandler(
      * @return True if the layout should be recalculated
      */
     private fun alignVerticalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?): Boolean {
-        // Set min to specified value or the value of the parent
-        var min: Float = minSpec?: 0.0f
-        // Set max to specified value or the value of the parent including margins
-        val max: Float = if (maxSpec == null) BookLayout.MAX_HEIGHT else maxSpec - dl.margins.bottom
-        // If we have a center spec, then center the field
-        centerSpec?.let centerOnly@{center ->
-            min = center - dl.bounds.height()
-        }
-        // Include the top margin.
-        min += dl.margins.top
+        val min = when {
+            centerSpec != null -> centerSpec - dl.bounds.height() / 2.0f
+            minSpec != null -> minSpec
+            maxSpec != null -> (maxSpec - dl.height).coerceAtLeast(0.0f)
+            else -> 0.0f
+        } + dl.margins.top
 
         // Calculate the adjustment to move the top to min. If the bounds are empty
         // make sure the margins are not included
@@ -452,8 +458,12 @@ class PageLayoutHandler(
         dl.bounds.bottom += adjust
         dl.bounds.top += adjust
 
+        // Don't change the height unless both min and max spec are given
+        if (minSpec == null || maxSpec == null)
+            return false
+
         // Calculate the height
-        var height = max - min
+        var height = maxSpec - dl.margins.bottom - minSpec + dl.margins.top
         dl.description?.let { height = height.coerceAtLeast(it.minSize.y).coerceAtMost(it.maxSize.y) }
         return if (abs(height - dl.height) >= EPSILON) {
             dl.height = height

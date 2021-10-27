@@ -26,9 +26,10 @@ data class LayoutDescription(
      *  Create the book layout from this description
      *  @param printer The printer being used
      *  @param columnWidth The width of a column
+     *  @param visible The set of visible fields
      *  @param rtl True to create a layout for right-to-left
      */
-    fun createLayout(printer: PDFPrinter, columnWidth: Float, rtl: Boolean): BookLayout {
+    fun createLayout(printer: PDFPrinter, columnWidth: Float, visible: Set<String>, rtl: Boolean): BookLayout {
         // Create the book layout
         val bookLayout = BookLayout(
             // The printer
@@ -36,7 +37,12 @@ data class LayoutDescription(
             // The layout description
             this,
             // The fields in the layout
-            inColumns.map { it.createLayout(printer, columnWidth) },
+            inColumns.map {
+                if (visible.contains(it.visibleFlag))
+                    it.createLayout(printer, columnWidth)
+                else
+                    BookLayout.EmptyLayout(printer, it)
+            },
             // The column width
             columnWidth,
             // The bounds rectangle excluding margins
@@ -381,15 +387,16 @@ data class LayoutDescription(
      * @param margin Additional padding in points
      * @param minSize The minimum size in points used by the field
      * @param maxSize The maximum size in points used by the field
-     * @param layoutAlignment The layout alignment for the field
      */
     abstract class FieldLayoutDescription(
+        /** Flag string used to control visibility for the field */
+        val visibleFlag: String,
         /** Additional padding in points */
         val margin: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f),
         /** The minimum size in points used by the field */
         val minSize: PointF = PointF(0.0f, 0.0f),
         /** The maximum size in points used by the field */
-        val maxSize: PointF = PointF(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+        val maxSize: PointF = PointF(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
     ) {
         /** The layout alignment for the field */
         lateinit var layoutAlignment: Set<LayoutAlignment>
@@ -406,7 +413,7 @@ data class LayoutDescription(
      * Static text field
      * @param text The static text to display
      */
-    class TextFieldLayoutDescription(private val text: String): FieldLayoutDescription() {
+    class TextFieldLayoutDescription(visibleFlag: String, private val text: String): FieldLayoutDescription(visibleFlag) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
             // Return a text field with the StaticLayout
@@ -420,7 +427,7 @@ data class LayoutDescription(
      * Text field from a book database column
      * @param column The database column description
      */
-    class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription() {
+    class ColumnTextFieldLayoutDescription(visibleFlag: String, private val column: Column): FieldLayoutDescription(visibleFlag) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
@@ -430,9 +437,9 @@ data class LayoutDescription(
 
     /**
      * Text field from a book database column
-     * @param column The database column description
+     * @param large True to use the large thumbnail
      */
-    class ColumnBitmapFieldLayoutDescription(val large: Boolean, size: PointF): FieldLayoutDescription() {
+    class ColumnBitmapFieldLayoutDescription(visibleFlag: String, val large: Boolean, size: PointF): FieldLayoutDescription(visibleFlag) {
         init {
             maxSize.set(size)
         }

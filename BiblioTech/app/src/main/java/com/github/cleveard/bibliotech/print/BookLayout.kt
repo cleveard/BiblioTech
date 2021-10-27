@@ -609,6 +609,25 @@ data class BookLayout(
         }
     }
 
+    open class EmptyLayout(
+        /** The printer */
+        printer: PDFPrinter,
+        /** The field description */
+        description: LayoutDescription.FieldLayoutDescription
+    ): DrawLayout(printer, description, 0.0f) {
+        override suspend fun draw(canvas: Canvas) {
+        }
+
+        override fun verticalClip(y: Float, columnHeight: Float, exclusive: Boolean): Boolean {
+            return false
+        }
+
+        override suspend fun setContent(book: BookAndAuthors) {
+            bounds.set(0.0f, 0.0f, 0.0f, 0.0f)
+            baseline = 0.0f
+        }
+    }
+
     /**
      * Class for a field with a book database value
      * @param printer The PDFPrinter we are using. Several attributes are kept there

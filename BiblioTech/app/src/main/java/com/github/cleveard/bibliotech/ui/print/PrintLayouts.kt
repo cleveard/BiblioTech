@@ -13,48 +13,68 @@ class PrintLayouts(context: Context) {
     /** A simple layout, Title, subtitle and authors */
     val simpleLayout = LayoutDescription(
         listOf(
-            LayoutDescription.ColumnBitmapFieldLayoutDescription(false, PointF(16.0f, BookLayout.MAX_HEIGHT)).apply {
+            LayoutDescription.ColumnBitmapFieldLayoutDescription("SmallThumb", false, PointF(16.0f, BookLayout.MAX_HEIGHT)).apply {
                 margin.right = 4.5f
             },
-            LayoutDescription.ColumnTextFieldLayoutDescription(Column.TITLE),
-            LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE).apply {
+            LayoutDescription.ColumnBitmapFieldLayoutDescription("LargeThumb", true, PointF(72.0f, 112.0f)).apply {
+                margin.left = 4.5f
+            },
+            LayoutDescription.ColumnTextFieldLayoutDescription(Column.TITLE.name, Column.TITLE),
+            LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE.name, Column.SUBTITLE).apply {
                 margin.top = 1.0f
             },
-            LayoutDescription.TextFieldLayoutDescription(authorsBy).apply {
+            LayoutDescription.TextFieldLayoutDescription(Column.FIRST_NAME.name, authorsBy).apply {
                 margin.top = 1.0f
                 margin.right = 4.5f
             },
-            LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME)
+            LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME.name, Column.FIRST_NAME)
         ),
         emptyList(),                // No headers
         18.0f,      // Separation between print columns
         9.0f            // Separation between books
     ).apply {
-        val thumb = inColumns[0]
-        val title = inColumns[1]
-        val subtitle = inColumns[2]
-        val by = inColumns[3]
-        val authors = inColumns[4]
-        thumb.layoutAlignment = setOf(
-            // Thumbnail is at the top
+        val smallThumb = inColumns[0]
+        val largeThumb = inColumns[1]
+        val title = inColumns[2]
+        val subtitle = inColumns[3]
+        val by = inColumns[4]
+        val authors = inColumns[5]
+        smallThumb.layoutAlignment = setOf(
+            // Small Thumbnail is at the top
             LayoutDescription.VerticalLayoutAlignment(
                 LayoutDescription.VerticalLayoutDimension.Type.Top,
                 listOf(
                     LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
                 )
             ),
-            // Thumbnail bottom is at the bottom of the authors
+            // Small Thumbnail bottom is at the bottom of the authors
             LayoutDescription.VerticalLayoutAlignment(
                 LayoutDescription.VerticalLayoutDimension.Type.Bottom,
                 listOf(
                     LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, authors)
                 )
             ),
-            // Thumbnail is at the start
+            // Small Thumbnail is at the start
             LayoutDescription.HorizontalLayoutAlignment(
                 LayoutDescription.HorizontalLayoutDimension.Type.Start,
                 listOf(
                     LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                )
+            )
+        )
+        largeThumb.layoutAlignment = setOf(
+            // Large Thumbnail is at the top
+            LayoutDescription.VerticalLayoutAlignment(
+                LayoutDescription.VerticalLayoutDimension.Type.Top,
+                listOf(
+                    LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
+                )
+            ),
+            // Large Thumbnail is at the end
+            LayoutDescription.HorizontalLayoutAlignment(
+                LayoutDescription.HorizontalLayoutDimension.Type.End,
+                listOf(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                 )
             )
         )
@@ -66,11 +86,18 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
                 )
             ),
-            // Title is to the right of the thumbnail
+            // Title is to the right of the small thumbnail
             LayoutDescription.HorizontalLayoutAlignment(
                 LayoutDescription.HorizontalLayoutDimension.Type.Start,
                 listOf(
-                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, thumb)
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                )
+            ),
+            // Title is to the left of the large thumbnail
+            LayoutDescription.HorizontalLayoutAlignment(
+                LayoutDescription.HorizontalLayoutDimension.Type.End,
+                listOf(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
                 )
             )
         )
@@ -87,6 +114,13 @@ class PrintLayouts(context: Context) {
                 LayoutDescription.HorizontalLayoutDimension.Type.Start,
                 listOf(
                     LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, title)
+                )
+            ),
+            // Subtitle is to the left of the large thumbnail
+            LayoutDescription.HorizontalLayoutAlignment(
+                LayoutDescription.HorizontalLayoutDimension.Type.End,
+                listOf(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
                 )
             )
         )
@@ -119,6 +153,13 @@ class PrintLayouts(context: Context) {
                 LayoutDescription.HorizontalLayoutDimension.Type.Start,
                 listOf(
                     LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, by)
+                )
+            ),
+            // Authors is to the left of the large thumbnail
+            LayoutDescription.HorizontalLayoutAlignment(
+                LayoutDescription.HorizontalLayoutDimension.Type.End,
+                listOf(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
                 )
             )
         )

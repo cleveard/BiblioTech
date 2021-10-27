@@ -21,6 +21,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
         app:layout_constraintStart_toEndOf="@+id/filter_label"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -124,14 +125,35 @@
         app:barrierDirection="bottom"
         app:constraint_referenced_ids="orphans, orphans_label" />
 
+    <TextView
+        android:id="@+id/visible_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:text="@string/visible_fields"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/barrier_print" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/visible_fields"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/visible_label" />
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/action_print"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         android:text="@string/print"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/barrier_print" />
+        app:layout_constraintTop_toBottomOf="@+id/visible_fields" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
