@@ -63,29 +63,29 @@ data class BookLayout(
      * @param columnHeight The height of the column
      */
     fun verticalClip(y: Float, columnHeight: Float): BookLayout {
-        var breakPosition: Float
-        var pos = columnHeight
-        do {
-            breakPosition = pos
-            for (dl in columns) {
-                pos = dl.getBreakPosition(y, breakPosition)
-                if (pos < breakPosition)
-                    break
-            }
-        } while (pos < breakPosition)
-
         // Initialize the clip rectangles
         columns.forEach { it.clip.set(it.bounds) }
 
         // Calculate the layout clip rectangle for the layout
-        val bookTop = y + bounds.top
         val bookBottom = y + bounds.bottom
-        val clipTop = bookTop.coerceAtLeast(0.0f) - bookTop
-        val clipBottom = bookBottom.coerceAtMost(breakPosition) -  bookTop
+        val clipTop = y.coerceAtLeast(0.0f) - y
+
+        var clipBottom: Float
+        var pos = bookBottom.coerceAtMost(columnHeight) -  y
+        do {
+            clipBottom = pos
+            for (dl in columns) {
+                pos = dl.getBreakPosition(clipTop, clipBottom)
+                if (pos < clipBottom)
+                    break
+            }
+        } while (pos < clipBottom)
+
+
         clip.set(bounds.left, clipTop, bounds.right, clipBottom)
 
         // If the book is completely visible, then return the layout
-        if (bookTop >= 0 && bookBottom <= breakPosition)
+        if (y >= 0 && bookBottom <= clipBottom)
             return this
 
         // Not completely visible. We need to make sure fields are clipped
