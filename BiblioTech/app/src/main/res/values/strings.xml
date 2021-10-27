@@ -197,4 +197,8 @@
     <string name="undo_clear_summary">Press to clear all undo information.</string>
     <string name="save_pdf">Save PDF</string>
     <string name="print">Print</string>
+    <string name="select_layout">Select Layout:</string>
+    <string name="columns">Columns:</string>
+    <string name="separator">Separator:</string>
+    <string name="orphans">Orphan Lines:</string>
 </resources>

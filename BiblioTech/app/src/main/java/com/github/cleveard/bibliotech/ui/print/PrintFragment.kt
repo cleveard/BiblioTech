@@ -1,9 +1,7 @@
 package com.github.cleveard.bibliotech.ui.print
 
 import android.content.Context
-import android.content.Intent
 import android.content.res.Resources
-import android.net.Uri
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
 import android.print.PrintManager
@@ -11,20 +9,15 @@ import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.Spinner
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.*
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
-import com.github.cleveard.bibliotech.print.PDFPrinter
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class PrintFragment : Fragment() {
 
@@ -90,24 +83,6 @@ class PrintFragment : Fragment() {
     /** The filter used for the export */
     private var filter: ViewName = ViewName(null, "")
 
-    /** Launcher used to get the content for exporting books */
-    private val savePdfLauncher: ActivityResultLauncher<String> =
-        registerForActivityResult(object: ActivityResultContracts.CreateDocument() {
-            /**
-             * @inheritDoc
-             * Set the intent type to "application.pdf"
-             */
-            override fun createIntent(context: Context, input: String): Intent {
-                val intent = super.createIntent(context, input)
-                intent.type = "application/pdf"
-                return intent
-            }
-        }) {
-            // Export books when we get the URI
-            if (it != null)
-                savePdf(it)
-        }
-
     private lateinit var viewModel: PrintViewModel
     private lateinit var booksViewModel: BooksViewModel
 
@@ -116,6 +91,21 @@ class PrintFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         return inflater.inflate(R.layout.print_fragment, container, false)
+    }
+
+    private fun setupNumberPicker(
+        picker: NumberPicker,
+        min: Int,
+        max: Int,
+        value: Int,
+        setter: (Int) -> Unit,
+        formatter: NumberPicker.Formatter? = null
+    ) {
+        picker.maxValue = min
+        picker.maxValue = max
+        picker.value = value
+        formatter?.let { picker.setFormatter(it) }
+        picker.setOnValueChangedListener { _, _, newVal -> setter(newVal)  }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -171,16 +161,36 @@ class PrintFragment : Fragment() {
             }
         }
 
-        view.findViewById<Button>(R.id.action_save_pdf).setOnClickListener {
-            savePdfLauncher.launch("books.csv", null)
-        }
+        setupNumberPicker(
+            view.findViewById(R.id.columns),
+            1,
+            10,
+            viewModel.pdfPrinter.numberOfColumns,
+            {
+                viewModel.pdfPrinter.numberOfColumns = it
+            }
+        )
+        setupNumberPicker(
+            view.findViewById(R.id.separator),
+            0,
+            40,
+            (viewModel.pdfPrinter.separatorLineWidth * 4.0f).roundToInt(),
+            {
+                viewModel.pdfPrinter.separatorLineWidth = it.toFloat() / 4.0f
+            }
+        ) { "%4.2f".format(it.toFloat() / 4.0f) }
+        setupNumberPicker(
+            view.findViewById(R.id.orphans),
+            1,
+            10,
+            viewModel.pdfPrinter.orphans,
+            {
+                viewModel.pdfPrinter.orphans = it
+            }
+        )
         view.findViewById<Button>(R.id.action_print).setOnClickListener {
             print()
         }
-    }
-
-    private fun savePdf(uri: Uri) {
-
     }
 
     private fun print() {
