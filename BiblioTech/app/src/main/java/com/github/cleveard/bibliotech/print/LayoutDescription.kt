@@ -423,7 +423,7 @@ data class LayoutDescription(
      * Text field from a book database column
      * @param column The database column description
      */
-    class ColumnTextFieldLayoutDescription(visibleFlag: String, private val column: Column): FieldLayoutDescription(visibleFlag) {
+    class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription(column.name) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
@@ -435,7 +435,9 @@ data class LayoutDescription(
      * Text field from a book database column
      * @param large True to use the large thumbnail
      */
-    class ColumnBitmapFieldLayoutDescription(visibleFlag: String, val large: Boolean, size: PointF): FieldLayoutDescription(visibleFlag) {
+    class ColumnBitmapFieldLayoutDescription(val large: Boolean, size: PointF): FieldLayoutDescription(
+        if (large) "LargeThumb" else "SmallThumb"
+    ) {
         init {
             maxSize.set(size)
         }

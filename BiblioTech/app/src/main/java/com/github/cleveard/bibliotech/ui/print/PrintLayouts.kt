@@ -23,21 +23,21 @@ class PrintLayouts(context: Context) {
             /** A narrow layout */
             Float.POSITIVE_INFINITY, LayoutDescription(
                 listOf(
-                    LayoutDescription.ColumnBitmapFieldLayoutDescription("SmallThumb", false, PointF(16.0f, BookLayout.MAX_HEIGHT)).apply {
+                    LayoutDescription.ColumnBitmapFieldLayoutDescription(false, PointF(16.0f, BookLayout.MAX_HEIGHT)).apply {
                         margin.right = 4.5f
                     },
-                    LayoutDescription.ColumnBitmapFieldLayoutDescription("LargeThumb", true, PointF(72.0f, 112.0f)).apply {
+                    LayoutDescription.ColumnBitmapFieldLayoutDescription(true, PointF(72.0f, 112.0f)).apply {
                         margin.left = 4.5f
                     },
-                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.TITLE.name, Column.TITLE),
-                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE.name, Column.SUBTITLE).apply {
+                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.TITLE),
+                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE).apply {
                         margin.top = 1.0f
                     },
                     LayoutDescription.TextFieldLayoutDescription(Column.FIRST_NAME.name, authorsBy).apply {
                         margin.top = 1.0f
                         margin.right = 4.5f
                     },
-                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME.name, Column.FIRST_NAME)
+                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME)
                 ),
                 emptyList()
             ).apply {
