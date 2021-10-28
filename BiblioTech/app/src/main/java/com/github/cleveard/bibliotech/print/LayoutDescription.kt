@@ -16,11 +16,7 @@ data class LayoutDescription(
     /** Layouts for the columns of the book to print */
     val inColumns: List<FieldLayoutDescription>,
     /** Columns to print as book header. Set to null to leave out the header */
-    val inHeaders: List<Column>?,
-    /** Distance in points to separate the books horizontally */
-    val horizontalSeparation: Float,
-    /** Distance in points to separate print columns vertically */
-    val verticalSeparation: Float
+    val inHeaders: List<Column>?
 ) {
     /**
      *  Create the book layout from this description

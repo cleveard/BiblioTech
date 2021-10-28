@@ -112,9 +112,9 @@ class PageLayoutHandler(
     /** The drawable width of the page */
     private val pageWidth = pageDrawBounds.width()
     /** The horizontal distance from on column to the next */
-    private val columnStride = (pageWidth + printer.layoutDescription.horizontalSeparation) / printer.numberOfColumns
+    private val columnStride = (pageWidth + printer.horizontalSeparation) / printer.numberOfColumns
     /** The width of a column */
-    private val columnWidth =  columnStride - printer.layoutDescription.horizontalSeparation
+    val columnWidth =  columnStride - printer.horizontalSeparation
     /** The current location on the page we are currently laying out */
     private var location: PointF = PointF(0.0f, 0.0f)
     /** True to indicate we are at the top of a column */
@@ -125,7 +125,8 @@ class PageLayoutHandler(
     private var laidOutBook: BookAndAuthors? = null
     /** The layout of the last book we laid out. This layout is shared by all books */
     private val layout: BookLayout by lazy {
-        printer.layoutDescription.createLayout(printer, columnWidth, printer.visibleFields, rtl)
+        printer.getLayout(columnWidth)
+            .createLayout(printer, columnWidth, printer.visibleFields, rtl)
     }
 
     /**
@@ -201,7 +202,7 @@ class PageLayoutHandler(
         var separatorSize = if (columnStart)
             -layout.bounds.top
         else
-            layout.description.verticalSeparation + printer.separatorLineWidth
+            printer.verticalSeparation + printer.separatorLineWidth
 
         /**
          * Bump to the next column and next page if needed
@@ -243,7 +244,7 @@ class PageLayoutHandler(
             page.add(
                 SeparatorPosition(
                     printer.basePaint,
-                    PointF(x, y + layout.description.verticalSeparation / 2.0f)
+                    PointF(x, y + printer.verticalSeparation / 2.0f)
                 )
             )
         }

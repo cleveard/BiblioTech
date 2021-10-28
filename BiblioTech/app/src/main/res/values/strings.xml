@@ -203,5 +203,5 @@
     <string name="columns">Columns:</string>
     <string name="separator">Separator:</string>
     <string name="orphans">Orphan Lines:</string>
-    <string name="visible_fields">Visible Fields:</string>
+    <string name="include_fields">Include Fields:</string>
 </resources>

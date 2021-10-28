@@ -17,7 +17,7 @@ import java.lang.IllegalStateException
 import kotlin.math.roundToInt
 
 /** Class for printing to a PDF */
-class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?): Closeable {
+class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?): Closeable {
     /** The pdf document we are printing to */
     private var pdf: PrintedPdfDocument? = null
         private set(v) {
@@ -53,10 +53,18 @@ class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspen
     /** Number of pages */
     val pageCount: Int
         get() = pages?.size?: 0
-    /** The description of the book layout */
-    var layoutDescription: LayoutDescription = layouts.simpleLayout
-        // If the book layout changes, reprint the document
+    /** Distance in points to separate the books horizontally */
+    var horizontalSeparation: Float = 18.0f
+        // If the horizontal separation changes, reprint the document
         set(v) { if (v != field) pdf = null; field = v }
+    /** Distance in points to separate print columns vertically */
+    var verticalSeparation: Float = 9.0f
+        // If the vertical separation changes, reprint the document
+        set(v) { if (v != field) pdf = null; field = v }
+    /** The bounds of the drawing area on the page */
+    val pageDrawBounds = RectF()
+    /** The layout handler for the document */
+    private var pageLayoutHandler: PageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
     /**
      * The width of a separator line
      * Set to 0 to prevent the line from printing
@@ -72,8 +80,6 @@ class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspen
     var orphans: Int = 2
         // If the orphan count changes, reprint the document
         set(v) { if (v != field) pdf = null; field = v }
-    /** The bounds of the drawing area on the page */
-    val pageDrawBounds = RectF()
     /** Set of visible fields in layout */
     val visibleFields: MutableSet<String> = mutableSetOf(
         "SmallThumb",
@@ -81,8 +87,6 @@ class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspen
         Column.SUBTITLE.name,
         Column.FIRST_NAME.name
     )
-    /** The layout handler for the document */
-    private var pageLayoutHandler: PageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
     /** The base paint for printing the document */
     val basePaint = TextPaint()
 
@@ -129,6 +133,12 @@ class PDFPrinter(layouts: PrintLayouts, private val getThumbnailCallback: suspen
         pdf = null
         attributes = defaultAttributes
     }
+
+    /**
+     * Get a layout based on the column width
+     * @param columnWidth The width of a column
+     */
+    fun getLayout(columnWidth: Float): LayoutDescription = layouts.getLayout(columnWidth)
 
     /**
      * Change the print attributes and margins
