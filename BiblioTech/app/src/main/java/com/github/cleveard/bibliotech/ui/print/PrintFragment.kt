@@ -29,12 +29,14 @@ class PrintFragment : Fragment() {
     companion object {
         fun newInstance() = PrintFragment()
 
+        fun columnName(column: Column): Pair<Int, String> = Pair(column.desc.nameResourceId, column.name)
         val visibleFieldNames: MutableList<Pair<Int,String>> = mutableListOf(
             Pair(R.string.small_thumb, "SmallThumb"),
             Pair(R.string.large_thumb, "LargeThumb"),
-            Pair(Column.TITLE.desc.nameResourceId, Column.TITLE.name),
-            Pair(Column.SUBTITLE.desc.nameResourceId, Column.SUBTITLE.name),
+            columnName(Column.TITLE),
+            columnName(Column.SUBTITLE),
             Pair(R.string.author, Column.FIRST_NAME.name),
+            columnName(Column.TAGS)
         )
     }
 

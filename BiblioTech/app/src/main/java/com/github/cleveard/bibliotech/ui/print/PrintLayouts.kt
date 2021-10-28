@@ -9,6 +9,7 @@ import com.github.cleveard.bibliotech.print.LayoutDescription
 
 class PrintLayouts(context: Context) {
     private val authorsBy: String = context.resources.getText(R.string.authors_by).toString()
+    private val tags: String = context.resources.getString(R.string.tags)
 
     /**
      * Get a layout based on the column width
@@ -37,7 +38,12 @@ class PrintLayouts(context: Context) {
                         margin.top = 1.0f
                         margin.right = 4.5f
                     },
-                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME)
+                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.FIRST_NAME),
+                    LayoutDescription.TextFieldLayoutDescription(Column.TAGS.name, tags).apply {
+                        margin.top = 1.0f
+                        margin.right = 4.5f
+                    },
+                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.TAGS)
                 ),
                 emptyList()
             ).apply {
@@ -47,6 +53,8 @@ class PrintLayouts(context: Context) {
                 val subtitle = inColumns[3]
                 val by = inColumns[4]
                 val authors = inColumns[5]
+                val tagsLabel = inColumns[6]
+                val tags = inColumns[7]
                 smallThumb.layoutAlignment = setOf(
                     // Small Thumbnail is at the top
                     LayoutDescription.VerticalLayoutAlignment(
@@ -164,6 +172,46 @@ class PrintLayouts(context: Context) {
                         )
                     ),
                     // Authors is to the left of the large thumbnail
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
+                        )
+                    )
+                )
+                tagsLabel.layoutAlignment = setOf(
+                    // Tags: is below the authors and icon
+                    LayoutDescription.VerticalLayoutAlignment(
+                        LayoutDescription.VerticalLayoutDimension.Type.Top,
+                        listOf(
+                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, authors),
+                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, smallThumb)
+                        )
+                    ),
+                    // Tags: is aligned with parent start
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.Start,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                        )
+                    )
+                )
+                tags.layoutAlignment = setOf(
+                    // Tags baseline is aligned with Tags:
+                    LayoutDescription.VerticalLayoutAlignment(
+                        LayoutDescription.VerticalLayoutDimension.Type.BaseLine,
+                        listOf(
+                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.BaseLine, tagsLabel)
+                        )
+                    ),
+                    // Tags start follows Tags:
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.Start,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, tagsLabel)
+                        )
+                    ),
+                    // Tags is to the left of the large thumbnail
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.End,
                         listOf(
