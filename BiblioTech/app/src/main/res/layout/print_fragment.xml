@@ -41,69 +41,128 @@
         android:id="@+id/columns_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginStart="8dp"
         android:text="@string/columns"
-        app:layout_constraintEnd_toEndOf="@+id/columns"
-        app:layout_constraintStart_toStartOf="@+id/columns"
-        app:layout_constraintTop_toBottomOf="@+id/barrier1" />
+        app:layout_constraintBottom_toBottomOf="@+id/columns"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/columns" />
 
-    <NumberPicker
+    <GridLayout
         android:id="@+id/columns"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        app:layout_constraintEnd_toStartOf="@+id/separator"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/columns_label" />
+        android:columnCount="4"
+        app:layout_constraintStart_toEndOf="@+id/columns_label"
+        app:layout_constraintTop_toBottomOf="@+id/barrier1">
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </GridLayout>
 
     <TextView
         android:id="@+id/separator_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginStart="8dp"
         android:text="@string/separator"
-        app:layout_constraintEnd_toEndOf="@+id/separator"
-        app:layout_constraintStart_toStartOf="@+id/separator"
-        app:layout_constraintTop_toBottomOf="@+id/barrier1" />
+        app:layout_constraintBottom_toBottomOf="@+id/separator"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/separator" />
 
-    <NumberPicker
+    <GridLayout
         android:id="@+id/separator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        app:layout_constraintEnd_toStartOf="@+id/orphans"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/columns"
-        app:layout_constraintTop_toBottomOf="@+id/separator_label" />
+        android:columnCount="4"
+        app:layout_constraintStart_toEndOf="@+id/separator_label"
+        app:layout_constraintTop_toBottomOf="@+id/columns">
 
-    <androidx.constraintlayout.widget.Barrier
-        android:id="@+id/barrier2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:barrierDirection="bottom"
-        app:constraint_referenced_ids="columns,columns_label,separator,separator_label" />
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </GridLayout>
 
     <TextView
         android:id="@+id/orphans_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
         android:text="@string/orphans"
-        app:layout_constraintEnd_toEndOf="@+id/orphans"
-        app:layout_constraintStart_toStartOf="@+id/orphans"
-        app:layout_constraintTop_toBottomOf="@+id/barrier1" />
+        app:layout_constraintBottom_toBottomOf="@+id/orphans"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/orphans" />
 
-    <NumberPicker
+    <GridLayout
         android:id="@+id/orphans"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/separator"
-        app:layout_constraintTop_toBottomOf="@+id/orphans_label" />
+        android:columnCount="4"
+        app:layout_constraintStart_toEndOf="@+id/orphans_label"
+        app:layout_constraintTop_toBottomOf="@+id/separator">
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <com.google.android.material.radiobutton.MaterialRadioButton
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </GridLayout>
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier_print"

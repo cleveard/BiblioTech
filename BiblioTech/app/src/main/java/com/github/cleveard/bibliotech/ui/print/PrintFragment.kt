@@ -11,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.core.view.children
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.DiffUtil
@@ -22,14 +23,13 @@ import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 class PrintFragment : Fragment() {
 
     companion object {
         fun newInstance() = PrintFragment()
 
-        fun columnName(column: Column): Pair<Int, String> = Pair(column.desc.nameResourceId, column.name)
+        private fun columnName(column: Column): Pair<Int, String> = Pair(column.desc.nameResourceId, column.name)
         val visibleFieldNames: MutableList<Pair<Int,String>> = mutableListOf(
             Pair(R.string.small_thumb, "SmallThumb"),
             Pair(R.string.large_thumb, "LargeThumb"),
@@ -113,19 +113,34 @@ class PrintFragment : Fragment() {
         return inflater.inflate(R.layout.print_fragment, container, false)
     }
 
-    private fun setupNumberPicker(
-        picker: NumberPicker,
-        min: Int,
-        max: Int,
-        value: Int,
-        setter: (Int) -> Unit,
-        formatter: NumberPicker.Formatter? = null
+    private fun <T> setupRadioPicker(
+        picker: GridLayout,
+        checked: Int,
+        contents: Array<T>,
+        format: RadioButton.(T) -> Unit,
+        setter: (T) -> Unit,
     ) {
-        picker.minValue = min
-        picker.maxValue = max
-        picker.value = value
-        formatter?.let { picker.setFormatter(it) }
-        picker.setOnValueChangedListener { _, _, newVal -> setter(newVal)  }
+        var checkedButton: RadioButton? = null
+        var index = 0
+        for (c in picker.children) {
+            if (c is RadioButton) {
+                if (index < contents.size) {
+                    c.isChecked = index == checked
+                    c.tag = index
+                    c.format(contents[index])
+                    if (index == checked)
+                        checkedButton = c
+                    c.setOnClickListener {
+                        checkedButton?.isChecked = false
+                        it as RadioButton
+                        it.isChecked = true
+                        checkedButton = it
+                        setter(contents[it.tag as Int])
+                    }
+                    ++index
+                }
+            }
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -181,33 +196,37 @@ class PrintFragment : Fragment() {
             }
         }
 
-        setupNumberPicker(
-            view.findViewById(R.id.columns),
-            1,
-            10,
-            viewModel.pdfPrinter.numberOfColumns,
-            {
+        arrayOf(1, 2, 3, 4).let {contents ->
+            setupRadioPicker(
+                view.findViewById(R.id.columns),
+                contents.indexOfFirst { it >= viewModel.pdfPrinter.numberOfColumns },
+                contents,
+                { text = "%d".format(it) }
+            ) {
                 viewModel.pdfPrinter.numberOfColumns = it
             }
-        )
-        setupNumberPicker(
-            view.findViewById(R.id.separator),
-            0,
-            40,
-            (viewModel.pdfPrinter.separatorLineWidth * 4.0f).roundToInt(),
-            {
-                viewModel.pdfPrinter.separatorLineWidth = it.toFloat() / 4.0f
+        }
+        @Suppress("SetTextI18n")
+        arrayOf(0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f).let {contents ->
+            setupRadioPicker(
+                view.findViewById(R.id.separator),
+                contents.indexOfFirst { it >= viewModel.pdfPrinter.separatorLineWidth },
+                contents,
+                { text = "%3.1f".format(it) }
+            ) {
+                viewModel.pdfPrinter.separatorLineWidth = it
             }
-        ) { "%4.2f".format(it.toFloat() / 4.0f) }
-        setupNumberPicker(
-            view.findViewById(R.id.orphans),
-            1,
-            10,
-            viewModel.pdfPrinter.orphans,
-            {
+        }
+        arrayOf(1, 2, 3, 4).let {contents ->
+            setupRadioPicker(
+                view.findViewById(R.id.orphans),
+                contents.indexOfFirst { it >= viewModel.pdfPrinter.orphans },
+                contents,
+                { text = "%d".format(it) }
+            ) {
                 viewModel.pdfPrinter.orphans = it
             }
-        )
+        }
 
         val visible = view.findViewById<RecyclerView>(R.id.visible_fields)
         visible.adapter = object: ListAdapter<Pair<Int, String>, ViewHolder>(object: DiffUtil.ItemCallback<Pair<Int, String>>() {
