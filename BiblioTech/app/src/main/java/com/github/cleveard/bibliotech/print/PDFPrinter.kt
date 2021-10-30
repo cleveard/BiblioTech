@@ -41,13 +41,13 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
         set(v) {
             // If the print attributes change, reprint the document
             if (v != field)
-                pdf = null
+                invalidateLayout()
             field = v
         }
     /** The list of books */
     var bookList: List<BookAndAuthors>? = null
         // If the book list changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** List of laid out pages */
     private var pages: List<PageLayoutHandler.Page>? = null
     /** Number of pages */
@@ -56,11 +56,11 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
     /** Distance in points to separate the books horizontally */
     var horizontalSeparation: Float = 18.0f
         // If the horizontal separation changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** Distance in points to separate print columns vertically */
     var verticalSeparation: Float = 9.0f
         // If the vertical separation changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** The bounds of the drawing area on the page */
     val pageDrawBounds = RectF()
     /** The layout handler for the document */
@@ -71,15 +71,15 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
      */
     var separatorLineWidth: Float = 0.5f
         // If the separator line changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** The number of print columns */
     var numberOfColumns: Int = 2
         // If the number of columns changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** The smallest number of lines that aren't orphans */
-    var orphans: Int = 2
+    var orphans: Int = 1
         // If the orphan count changes, reprint the document
-        set(v) { if (v != field) pdf = null; field = v }
+        set(v) { if (v != field) invalidateLayout(); field = v }
     /** Set of visible fields in layout */
     val visibleFields: MutableSet<String> = mutableSetOf(
         "SmallThumb",
@@ -88,7 +88,9 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
         Column.FIRST_NAME.name
     )
     /** The base paint for printing the document */
-    val basePaint = TextPaint()
+    val basePaint = TextPaint().apply {
+        textSize = 10.0f
+    }
 
     /**
      * Convert points to horizontal pixels
@@ -135,6 +137,13 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
     }
 
     /**
+     * Invalidate the current layout
+     */
+    fun invalidateLayout() {
+        pdf = null
+    }
+
+    /**
      * Get a layout based on the column width
      * @param columnWidth The width of a column
      */
@@ -150,7 +159,7 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
         attributes = newAttributes?: defaultAttributes
         if (newMargins != null && newMargins != margins) {
             margins.set(newMargins)
-            pdf = null
+            invalidateLayout()
         }
         return pdf == null
     }

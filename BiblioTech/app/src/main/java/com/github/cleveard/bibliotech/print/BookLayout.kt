@@ -180,7 +180,7 @@ data class BookLayout(
                         }
                     }
                 }
-                if (visibleCount < printer.orphans) {
+                if (visibleCount <= printer.orphans) {
                     // Not enough visible lines force next column, by making the clip rectangle empty
                     clip.top = bounds.top
                     clip.bottom = bounds.top
@@ -208,7 +208,7 @@ data class BookLayout(
             }
             // If there are no lines for the next column, or there are enough lines,
             // then it is OK
-            if (nextCount <= 0 || nextCount >= printer.orphans)
+            if (nextCount <= 0 || nextCount > printer.orphans)
                 return
 
             // Need to move some lines to the next column

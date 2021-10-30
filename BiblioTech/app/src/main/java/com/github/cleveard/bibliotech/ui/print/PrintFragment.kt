@@ -113,34 +113,28 @@ class PrintFragment : Fragment() {
         return inflater.inflate(R.layout.print_fragment, container, false)
     }
 
-    private fun <T> setupRadioPicker(
-        picker: GridLayout,
-        checked: Int,
-        contents: Array<T>,
-        format: RadioButton.(T) -> Unit,
-        setter: (T) -> Unit,
+    private fun setupSpinner(
+        picker: Spinner,
+        selected: Int,
+        values: Array<String>,
+        setter: (String?) -> Unit,
     ) {
-        var checkedButton: RadioButton? = null
-        var index = 0
-        for (c in picker.children) {
-            if (c is RadioButton) {
-                if (index < contents.size) {
-                    c.isChecked = index == checked
-                    c.tag = index
-                    c.format(contents[index])
-                    if (index == checked)
-                        checkedButton = c
-                    c.setOnClickListener {
-                        checkedButton?.isChecked = false
-                        it as RadioButton
-                        it.isChecked = true
-                        checkedButton = it
-                        setter(contents[it.tag as Int])
-                    }
-                    ++index
-                }
+        picker.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                setter(
+                    if (position >= 0 && position < values.size)
+                        values[position]
+                    else
+                        null
+                )
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                setter(null)
             }
         }
+        if (selected >= 0)
+            picker.setSelection(selected)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -196,35 +190,45 @@ class PrintFragment : Fragment() {
             }
         }
 
-        arrayOf(1, 2, 3, 4).let {contents ->
-            setupRadioPicker(
+        requireContext().resources.getStringArray(R.array.column_values).let {values ->
+            setupSpinner(
                 view.findViewById(R.id.columns),
-                contents.indexOfFirst { it >= viewModel.pdfPrinter.numberOfColumns },
-                contents,
-                { text = "%d".format(it) }
-            ) {
-                viewModel.pdfPrinter.numberOfColumns = it
+                values.indexOfFirst { viewModel.pdfPrinter.numberOfColumns == it.toIntOrNull() },
+                values
+            ) {value ->
+                value?.toIntOrNull()?.let { viewModel.pdfPrinter.numberOfColumns = it }
             }
         }
-        @Suppress("SetTextI18n")
-        arrayOf(0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 3.5f).let {contents ->
-            setupRadioPicker(
+        requireContext().resources.getStringArray(R.array.separator_values).let {values ->
+            setupSpinner(
                 view.findViewById(R.id.separator),
-                contents.indexOfFirst { it >= viewModel.pdfPrinter.separatorLineWidth },
-                contents,
-                { text = "%3.1f".format(it) }
-            ) {
-                viewModel.pdfPrinter.separatorLineWidth = it
+                values.indexOfFirst { viewModel.pdfPrinter.separatorLineWidth == it.toFloatOrNull() },
+                values
+            ) {value ->
+                value?.toFloatOrNull()?.let { viewModel.pdfPrinter.separatorLineWidth = it }
             }
         }
-        arrayOf(1, 2, 3, 4).let {contents ->
-            setupRadioPicker(
+        requireContext().resources.getStringArray(R.array.orphans_values).let {values ->
+            setupSpinner(
                 view.findViewById(R.id.orphans),
-                contents.indexOfFirst { it >= viewModel.pdfPrinter.orphans },
-                contents,
-                { text = "%d".format(it) }
-            ) {
-                viewModel.pdfPrinter.orphans = it
+                values.indexOfFirst { viewModel.pdfPrinter.orphans == it.toIntOrNull() },
+                values
+            ) {value ->
+                value?.toIntOrNull()?.let { viewModel.pdfPrinter.orphans = it }
+            }
+        }
+        requireContext().resources.getStringArray(R.array.size_values).let {values ->
+            setupSpinner(
+                view.findViewById(R.id.size),
+                values.indexOfFirst { viewModel.pdfPrinter.basePaint.textSize == it.toFloatOrNull() },
+                values
+            ) {value ->
+                value?.toFloatOrNull()?.let {
+                    if (viewModel.pdfPrinter.basePaint.textSize != it) {
+                        viewModel.pdfPrinter.basePaint.textSize = it
+                        viewModel.pdfPrinter.invalidateLayout()
+                    }
+                }
             }
         }
 

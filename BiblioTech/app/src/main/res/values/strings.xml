@@ -203,5 +203,78 @@
     <string name="columns">Columns:</string>
     <string name="separator">Separator:</string>
     <string name="orphans">Orphan Lines:</string>
+    <string name="size">Size:</string>
     <string name="include_fields">Include Fields:</string>
+    <!-- The column array are the strings displayed in the column spinner.
+         column_values are the values associated with the spinner items -->
+    <string-array name="column">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
+    <string-array name="column_values">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
+    <!-- The separator array are the strings displayed in the separator spinner.
+         separator_values are the values associated with the spinner items -->
+    <string-array name="separator">
+        <item>None</item>
+        <item>0.5</item>
+        <item>1.0</item>
+        <item>1.5</item>
+        <item>2.0</item>
+        <item>2.5</item>
+        <item>3.0</item>
+        <item>3.5</item>
+        <item>4.0</item>
+        <item>4.5</item>
+        <item>5.0</item>
+    </string-array>
+    <string-array name="separator_values">
+        <item>0.0</item>
+        <item>0.5</item>
+        <item>1.0</item>
+        <item>1.5</item>
+        <item>2.0</item>
+        <item>2.5</item>
+        <item>3.0</item>
+        <item>3.5</item>
+        <item>4.0</item>
+        <item>4.5</item>
+        <item>5.0</item>
+    </string-array>
+    <!-- The orphans array are the strings displayed in the orphans spinner.
+         orphans_values are the values associated with the spinner items -->
+    <string-array name="orphans">
+        <item>None</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string-array name="orphans_values">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <!-- The size array are the strings displayed in the size spinner.
+         size_values are the values associated with the spinner items -->
+    <string-array name="size">
+        <item><small>A</small></item>
+        <item>A</item>
+        <item><big>A</big></item>
+        <item><big><big>A</big></big></item>
+        <item><big><big><big>A</big></big></big></item>
+    </string-array>
+    <string-array name="size_values">
+        <item>8.0</item>
+        <item>10.0</item>
+        <item>12.5</item>
+        <item>16.0</item>
+        <item>20.0</item>
+    </string-array>
 </resources>
