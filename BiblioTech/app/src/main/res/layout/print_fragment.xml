@@ -47,18 +47,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/columns" />
 
-    <Spinner
+    <TextView
         android:id="@+id/columns"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        android:columnCount="4"
-        android:entries="@array/column"
+        android:textColor="@color/colorPrimary"
         app:layout_constraintStart_toEndOf="@+id/columns_label"
         app:layout_constraintTop_toBottomOf="@+id/barrier1" />
 
-    <TextView
+    <!--TextView
         android:id="@+id/size_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -66,16 +65,15 @@
         android:text="@string/size"
         app:layout_constraintBottom_toBottomOf="@+id/size"
         app:layout_constraintEnd_toStartOf="@+id/size"
-        app:layout_constraintTop_toTopOf="@+id/size" />
+        app:layout_constraintTop_toTopOf="@+id/size" -->
 
-    <Spinner
+    <TextView
         android:id="@+id/size"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        android:columnCount="4"
-        android:entries="@array/size"
+        android:layout_marginEnd="8dp"
+        android:textColor="@color/colorPrimary"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/barrier1" />
 
@@ -89,14 +87,13 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@+id/orphans" />
 
-    <Spinner
+    <TextView
         android:id="@+id/orphans"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
-        android:columnCount="4"
-        android:entries="@array/orphans"
+        android:textColor="@color/colorPrimary"
         app:layout_constraintStart_toEndOf="@+id/orphans_label"
         app:layout_constraintTop_toBottomOf="@+id/columns" />
 
@@ -126,7 +123,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:barrierDirection="bottom"
-        app:constraint_referenced_ids="orphans, orphans_label" />
+        app:constraint_referenced_ids="orphans, orphans_label, separator, separator_label" />
 
     <TextView
         android:id="@+id/visible_label"

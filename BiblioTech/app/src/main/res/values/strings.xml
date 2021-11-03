@@ -208,10 +208,10 @@
     <!-- The column array are the strings displayed in the column spinner.
          column_values are the values associated with the spinner items -->
     <string-array name="column">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-        <item>4</item>
+        <item>1\u0020</item>
+        <item>\u00202\u0020</item>
+        <item>\u00203\u0020</item>
+        <item>\u00204</item>
     </string-array>
     <string-array name="column_values">
         <item>1</item>
@@ -223,16 +223,16 @@
          separator_values are the values associated with the spinner items -->
     <string-array name="separator">
         <item>None</item>
-        <item>0.5</item>
-        <item>1.0</item>
-        <item>1.5</item>
-        <item>2.0</item>
-        <item>2.5</item>
-        <item>3.0</item>
-        <item>3.5</item>
-        <item>4.0</item>
-        <item>4.5</item>
-        <item>5.0</item>
+        <item>0.5 pt</item>
+        <item>1.0 pt</item>
+        <item>1.5 pt</item>
+        <item>2.0 pt</item>
+        <item>2.5 pt</item>
+        <item>3.0 pt</item>
+        <item>3.5 pt</item>
+        <item>4.0 pt</item>
+        <item>4.5 pt</item>
+        <item>5.0 pt</item>
     </string-array>
     <string-array name="separator_values">
         <item>0.0</item>
@@ -250,10 +250,10 @@
     <!-- The orphans array are the strings displayed in the orphans spinner.
          orphans_values are the values associated with the spinner items -->
     <string-array name="orphans">
-        <item>None</item>
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
+        <item>None\u0020</item>
+        <item>\u00201\u0020</item>
+        <item>\u00202\u0020</item>
+        <item>\u00203</item>
     </string-array>
     <string-array name="orphans_values">
         <item>0</item>
@@ -264,11 +264,11 @@
     <!-- The size array are the strings displayed in the size spinner.
          size_values are the values associated with the spinner items -->
     <string-array name="size">
-        <item><small>A</small></item>
+        <item>A\u0020</item>
+        <item>A\u0020</item>
+        <item>A\u0020</item>
+        <item>A\u0020</item>
         <item>A</item>
-        <item><big>A</big></item>
-        <item><big><big>A</big></big></item>
-        <item><big><big><big>A</big></big></big></item>
     </string-array>
     <string-array name="size_values">
         <item>8.0</item>

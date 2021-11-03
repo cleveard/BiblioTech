@@ -6,12 +6,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.ListAdapter
 import android.os.Bundle
 import android.print.PrintManager
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.AbsoluteSizeSpan
+import android.text.style.ForegroundColorSpan
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
-import androidx.core.view.children
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.DiffUtil
@@ -23,6 +27,7 @@ import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class PrintFragment : Fragment() {
 
@@ -38,6 +43,8 @@ class PrintFragment : Fragment() {
             Pair(R.string.author, Column.FIRST_NAME.name),
             columnName(Column.TAGS)
         )
+
+        private const val pointsToDips = 160.0f / 72.0f
     }
 
     /** Fragment navigation arguments */
@@ -101,11 +108,17 @@ class PrintFragment : Fragment() {
     private lateinit var viewModel: PrintViewModel
     private lateinit var booksViewModel: BooksViewModel
 
+    /**
+     * ViewHolder for the included fields list
+     */
     class ViewHolder(
+        /** Field checkbox */
         checkBox: CheckBox,
+        /** The resource id and filter name for a field */
         var field: Pair<Int, String> = Pair(0, "")
     ): RecyclerView.ViewHolder(checkBox)
 
+    /** @inheritDoc */
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -113,14 +126,24 @@ class PrintFragment : Fragment() {
         return inflater.inflate(R.layout.print_fragment, container, false)
     }
 
+    /**
+     * Setup a spinner
+     * @param picker The spinner to be setup
+     * @param selected The initial selected item
+     * @param values The values associated with the spinner items
+     * @param setter A callback to set a selected value
+     * The spinner items are set from a resource array in the layout xml
+     */
     private fun setupSpinner(
         picker: Spinner,
         selected: Int,
         values: Array<String>,
         setter: (String?) -> Unit,
     ) {
+        // Set the selected item listener
         picker.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // let the setter know something was selected
                 setter(
                     if (position >= 0 && position < values.size)
                         values[position]
@@ -130,11 +153,97 @@ class PrintFragment : Fragment() {
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
+                // Let the setter know nothing was selected
                 setter(null)
             }
         }
+        // Set the initial selection
         if (selected >= 0)
             picker.setSelection(selected)
+    }
+
+    /**
+     * Set up a text view that acts as a set of radio buttons
+     * @param text The text view
+     * @param startValue The initial value. Used to set the initial selection
+     * @param content The array of text buttons in the text view
+     * @param values The array of values for the text buttons
+     * @param highlightColor The highlight color for the selected button
+     * @param format Callback used to format the text button
+     * @param setter Callback used to set selected value
+     */
+    private fun <T> setupTextviewRadio(
+        text: TextView,
+        startValue: T,
+        content: Array<String>,
+        values: List<T?>,
+        highlightColor: Int,
+        format: (SpannableString, start: Int, end: Int, value: T) -> Unit = {_, _, _, _ -> },
+        setter: (TextView, T) -> Unit)
+    {
+        // Get the count of buttons
+        val count = values.size.coerceAtMost(content.size)
+        // Build the string for the buttons
+        val spans = SpannableString(content.joinToString("") { it })
+        // The highlight span for the selected button
+        val highlight = ForegroundColorSpan(highlightColor)
+
+        // Setup the spans
+        run {
+            var startOffset = 0
+            for (i in 0 until count) {
+                val endOffset = startOffset + content[i].length
+                // If values is not null, then setup the button
+                values[i]?.let { value ->
+                    // Format the button based on the value
+                    format(spans, startOffset, endOffset, value)
+                    // Highlight the initial value
+                    if (startValue == value) {
+                        spans.setSpan(highlight, startOffset, endOffset, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                startOffset = endOffset
+            }
+            // Set the string to the text view
+            text.text = spans
+        }
+
+        // Set an on touch listener to handle button selection
+        @Suppress("ClickableViewAccessibility")
+        text.setOnTouchListener { _, event ->
+            // Only select on first down action
+            if (event.action == MotionEvent.ACTION_DOWN && event.pointerCount == 1) {
+                // Get the event x coordinate
+                val x = event.x
+                // Make sure the text layout has been initialized
+                text.layout?.let { layout ->
+                    // Find the button that was touched
+                    var startPos = 0
+                    var startOffset = layout.getPrimaryHorizontal(startPos)
+                    for (i in 0 until count) {
+                        val endPos = startPos + content[i].length
+                        val endOffset = layout.getPrimaryHorizontal(endPos)
+                        // Direction independent test for x between startOffset and endOffset
+                        // If x is between then (x - startOffset) and (x - endOffset) have different signs
+                        if ((x - startOffset) * (x - endOffset) < 0) {
+                            // Make sure the value is valid
+                            values[i]?.let {
+                                // Set the value
+                                setter(text, it)
+                                // move the highlight
+                                spans.removeSpan(highlight)
+                                spans.setSpan(highlight, startPos, endPos, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                                // Set the new higlight to the text view
+                                text.text = spans
+                            }
+                        }
+                        startPos = endPos
+                        startOffset = endOffset
+                    }
+                }
+            }
+            true
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -190,15 +299,14 @@ class PrintFragment : Fragment() {
             }
         }
 
-        requireContext().resources.getStringArray(R.array.column_values).let {values ->
-            setupSpinner(
-                view.findViewById(R.id.columns),
-                values.indexOfFirst { viewModel.pdfPrinter.numberOfColumns == it.toIntOrNull() },
-                values
-            ) {value ->
-                value?.toIntOrNull()?.let { viewModel.pdfPrinter.numberOfColumns = it }
-            }
+        val resources = requireContext().resources
+        view.findViewById<TextView>(R.id.columns).let {text ->
+            setupTextviewRadio(text, viewModel.pdfPrinter.numberOfColumns,
+                resources.getStringArray(R.array.column), resources.getStringArray(R.array.column_values).map { it.toIntOrNull() },
+                resources.getColor(R.color.colorSelect, text.context.theme)
+            ) {_, size -> viewModel.pdfPrinter.numberOfColumns = size }
         }
+
         requireContext().resources.getStringArray(R.array.separator_values).let {values ->
             setupSpinner(
                 view.findViewById(R.id.separator),
@@ -208,26 +316,25 @@ class PrintFragment : Fragment() {
                 value?.toFloatOrNull()?.let { viewModel.pdfPrinter.separatorLineWidth = it }
             }
         }
-        requireContext().resources.getStringArray(R.array.orphans_values).let {values ->
-            setupSpinner(
-                view.findViewById(R.id.orphans),
-                values.indexOfFirst { viewModel.pdfPrinter.orphans == it.toIntOrNull() },
-                values
-            ) {value ->
-                value?.toIntOrNull()?.let { viewModel.pdfPrinter.orphans = it }
-            }
+
+        view.findViewById<TextView>(R.id.orphans).let {text ->
+            setupTextviewRadio(text, viewModel.pdfPrinter.orphans,
+                resources.getStringArray(R.array.orphans), resources.getStringArray(R.array.orphans_values).map { it.toIntOrNull() },
+                resources.getColor(R.color.colorSelect, text.context.theme)
+            ) {_, size -> viewModel.pdfPrinter.orphans = size }
         }
-        requireContext().resources.getStringArray(R.array.size_values).let {values ->
-            setupSpinner(
-                view.findViewById(R.id.size),
-                values.indexOfFirst { viewModel.pdfPrinter.basePaint.textSize == it.toFloatOrNull() },
-                values
-            ) {value ->
-                value?.toFloatOrNull()?.let {
-                    if (viewModel.pdfPrinter.basePaint.textSize != it) {
-                        viewModel.pdfPrinter.basePaint.textSize = it
-                        viewModel.pdfPrinter.invalidateLayout()
-                    }
+
+        view.findViewById<TextView>(R.id.size).let {text ->
+            setupTextviewRadio(text, viewModel.pdfPrinter.basePaint.textSize,
+                resources.getStringArray(R.array.size), resources.getStringArray(R.array.size_values).map { it.toFloatOrNull() },
+                resources.getColor(R.color.colorSelect, text.context.theme), {spans, start, end, size ->
+                    spans.setSpan(AbsoluteSizeSpan((size * pointsToDips).roundToInt(), true),
+                        start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            ) {_, size ->
+                if (viewModel.pdfPrinter.basePaint.textSize != size) {
+                    viewModel.pdfPrinter.basePaint.textSize = size
+                    viewModel.pdfPrinter.invalidateLayout()
                 }
             }
         }
