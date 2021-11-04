@@ -596,8 +596,11 @@ data class BookLayout(
         width: Float,
         /** The field description */
         description: LayoutDescription.FieldLayoutDescription,
+        /** The database column with the field value */
         val column: Column,
-    ): TextLayout(printer, width, description, "") {
+        /** The paint used to draw the text */
+        paint: TextPaint = printer.basePaint
+    ): TextLayout(printer, width, description, "", paint) {
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
             // Get the column value
@@ -632,15 +635,21 @@ data class BookLayout(
      * Class for a field with a book database value
      * @param printer The PDFPrinter we are using. Several attributes are kept there
      * @param description The description of the field layout
+     * @param columnWidth The width of the print column
      * @param large True to display the large thumbnail
+     * @param paint The paint used to draw the bitmap
      */
     open class ColumnBitmapLayout(
         /** The printer */
         printer: PDFPrinter,
         /** The field description */
         description: LayoutDescription.FieldLayoutDescription,
+        /** The width of the print column */
         private val columnWidth: Float,
+        /** True to show the large bitmap */
         val large: Boolean,
+        /** The paint used to draw the bitmap */
+        val paint: TextPaint = printer.basePaint
     ): DrawLayout(printer, description, description.maxSize.x) {
         /** @inheritDoc */
         override var height: Float = description.maxSize.y
@@ -686,7 +695,7 @@ data class BookLayout(
                 // Draw the bitmap
                 canvas.save()
                 canvas.clipRect(clip)
-                canvas.drawBitmap(bitmap, null, dst, printer.basePaint)
+                canvas.drawBitmap(bitmap, null, dst, paint)
                 canvas.restore()
             }
         }

@@ -30,7 +30,7 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.ColumnBitmapFieldLayoutDescription(true, PointF(72.0f, 112.0f)).apply {
                         margin.left = 4.5f
                     },
-                    LayoutDescription.ColumnTextFieldLayoutDescription(Column.TITLE),
+                    LayoutDescription.TitleTextFieldLayoutDescription(),
                     LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE).apply {
                         margin.top = 1.0f
                     },

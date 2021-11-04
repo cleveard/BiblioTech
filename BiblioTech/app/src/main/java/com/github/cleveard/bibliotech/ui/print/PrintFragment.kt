@@ -300,6 +300,7 @@ class PrintFragment : Fragment() {
         }
 
         val resources = requireContext().resources
+        // setup the number of columns view
         view.findViewById<TextView>(R.id.columns).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.numberOfColumns,
                 resources.getStringArray(R.array.column), resources.getStringArray(R.array.column_values).map { it.toIntOrNull() },
@@ -307,6 +308,7 @@ class PrintFragment : Fragment() {
             ) {_, size -> viewModel.pdfPrinter.numberOfColumns = size }
         }
 
+        // Setup the separator line width spinner
         requireContext().resources.getStringArray(R.array.separator_values).let {values ->
             setupSpinner(
                 view.findViewById(R.id.separator),
@@ -317,6 +319,7 @@ class PrintFragment : Fragment() {
             }
         }
 
+        // setup the orphan lines view
         view.findViewById<TextView>(R.id.orphans).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.orphans,
                 resources.getStringArray(R.array.orphans), resources.getStringArray(R.array.orphans_values).map { it.toIntOrNull() },
@@ -324,6 +327,7 @@ class PrintFragment : Fragment() {
             ) {_, size -> viewModel.pdfPrinter.orphans = size }
         }
 
+        // Set up the text size view
         view.findViewById<TextView>(R.id.size).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.basePaint.textSize,
                 resources.getStringArray(R.array.size), resources.getStringArray(R.array.size_values).map { it.toFloatOrNull() },
@@ -339,6 +343,7 @@ class PrintFragment : Fragment() {
             }
         }
 
+        // Setup the check boxes to set the included fields
         val visible = view.findViewById<RecyclerView>(R.id.visible_fields)
         visible.adapter = object: ListAdapter<Pair<Int, String>, ViewHolder>(object: DiffUtil.ItemCallback<Pair<Int, String>>() {
             override fun areItemsTheSame(oldItem: Pair<Int, String>, newItem: Pair<Int, String>): Boolean {
@@ -373,6 +378,7 @@ class PrintFragment : Fragment() {
         }
         visible.layoutManager = GridLayoutManager(requireContext(), 3, GridLayoutManager.VERTICAL, false)
 
+        // setup the print button
         view.findViewById<Button>(R.id.action_print).setOnClickListener {
             print()
         }

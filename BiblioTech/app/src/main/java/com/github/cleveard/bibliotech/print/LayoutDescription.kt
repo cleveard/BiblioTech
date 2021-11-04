@@ -2,6 +2,8 @@ package com.github.cleveard.bibliotech.print
 
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.Typeface
+import android.text.TextPaint
 import com.github.cleveard.bibliotech.db.Column
 import kotlin.collections.HashMap
 
@@ -401,8 +403,9 @@ data class LayoutDescription(
          * Get/Fill the layout for a field
          * @param printer The printer we are using
          * @param columnWidth The width of a column
+         * @param paint The paint used to draw the field
          */
-        abstract fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout
+        abstract fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint = printer.basePaint): BookLayout.DrawLayout
     }
 
     /**
@@ -411,9 +414,9 @@ data class LayoutDescription(
      */
     class TextFieldLayoutDescription(visibleFlag: String, private val text: String): FieldLayoutDescription(visibleFlag) {
         /** @inheritDoc */
-        override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
+        override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Return a text field with the StaticLayout
-            return BookLayout.TextLayout(printer, columnWidth, this, text).apply {
+            return BookLayout.TextLayout(printer, columnWidth, this, text, paint).apply {
                 setContent()
             }
         }
@@ -425,9 +428,33 @@ data class LayoutDescription(
      */
     class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription(column.name) {
         /** @inheritDoc */
-        override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
+        override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnTextLayout(printer, columnWidth, this, column)
+            return BookLayout.ColumnTextLayout(printer, columnWidth, this, column, paint)
+        }
+    }
+
+    /**
+     * Text field from a book database column
+     * @param column The database column description
+     */
+    class TitleTextFieldLayoutDescription(): FieldLayoutDescription(Column.TITLE.name) {
+        /** @inheritDoc */
+        override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
+            // Create the field with the column description, the content holder and the DynamicLayout
+            return BookLayout.ColumnTextLayout(printer, columnWidth, this, Column.TITLE,
+                TextPaint(paint).apply {
+                    textSize = when(textSize) {
+                        8.0f -> 10.0f
+                        10.0f -> 12.5f
+                        12.5f -> 16.0f
+                        16.0f -> 20.0f
+                        20.0f -> 24.0f
+                        else -> textSize
+                    }
+                    typeface = Typeface.create(typeface, Typeface.BOLD)
+                }
+            )
         }
     }
 
@@ -443,9 +470,9 @@ data class LayoutDescription(
         }
 
         /** @inheritDoc */
-        override fun createLayout(printer: PDFPrinter, columnWidth: Float): BookLayout.DrawLayout {
+        override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnBitmapLayout(printer, this, columnWidth, large)
+            return BookLayout.ColumnBitmapLayout(printer, this, columnWidth, large, paint)
         }
     }
 }
