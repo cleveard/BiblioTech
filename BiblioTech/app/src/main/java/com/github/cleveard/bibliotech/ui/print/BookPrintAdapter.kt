@@ -50,7 +50,10 @@ class BookPrintAdapter(
                     }
             } catch (e: Exception) {
                 // Got an exception display a message
-                callback.onLayoutFailed(e.toString())
+                if (e is CancellationException)
+                    callback.onLayoutCancelled()
+                else
+                    callback.onLayoutFailed(e.toString())
             } finally {
                 // Remove the cancellation listener
                 cancellationSignal?.setOnCancelListener(null)
@@ -61,7 +64,6 @@ class BookPrintAdapter(
         cancellationSignal?.setOnCancelListener {
             // Cancel the layout job and return status to print manager
             job.cancel()
-            callback.onLayoutCancelled()
         }
     }
 
@@ -85,7 +87,10 @@ class BookPrintAdapter(
                 }
             } catch (e: Exception) {
                 // Exception - output a message
-                callback.onWriteFailed(e.toString())
+                if (e is CancellationException)
+                    callback.onWriteCancelled()
+                else
+                    callback.onWriteFailed(e.toString())
             } finally {
                 // Done close the printer
                 pdfPrinter.close()
@@ -100,8 +105,6 @@ class BookPrintAdapter(
         cancellationSignal?.setOnCancelListener {
             // Cancel the job
             job.cancel()
-            // and let the print manager know
-            callback.onWriteCancelled()
         }
     }
 }

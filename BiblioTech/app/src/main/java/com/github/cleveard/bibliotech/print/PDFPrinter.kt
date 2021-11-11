@@ -2,6 +2,7 @@ package com.github.cleveard.bibliotech.print
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.RectF
 import android.print.PageRange
 import android.print.PrintAttributes
@@ -11,9 +12,11 @@ import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.ui.print.PrintLayouts
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.lang.IllegalStateException
+import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 
 /** Class for printing to a PDF */
@@ -37,8 +40,8 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
     /** The page margins */
     private val margins: RectF = RectF(72.0f, 72.0f, 72.0f, 72.0f)
     /** The print attributes */
-    private var attributes: PrintAttributes = defaultAttributes
-        set(v) {
+    var attributes: PrintAttributes = defaultAttributes
+        private set(v) {
             // If the print attributes change, reprint the document
             if (v != field)
                 invalidateLayout()
@@ -63,8 +66,6 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
         set(v) { if (v != field) invalidateLayout(); field = v }
     /** The bounds of the drawing area on the page */
     val pageDrawBounds = RectF()
-    /** The layout handler for the document */
-    private var pageLayoutHandler: PageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
     /**
      * The width of a separator line
      * Set to 0 to prevent the line from printing
@@ -133,7 +134,6 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
      */
     override fun close() {
         pdf = null
-        attributes = defaultAttributes
     }
 
     /**
@@ -141,6 +141,7 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
      */
     fun invalidateLayout() {
         pdf = null
+        pages = null
     }
 
     /**
@@ -230,14 +231,16 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
 
     /**
      * Layout the pages
+     * @return A list of the pages
+     * The returned list is also assigned to this.pages
      */
-    private suspend fun layoutPages(): List<PageLayoutHandler.Page> {
+    suspend fun layoutPages(): List<PageLayoutHandler.Page> {
         // Only layout if there are some books
         return bookList?.let {books ->
             // If pages is not null, the previous layout is valid, return it
             pages?: run {
                 // Get a new layout handler
-                pageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
+                val pageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
                 // Use it to layout the pages
                 pageLayoutHandler.layoutPages(books).let {pages ->
                     // Not pages, through an exception
@@ -267,6 +270,9 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
                 var start = Int.MIN_VALUE
                 var end = Int.MIN_VALUE
 
+                // Create a layout handler to layout the books for printing
+                val handler = PageLayoutHandler(this, pageDrawBounds)
+
                 // For each page
                 for (pageNumber in pages.indices) {
                     // If the page is not in the range we are printing, go to the next page
@@ -287,21 +293,8 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
                     // Get the page
                     val page = doc.startPage(pageNumber)
 
-                    // Get the canvas for printing
-                    val canvas = page.canvas
-                    canvas.translate(pageDrawBounds.left, pageDrawBounds.top)
-
-                    // Debugging - Draw border of margin area
-                    //canvas.drawRect(-0.5f, -0.5f, pageDrawBounds.width() + 0.5f, 0.0f, basePaint)
-                    //canvas.drawRect(-0.5f, 0.0f, 0.0f, pageDrawBounds.height(), basePaint)
-                    //canvas.drawRect(pageDrawBounds.width(), 0.0f, pageDrawBounds.width() + 0.5f, pageDrawBounds.height(), basePaint)
-                    //canvas.drawRect(-0.5f, pageDrawBounds.height(), pageDrawBounds.width() + 0.5f, pageDrawBounds.height() + 0.5f, basePaint)
-
-                    // Print each book on the page
-                    for (bp in pages[pageNumber].books) {
-                        // Print the book
-                        bp.draw(canvas, books)
-                    }
+                    // Draw the page for printing
+                    drawPage(page.canvas, pages[pageNumber], books, handler)
 
                     // Finish the page
                     doc.finishPage(page)
@@ -311,6 +304,32 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
                 if (start >= 0)
                     writtenRanges.add(PageRange(start, end))
             }
+        }
+    }
+
+    /**
+     * Draw a page into a canvas
+     * @param canvas The canvas to draw into
+     * @param page The page to draw
+     * @param books The list of books to draw
+     * @param handler The layout handler used to layout each book
+     * Canvas must be scaled to use points as the unit for coordinates
+     */
+    suspend fun drawPage(canvas: Canvas, page: PageLayoutHandler.Page, books: List<BookAndAuthors>, handler: PageLayoutHandler) {
+        canvas.translate(pageDrawBounds.left, pageDrawBounds.top)
+
+        // Debugging - Draw border of margin area
+        //canvas.drawRect(-0.5f, -0.5f, pageDrawBounds.width() + 0.5f, 0.0f, basePaint)
+        //canvas.drawRect(-0.5f, 0.0f, 0.0f, pageDrawBounds.height(), basePaint)
+        //canvas.drawRect(pageDrawBounds.width(), 0.0f, pageDrawBounds.width() + 0.5f, pageDrawBounds.height(), basePaint)
+        //canvas.drawRect(-0.5f, pageDrawBounds.height(), pageDrawBounds.width() + 0.5f, pageDrawBounds.height() + 0.5f, basePaint)
+
+        // Print each book on the page
+        for (bp in page.books) {
+            // Make sure the job isn't canceled
+            coroutineContext.ensureActive()
+            // Draw the book
+            bp.draw(canvas, books, handler)
         }
     }
 
@@ -326,7 +345,7 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
     companion object {
         /** Default attributes for printing */
         private val defaultAttributes: PrintAttributes = PrintAttributes.Builder()
-            .setMediaSize(PrintAttributes.MediaSize.NA_LEDGER)
+            .setMediaSize(PrintAttributes.MediaSize.NA_LETTER)
             .setResolution(PrintAttributes.Resolution("1", "300DPI", 300, 300))
             .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
             .setMinMargins(PrintAttributes.Margins(500, 500, 500, 500))

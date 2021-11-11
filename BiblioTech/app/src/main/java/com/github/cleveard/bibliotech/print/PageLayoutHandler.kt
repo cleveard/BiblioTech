@@ -5,6 +5,8 @@ import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
 import com.github.cleveard.bibliotech.db.BookAndAuthors
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 
 const val EPSILON = 1.0e-3
@@ -35,8 +37,9 @@ class PageLayoutHandler(
          * Draw the drawable
          * @param canvas The canvas to draw on
          * @param bookList The list of books to draw
+         * @param handler A PageLayoutHandler used to layout out the book for drawing
          */
-        abstract suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>)
+        abstract suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>, handler: PageLayoutHandler)
     }
 
     /**
@@ -45,7 +48,7 @@ class PageLayoutHandler(
      * @param position The position of the drawable
      * @param clip The clip rectangle for the book
      */
-    inner class BookPosition(
+    class BookPosition(
         /** The index of the book */
         private val bookIndex: Int,
         position: PointF,
@@ -55,15 +58,15 @@ class PageLayoutHandler(
         private val clipRect: RectF = RectF(clip)
 
         /** @inheritDoc */
-        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>, handler: PageLayoutHandler) {
             // Save the current canvas state
             canvas.save()
             // Set the clip rectangle and location
             canvas.translate(position.x, position.y)
             canvas.clipRect(clipRect)
             // Print the book
-            layoutBook(bookList[bookIndex])
-                .verticalClip(position.y, pageHeight)
+            handler.layoutBook(bookList[bookIndex])
+                .verticalClip(position.y, handler.pageHeight)
                 .draw(canvas)
             // Restore the canvas
             canvas.restore()
@@ -75,20 +78,20 @@ class PageLayoutHandler(
      * @param paint The paint to use for drawing
      * @param position The position of the drawable
      */
-    inner class SeparatorPosition(
+    class SeparatorPosition(
         /** The paint used for drawing */
         private val paint: Paint,
         position: PointF
     ): DrawPosition(position) {
         /** @inheritDoc */
-        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>) {
+        override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>, handler: PageLayoutHandler) {
             // Save the current canvas state
             canvas.save()
             // Set the location
             canvas.translate(position.x, position.y)
             // Print the line
             paint.style = Paint.Style.FILL
-            canvas.drawRect(0.0f, 0.0f, columnWidth, printer.separatorLineWidth, paint)
+            canvas.drawRect(0.0f, 0.0f, handler.columnWidth, handler.printer.separatorLineWidth, paint)
             // Restore the canvas
             canvas.restore()
         }
@@ -150,6 +153,9 @@ class PageLayoutHandler(
     suspend fun layoutPages(books: List<BookAndAuthors>): List<Page> {
         // For each book in the list place its layout on a page
         for (i in books.indices) {
+            // Check for canceled job
+            coroutineContext.ensureActive()
+            // Place the book on the page
             placeBook(i, layoutBook(books[i]))
         }
 

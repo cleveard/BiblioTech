@@ -205,6 +205,7 @@
     <string name="orphans">Orphan Lines:</string>
     <string name="size">Size:</string>
     <string name="include_fields">Include Fields:</string>
+    <string name="preview_page">Page %1$d/%2$d</string>
     <!-- The column array are the strings displayed in the column spinner.
          column_values are the values associated with the spinner items -->
     <string-array name="column">

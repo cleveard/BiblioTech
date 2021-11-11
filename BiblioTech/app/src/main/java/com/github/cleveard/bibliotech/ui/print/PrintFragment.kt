@@ -1,9 +1,11 @@
 package com.github.cleveard.bibliotech.ui.print
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.lifecycle.ViewModelProvider
-import androidx.recyclerview.widget.ListAdapter
 import android.os.Bundle
 import android.print.PrintManager
 import android.text.SpannableString
@@ -18,14 +20,19 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.*
+import androidx.recyclerview.widget.ListAdapter
 import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
+import com.github.cleveard.bibliotech.print.PageLayoutHandler
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
+import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -34,8 +41,20 @@ class PrintFragment : Fragment() {
     companion object {
         fun newInstance() = PrintFragment()
 
+        /**
+         * Create an entry for the visibleFieldNames array from a database Column
+         * @param column The database column
+         * @return The field names entry
+         */
         private fun columnName(column: Column): Pair<Int, String> = Pair(column.desc.nameResourceId, column.name)
-        val visibleFieldNames: MutableList<Pair<Int,String>> = mutableListOf(
+
+        /**
+         * List of names for database fields we can print.
+         * The list is a pair of the localized resource id and the
+         * name of the database Column enum. The list is used to
+         * populate the checkboxes that select the fields to be printed
+         */
+        val visibleFieldNames: List<Pair<Int,String>> = listOf(
             Pair(R.string.small_thumb, "SmallThumb"),
             Pair(R.string.large_thumb, "LargeThumb"),
             columnName(Column.TITLE),
@@ -44,6 +63,10 @@ class PrintFragment : Fragment() {
             columnName(Column.TAGS)
         )
 
+        /**
+         * Conversion factor from points to dips
+         * Used to display the font size selection characters
+         */
         private const val pointsToDips = 160.0f / 72.0f
     }
 
@@ -102,21 +125,199 @@ class PrintFragment : Fragment() {
         }
     }
 
+    /** Job used to get the list of books */
+    private var filterJob: Job? = null
     /** The filter used for the export */
     private var filter: ViewName = ViewName(null, "")
+     set(v) {
+         if (v != field) {
+             field = v
+             filterJob?.cancel()
+             viewModel.viewModelScope.launch {
+                 filterJob?.join()
+                 filterJob = coroutineContext[Job]
+                 try {
+                     // Get the book filter for the export
+                     val bookFilter = v.name?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
+                     ensureActive()
+                     // Get the PageSource for the books
+                     val source = if (bookFilter != null)
+                         booksViewModel.repo.getBookList(bookFilter, requireContext())
+                     else
+                         booksViewModel.repo.getBookList()
+                     ensureActive()
+                     viewModel.pdfPrinter.bookList = source.getLive()
+                     calculatePages()
+                 } finally {
+                     filterJob = null
+                 }
+             }
+         }
+     }
 
+    /** View model for the print fragment */
     private lateinit var viewModel: PrintViewModel
+
+    /**
+     * View model for the books fragment
+     * Used to access the database and to get thumbnails
+     */
     private lateinit var booksViewModel: BooksViewModel
+
+    /** Adapter for the print preview recycler view */
+    private lateinit var previewAdapter: ListAdapter<PageLayoutHandler.Page, PreviewViewHolder>
+    /** Job used to layout the pages for previewing */
+    private var pageJob: Job? = null
 
     /**
      * ViewHolder for the included fields list
+     * @param checkBox Field checkbox
+     * @param field The resource id and filter name for a field
      */
-    class ViewHolder(
+    private class IncludedViewHolder(
         /** Field checkbox */
         checkBox: CheckBox,
         /** The resource id and filter name for a field */
         var field: Pair<Int, String> = Pair(0, "")
     ): RecyclerView.ViewHolder(checkBox)
+
+    /** Manager for PageLayoutHandlers */
+    private val layoutHandlers = object: Any() {
+        // Pool of handler
+        private val handlers = LinkedHashSet<Pair<PageLayoutHandler, UInt>>()
+        // Current handler generation
+        private var generation = 0u
+
+        /**
+         * Acquire a PageLayoutHandler along with the current generation
+         * @return The handler and generation
+         */
+        fun acquire(): Pair<PageLayoutHandler, UInt> {
+            return handlers.firstOrNull()?: Pair(
+                PageLayoutHandler(viewModel.pdfPrinter, viewModel.pdfPrinter.pageDrawBounds),
+                generation
+            ).also {
+                // Remove the handler, so it won't be acquired again
+                handlers.remove(it)
+            }
+        }
+
+        /**
+         * Release a PageLayoutHandler acquired by acquire()
+         * @param The handler and generation
+         */
+        fun release(handler: Pair<PageLayoutHandler, UInt>) {
+            // Add the handler back into the pool, unless the generation has changed
+            if (handler.second == generation)
+                handlers.add(handler)
+        }
+
+        /**
+         * Invalidate all handlers
+         */
+        fun invalidate() {
+            // Bump the generation
+            ++generation
+            // And clear the pool
+            handlers.clear()
+        }
+    }
+
+    /**
+     * ViewHolder for the included fields list
+     * @param view The view the holder holds
+     * @param width The width of the page
+     */
+    private inner class PreviewViewHolder(
+        /** Field checkbox */
+        view: View,
+        /** The width of the page */
+        width: Int
+    ): RecyclerView.ViewHolder(view) {
+        /** The page image */
+        var image: Bitmap? = createBitmap(width)
+        /** The job drawing the page */
+        var drawJob: Job? = null
+
+        /**
+         * Draw a page for this view holder
+         * @param page The page to draw
+         * @param books The list of books
+         * @param scope A coroutine scope used for drawing
+         */
+        fun drawPage(page: PageLayoutHandler.Page?, books: List<BookAndAuthors>?, scope: CoroutineScope) {
+            // If we are currently drawing, cancel it
+            cancelDraw()
+            // If page or books is null, the nothring to do
+            if (page == null || books == null)
+                return
+
+            // Get the item view
+            val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
+            // Draw into a bitmap
+            image?.let { image ->
+                // Erase the bitmap to white
+                image.eraseColor(0xFFFFFFFF.toInt())
+                // Start the job to draw the page
+                scope.launch {
+                    // If a draw was in progress wait for it to finish
+                    drawJob?.join()
+                    // Keep track of the current job
+                    drawJob = coroutineContext[Job]
+                    // Get a handler for the page
+                    val handler = layoutHandlers.acquire()
+                    try {
+                        // Make the canvas for the page and save its state
+                        val canvas = Canvas(image)
+                        canvas.save()
+                        // Scale the canvas to use points for coordinates
+                        val scaleX = (viewModel.pdfPrinter.attributes.mediaSize?.widthMils ?: 8500).toFloat() / 1000.0f
+                        val scaleY = (viewModel.pdfPrinter.attributes.mediaSize?.heightMils ?: 11000).toFloat() / 1000.0f
+                        canvas.scale(image.width.toFloat() / (scaleX * 72.0f), image.height.toFloat() / (scaleY * 72.0f))
+                        // Draw the page
+                        viewModel.pdfPrinter.drawPage(canvas, page, books, handler.first)
+                        // Restore the canvas state
+                        canvas.restore()
+                        // Invalidate the view
+                        imageView.invalidate()
+                    } finally {
+                        // The job is complete, clean up
+                        drawJob = null
+                        layoutHandlers.release(handler)
+                    }
+                }
+            }
+        }
+
+        /**
+         * Cancel the current draw job, if any
+         */
+        fun cancelDraw() {
+            drawJob?.cancel()
+        }
+
+        /**
+         * Create a bitmap for this page
+         * @param w The width of the page in pixels
+         * @return The bitmap or null if the dimensions as 0
+         */
+        private fun createBitmap(w: Int): Bitmap? {
+            val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
+            // Get the page size
+            val pW = viewModel.pdfPrinter.attributes.mediaSize?.widthMils?: 8500
+            val pH = viewModel.pdfPrinter.attributes.mediaSize?.heightMils?: 11000
+            val h = (w * pH) / pW
+            // create the bitmap
+            val bitmap = if (w == 0 || h == 0)
+                null
+            else
+                Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888, true)
+            // Set the bitmap on the image view
+            imageView.setImageBitmap(bitmap)
+            // return the bitmap
+            return bitmap
+        }
+    }
 
     /** @inheritDoc */
     override fun onCreateView(
@@ -233,7 +434,7 @@ class PrintFragment : Fragment() {
                                 // move the highlight
                                 spans.removeSpan(highlight)
                                 spans.setSpan(highlight, startPos, endPos, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                                // Set the new higlight to the text view
+                                // Set the new highlight to the text view
                                 text.text = spans
                             }
                         }
@@ -246,14 +447,17 @@ class PrintFragment : Fragment() {
         }
     }
 
+    /** @inheritDoc */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Get the view model
         viewModel = ViewModelProvider(this).get(PrintViewModel::class.java).apply {
             // Create the print layouts and the PDF printer
             initialize(requireContext()) {id, large ->
                 booksViewModel.getThumbnail(id, large)
             }
         }
+        // Get the books view model
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Create the ViewName for the filter from the arguments
@@ -304,8 +508,13 @@ class PrintFragment : Fragment() {
         view.findViewById<TextView>(R.id.columns).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.numberOfColumns,
                 resources.getStringArray(R.array.column), resources.getStringArray(R.array.column_values).map { it.toIntOrNull() },
-                resources.getColor(R.color.colorSelect, text.context.theme)
-            ) {_, size -> viewModel.pdfPrinter.numberOfColumns = size }
+                resources.getColor(R.color.colorAccent, text.context.theme)
+            ) { _, size ->
+                if (viewModel.pdfPrinter.numberOfColumns != size ) {
+                    viewModel.pdfPrinter.numberOfColumns = size
+                    calculatePages()
+                }
+            }
         }
 
         // Setup the separator line width spinner
@@ -315,7 +524,12 @@ class PrintFragment : Fragment() {
                 values.indexOfFirst { viewModel.pdfPrinter.separatorLineWidth == it.toFloatOrNull() },
                 values
             ) {value ->
-                value?.toFloatOrNull()?.let { viewModel.pdfPrinter.separatorLineWidth = it }
+                value?.toFloatOrNull()?.let {
+                    if (viewModel.pdfPrinter.separatorLineWidth != it) {
+                        viewModel.pdfPrinter.separatorLineWidth = it
+                        calculatePages()
+                    }
+                }
             }
         }
 
@@ -323,15 +537,20 @@ class PrintFragment : Fragment() {
         view.findViewById<TextView>(R.id.orphans).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.orphans,
                 resources.getStringArray(R.array.orphans), resources.getStringArray(R.array.orphans_values).map { it.toIntOrNull() },
-                resources.getColor(R.color.colorSelect, text.context.theme)
-            ) {_, size -> viewModel.pdfPrinter.orphans = size }
+                resources.getColor(R.color.colorAccent, text.context.theme)
+            ) {_, size ->
+                if (viewModel.pdfPrinter.orphans != size) {
+                    viewModel.pdfPrinter.orphans = size
+                    calculatePages()
+                }
+            }
         }
 
         // Set up the text size view
         view.findViewById<TextView>(R.id.size).let {text ->
             setupTextviewRadio(text, viewModel.pdfPrinter.basePaint.textSize,
                 resources.getStringArray(R.array.size), resources.getStringArray(R.array.size_values).map { it.toFloatOrNull() },
-                resources.getColor(R.color.colorSelect, text.context.theme), {spans, start, end, size ->
+                resources.getColor(R.color.colorAccent, text.context.theme), {spans, start, end, size ->
                     spans.setSpan(AbsoluteSizeSpan((size * pointsToDips).roundToInt(), true),
                         start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
@@ -339,13 +558,14 @@ class PrintFragment : Fragment() {
                 if (viewModel.pdfPrinter.basePaint.textSize != size) {
                     viewModel.pdfPrinter.basePaint.textSize = size
                     viewModel.pdfPrinter.invalidateLayout()
+                    calculatePages()
                 }
             }
         }
 
         // Setup the check boxes to set the included fields
         val visible = view.findViewById<RecyclerView>(R.id.visible_fields)
-        visible.adapter = object: ListAdapter<Pair<Int, String>, ViewHolder>(object: DiffUtil.ItemCallback<Pair<Int, String>>() {
+        visible.adapter = object: ListAdapter<Pair<Int, String>, IncludedViewHolder>(object: DiffUtil.ItemCallback<Pair<Int, String>>() {
             override fun areItemsTheSame(oldItem: Pair<Int, String>, newItem: Pair<Int, String>): Boolean {
                 return oldItem == newItem
             }
@@ -354,11 +574,11 @@ class PrintFragment : Fragment() {
                 return oldItem == newItem
             }
         }) {
-            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-                return ViewHolder(CheckBox(requireContext()))
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): IncludedViewHolder {
+                return IncludedViewHolder(CheckBox(requireContext()))
             }
 
-            override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            override fun onBindViewHolder(holder: IncludedViewHolder, position: Int) {
                 holder.field = getItem(position)
                 (holder.itemView as CheckBox).let {
                     val visibleFields = viewModel.pdfPrinter.visibleFields
@@ -369,6 +589,9 @@ class PrintFragment : Fragment() {
                             visibleFields.remove(holder.field.second)
                         else
                             visibleFields.add(holder.field.second)
+                            calculatePages()
+                        viewModel.pdfPrinter.invalidateLayout()
+                        calculatePages()
                         notifyItemChanged(position)
                     }
                 }
@@ -378,25 +601,106 @@ class PrintFragment : Fragment() {
         }
         visible.layoutManager = GridLayoutManager(requireContext(), 3, GridLayoutManager.VERTICAL, false)
 
+        // Handle the expand/collapse button for the print parameters
+        view.findViewById<MaterialButton>(R.id.action_expand).let {button ->
+            val parameters = view.findViewById<View>(R.id.print_parameters)
+            button.isChecked = false
+            parameters.visibility = View.GONE
+            button.setOnClickListener {
+                parameters.visibility = if (button.isChecked) View.VISIBLE else View.GONE
+            }
+        }
+
+        // Setup the print preview recycler view
+        val preview = view.findViewById<RecyclerView>(R.id.preview)
+        previewAdapter = object: ListAdapter<PageLayoutHandler.Page, PreviewViewHolder>(object: DiffUtil.ItemCallback<PageLayoutHandler.Page>() {
+            override fun areItemsTheSame(oldItem: PageLayoutHandler.Page, newItem: PageLayoutHandler.Page): Boolean {
+                return oldItem == newItem
+            }
+
+            override fun areContentsTheSame(oldItem: PageLayoutHandler.Page, newItem: PageLayoutHandler.Page): Boolean {
+                return oldItem == newItem
+            }
+        }) {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PreviewViewHolder {
+                @SuppressLint("InflateParams")
+                val itemView = LayoutInflater.from(parent.context).inflate(R.layout.print_preview_item, null)
+                return PreviewViewHolder(itemView, parent.width)
+            }
+
+            override fun onBindViewHolder(holder: PreviewViewHolder, position: Int) {
+                holder.itemView.findViewById<TextView>(R.id.preview_page_number).text =
+                    requireContext().resources.getString(R.string.preview_page, position + 1, viewModel.pdfPrinter.pageCount)
+                holder.drawPage(getItem(position), viewModel.pdfPrinter.bookList, viewModel.viewModelScope)
+            }
+
+            override fun onViewRecycled(holder: PreviewViewHolder) {
+                // When a holder is recycled, kill any draw job that might be running
+                holder.cancelDraw()
+            }
+        }
+        preview.adapter = previewAdapter
+        preview.layoutManager = LinearLayoutManager(activity)
+        // Calculate the pages for the first preview
+        calculatePages()
+
         // setup the print button
         view.findViewById<Button>(R.id.action_print).setOnClickListener {
             print()
         }
     }
 
+    /**
+     * Calculate the pages using the current parameters
+     */
+    private fun calculatePages() {
+        // Cancel any calculation jobs currently running
+        cancelPages()
+        // Invalidate the page layout handlers
+        layoutHandlers.invalidate()
+        viewModel.viewModelScope.launch {
+            // Wait for the last job to complete
+            pageJob?.join()
+            pageJob = coroutineContext[Job]
+            try {
+                // Calculate the pages
+                val pages = if (viewModel.pdfPrinter.bookList != null)
+                    viewModel.pdfPrinter.layoutPages()
+                else
+                    null
+                // Set the pages in the preview view and notify changes
+                previewAdapter.submitList(pages)
+                @Suppress("NotifyDataSetChanged")
+                previewAdapter.notifyDataSetChanged()
+            } finally {
+                // Done - clean up
+                pageJob = null
+            }
+        }
+    }
+
+    /**
+     * Cancel any running page calculations
+     */
+    private fun cancelPages() {
+        pageJob?.cancel()
+    }
+
+    /**
+     * Print the document
+     */
     private fun print() {
         viewModel.viewModelScope.launch {
-            val context = requireContext()
-            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-            val jobName = "${context.getString(R.string.app_name)} Document"
+            // Don't print if there aren't any books
+            if (!viewModel.pdfPrinter.bookList.isNullOrEmpty()) {
+                val context = requireContext()
+                val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                val jobName = "${context.getString(R.string.app_name)} Document"
 
-            // Get the book filter for the export
-            val bookFilter = filter.name?.let {name -> booksViewModel.repo.findViewByName(name) }?.filter
-            // Get the PageSource for the books
-            val source = bookFilter?.let {filter -> booksViewModel.repo.getBookList(filter, requireContext()) } ?: booksViewModel.repo.getBookList()
-            viewModel.pdfPrinter.bookList = source.getLive()?: return@launch
-
-            printManager.print(jobName, BookPrintAdapter(viewModel.pdfPrinter, context, viewModel.viewModelScope), null)
+                // Start the print job
+                printManager.print(jobName, BookPrintAdapter(viewModel.pdfPrinter,
+                    context, viewModel.viewModelScope), null)
+            }
         }
     }
 }
