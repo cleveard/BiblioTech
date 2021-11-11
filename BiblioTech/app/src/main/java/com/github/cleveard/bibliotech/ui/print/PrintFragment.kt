@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
+import android.print.PrintAttributes
 import android.print.PrintManager
 import android.text.SpannableString
 import android.text.Spanned
@@ -68,17 +69,135 @@ class PrintFragment : Fragment() {
          * Used to display the font size selection characters
          */
         private const val pointsToDips = 160.0f / 72.0f
+
+        private val paperSizes = arrayOf(
+            PrintAttributes.MediaSize.NA_FOOLSCAP,
+            PrintAttributes.MediaSize.NA_GOVT_LETTER,
+            PrintAttributes.MediaSize.NA_INDEX_3X5,
+            PrintAttributes.MediaSize.NA_INDEX_4X6,
+            PrintAttributes.MediaSize.NA_INDEX_5X8,
+            PrintAttributes.MediaSize.NA_JUNIOR_LEGAL,
+            PrintAttributes.MediaSize.NA_LEDGER,
+            PrintAttributes.MediaSize.NA_LEGAL,
+            PrintAttributes.MediaSize.NA_LETTER,
+            PrintAttributes.MediaSize.NA_MONARCH,
+            PrintAttributes.MediaSize.NA_QUARTO,
+            PrintAttributes.MediaSize.NA_TABLOID,
+            PrintAttributes.MediaSize.ISO_A0,
+            PrintAttributes.MediaSize.ISO_A1,
+            PrintAttributes.MediaSize.ISO_A10,
+            PrintAttributes.MediaSize.ISO_A2,
+            PrintAttributes.MediaSize.ISO_A3,
+            PrintAttributes.MediaSize.ISO_A4,
+            PrintAttributes.MediaSize.ISO_A5,
+            PrintAttributes.MediaSize.ISO_A6,
+            PrintAttributes.MediaSize.ISO_A7,
+            PrintAttributes.MediaSize.ISO_A8,
+            PrintAttributes.MediaSize.ISO_A9,
+            PrintAttributes.MediaSize.ISO_B0,
+            PrintAttributes.MediaSize.ISO_B1,
+            PrintAttributes.MediaSize.ISO_B10,
+            PrintAttributes.MediaSize.ISO_B2,
+            PrintAttributes.MediaSize.ISO_B3,
+            PrintAttributes.MediaSize.ISO_B4,
+            PrintAttributes.MediaSize.ISO_B5,
+            PrintAttributes.MediaSize.ISO_B6,
+            PrintAttributes.MediaSize.ISO_B7,
+            PrintAttributes.MediaSize.ISO_B8,
+            PrintAttributes.MediaSize.ISO_B9,
+            PrintAttributes.MediaSize.ISO_C0,
+            PrintAttributes.MediaSize.ISO_C1,
+            PrintAttributes.MediaSize.ISO_C10,
+            PrintAttributes.MediaSize.ISO_C2,
+            PrintAttributes.MediaSize.ISO_C3,
+            PrintAttributes.MediaSize.ISO_C4,
+            PrintAttributes.MediaSize.ISO_C5,
+            PrintAttributes.MediaSize.ISO_C6,
+            PrintAttributes.MediaSize.ISO_C7,
+            PrintAttributes.MediaSize.ISO_C8,
+            PrintAttributes.MediaSize.ISO_C9,
+            PrintAttributes.MediaSize.JPN_CHOU2,
+            PrintAttributes.MediaSize.JPN_CHOU3,
+            PrintAttributes.MediaSize.JPN_CHOU4,
+            PrintAttributes.MediaSize.JPN_HAGAKI,
+            PrintAttributes.MediaSize.JIS_B0,
+            PrintAttributes.MediaSize.JIS_B1,
+            PrintAttributes.MediaSize.JIS_B10,
+            PrintAttributes.MediaSize.JIS_B2,
+            PrintAttributes.MediaSize.JIS_B3,
+            PrintAttributes.MediaSize.JIS_B4,
+            PrintAttributes.MediaSize.JIS_B5,
+            PrintAttributes.MediaSize.JIS_B6,
+            PrintAttributes.MediaSize.JIS_B7,
+            PrintAttributes.MediaSize.JIS_B8,
+            PrintAttributes.MediaSize.JIS_B9,
+            PrintAttributes.MediaSize.JIS_EXEC,
+            PrintAttributes.MediaSize.JPN_KAHU,
+            PrintAttributes.MediaSize.JPN_KAKU2,
+            PrintAttributes.MediaSize.JPN_OUFUKU,
+            PrintAttributes.MediaSize.JPN_YOU4,
+            PrintAttributes.MediaSize.OM_DAI_PA_KAI,
+            PrintAttributes.MediaSize.OM_JUURO_KU_KAI,
+            PrintAttributes.MediaSize.OM_PA_KAI,
+            PrintAttributes.MediaSize.PRC_1,
+            PrintAttributes.MediaSize.PRC_10,
+            PrintAttributes.MediaSize.PRC_16K,
+            PrintAttributes.MediaSize.PRC_2,
+            PrintAttributes.MediaSize.PRC_3,
+            PrintAttributes.MediaSize.PRC_4,
+            PrintAttributes.MediaSize.PRC_5,
+            PrintAttributes.MediaSize.PRC_6,
+            PrintAttributes.MediaSize.PRC_7,
+            PrintAttributes.MediaSize.PRC_8,
+            PrintAttributes.MediaSize.PRC_9,
+            PrintAttributes.MediaSize.ROC_16K,
+            PrintAttributes.MediaSize.ROC_8K
+        )
     }
 
     /** Fragment navigation arguments */
     private val args: PrintFragmentArgs by navArgs()
 
     /**
+     * Class used to display names for objects in the UI
+     * @param obj The object to assign a name
+     * @param displayName The display name for the object
+     */
+    private open class ObjectName<T>(val obj: T, val displayName: String) {
+        /**
+         * @inheritDoc
+         * Only use the name for the comparison
+         */
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as ViewName
+            return obj == other.obj
+        }
+
+        /**
+         * @inheritDoc
+         * Only use the name for comparison
+         */
+        override fun hashCode(): Int {
+            return obj.hashCode()
+        }
+
+        /**
+         * @inheritDoc
+         * Use the displayName for the string representation
+         */
+        override fun toString(): String {
+            return displayName
+        }
+    }
+
+    /**
      * Class used to display view names in the UI
-     * @param name The view name
+     * @param obj The view name
      * @param displayName The display name for the view name
      */
-    private class ViewName(val name: String?, val displayName: String) {
+    private class ViewName(obj: String?, displayName: String): ObjectName<String?>(obj, displayName) {
         companion object {
             /**
              * Make a ViewName object for a string
@@ -96,34 +215,13 @@ class PrintFragment : Fragment() {
                 )
             }
         }
-
-        /**
-         * @inheritDoc
-         * Only use the name for the comparison
-         */
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-            other as ViewName
-            return name == other.name
-        }
-
-        /**
-         * @inheritDoc
-         * Only use the name for comparison
-         */
-        override fun hashCode(): Int {
-            return name.hashCode()
-        }
-
-        /**
-         * @inheritDoc
-         * Use the displayName for the string representation
-         */
-        override fun toString(): String {
-            return displayName
-        }
     }
+
+    /**
+     * Class used to display paper size names in the UI
+     * @param obj The paper size
+     */
+    private inner class PaperSizeName(obj: PrintAttributes.MediaSize): ObjectName<PrintAttributes.MediaSize>(obj, obj.getLabel(requireContext().packageManager))
 
     /** Job used to get the list of books */
     private var filterJob: Job? = null
@@ -138,7 +236,7 @@ class PrintFragment : Fragment() {
                  filterJob = coroutineContext[Job]
                  try {
                      // Get the book filter for the export
-                     val bookFilter = v.name?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
+                     val bookFilter = v.obj?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
                      ensureActive()
                      // Get the PageSource for the books
                      val source = if (bookFilter != null)
@@ -204,7 +302,7 @@ class PrintFragment : Fragment() {
 
         /**
          * Release a PageLayoutHandler acquired by acquire()
-         * @param The handler and generation
+         * @param handler The handler and generation
          */
         fun release(handler: Pair<PageLayoutHandler, UInt>) {
             // Add the handler back into the pool, unless the generation has changed
@@ -232,10 +330,10 @@ class PrintFragment : Fragment() {
         /** Field checkbox */
         view: View,
         /** The width of the page */
-        width: Int
+        private val width: Int
     ): RecyclerView.ViewHolder(view) {
         /** The page image */
-        var image: Bitmap? = createBitmap(width)
+        var image: Bitmap? = createBitmap(null)
         /** The job drawing the page */
         var drawJob: Job? = null
 
@@ -248,13 +346,14 @@ class PrintFragment : Fragment() {
         fun drawPage(page: PageLayoutHandler.Page?, books: List<BookAndAuthors>?, scope: CoroutineScope) {
             // If we are currently drawing, cancel it
             cancelDraw()
-            // If page or books is null, the nothring to do
+            // If page or books is null, the nothing to do
             if (page == null || books == null)
                 return
 
             // Get the item view
             val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
             // Draw into a bitmap
+            image = createBitmap(image)
             image?.let { image ->
                 // Erase the bitmap to white
                 image.eraseColor(0xFFFFFFFF.toInt())
@@ -298,21 +397,23 @@ class PrintFragment : Fragment() {
 
         /**
          * Create a bitmap for this page
-         * @param w The width of the page in pixels
+         * @param oldBitmap The current bitmap in the holder
          * @return The bitmap or null if the dimensions as 0
          */
-        private fun createBitmap(w: Int): Bitmap? {
-            val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
+        private fun createBitmap(oldBitmap: Bitmap?): Bitmap? {
             // Get the page size
             val pW = viewModel.pdfPrinter.attributes.mediaSize?.widthMils?: 8500
             val pH = viewModel.pdfPrinter.attributes.mediaSize?.heightMils?: 11000
-            val h = (w * pH) / pW
+            val h = (width * pH) / pW
+            if (width == oldBitmap?.width && h == oldBitmap.height)
+                return oldBitmap
             // create the bitmap
-            val bitmap = if (w == 0 || h == 0)
+            val bitmap = if (width == 0 || h == 0)
                 null
             else
-                Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888, true)
+                Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888, true)
             // Set the bitmap on the image view
+            val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
             imageView.setImageBitmap(bitmap)
             // return the bitmap
             return bitmap
@@ -361,6 +462,26 @@ class PrintFragment : Fragment() {
         // Set the initial selection
         if (selected >= 0)
             picker.setSelection(selected)
+    }
+
+    private inline fun <reified T> setupSpinner(
+        picker: Spinner,
+        selected: Int,
+        items: List<T>,
+        crossinline setter: (T?) -> Unit
+    ) {
+        picker.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, items.toTypedArray())
+        if (selected >= 0)
+            picker.setSelection(selected)
+        picker.onItemSelectedListener = object: AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                setter(items[position])
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                setter(null)
+            }
+        }
     }
 
     /**
@@ -528,6 +649,59 @@ class PrintFragment : Fragment() {
                     if (viewModel.pdfPrinter.separatorLineWidth != it) {
                         viewModel.pdfPrinter.separatorLineWidth = it
                         calculatePages()
+                    }
+                }
+            }
+        }
+
+        fun changeMediaSize(size: PrintAttributes.MediaSize, portrait: Boolean) {
+            val oldAttributes = viewModel.pdfPrinter.attributes
+            // If the paper size is square, or the orientation isn't changing
+            // then return because there is nothing to do
+            val newSize = if (size.widthMils == size.heightMils || portrait == (size.heightMils > size.widthMils))
+                size
+            else {
+                PrintAttributes.MediaSize(size.id, size.getLabel(requireContext().packageManager), size.heightMils, size.widthMils)
+            }
+
+            // Duplicate the current attributes, but change the media size
+            val newAttributes = PrintAttributes.Builder()
+                .setColorMode(oldAttributes.colorMode)
+                .setDuplexMode(oldAttributes.duplexMode)
+                .setMediaSize(newSize)
+                .setMinMargins(oldAttributes.minMargins!!)
+                .setResolution(oldAttributes.resolution!!)
+                .build()
+            // set the new attributes
+            viewModel.pdfPrinter.changeLayout(newAttributes)
+            calculatePages()
+        }
+
+        // Setup the paper size spinner
+        setupSpinner(
+            view.findViewById(R.id.paper_size),
+            paperSizes.indexOfFirst { viewModel.pdfPrinter.attributes.mediaSize?.id == it.id },
+            paperSizes.map { PaperSizeName(it) }
+        ) {
+            if (it != null)
+                changeMediaSize(it.obj, view.findViewById<Spinner>(R.id.orientation).selectedItemPosition == 0)
+        }
+
+        // Setup the paper orientation width spinner
+        requireContext().resources.getStringArray(R.array.paper_orientation_values).let {values ->
+            setupSpinner(
+                view.findViewById(R.id.orientation),
+                if(viewModel.pdfPrinter.attributes.mediaSize?.isPortrait != false) 0 else 1,
+                values
+            ) {value ->
+                value?.toIntOrNull()?.let {
+                    viewModel.pdfPrinter.attributes.mediaSize?.let square@ {size ->
+                        // If the paper size is square, or the orientation isn't changing
+                        // then return because there is nothing to do
+                        if (size.widthMils == size.heightMils || (it == 0) == (size.heightMils > size.widthMils))
+                            return@square
+                        // Change the media size
+                        changeMediaSize(PrintAttributes.MediaSize(size.id, size.getLabel(requireContext().packageManager), size.heightMils, size.widthMils), it == 0)
                     }
                 }
             }

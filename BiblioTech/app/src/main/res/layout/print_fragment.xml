@@ -82,6 +82,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/columns"
+            android:textSize="16sp"
             app:layout_constraintBottom_toBottomOf="@+id/columns"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@+id/columns" />
@@ -92,25 +93,8 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:textColor="@color/colorPrimary"
+            android:textSize="16sp"
             app:layout_constraintStart_toEndOf="@+id/columns_label"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <!--TextView
-            android:id="@+id/size_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="@string/size"
-            app:layout_constraintBottom_toBottomOf="@+id/size"
-            app:layout_constraintEnd_toStartOf="@+id/size"
-            app:layout_constraintTop_toTopOf="@+id/size" -->
-
-        <TextView
-            android:id="@+id/size"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/colorPrimary"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
@@ -118,6 +102,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/orphans"
+            android:textSize="16sp"
             app:layout_constraintBottom_toBottomOf="@+id/orphans"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="@+id/orphans" />
@@ -129,44 +114,107 @@
             android:layout_marginStart="8dp"
             android:layout_marginTop="8dp"
             android:textColor="@color/colorPrimary"
+            android:textSize="16sp"
             app:layout_constraintStart_toEndOf="@+id/orphans_label"
             app:layout_constraintTop_toBottomOf="@+id/columns" />
+
+        <TextView
+            android:id="@+id/size"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorPrimary"
+            android:layout_marginTop="8dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintHorizontal_bias="0.55"
+            app:layout_constraintTop_toBottomOf="@+id/orphans" />
+
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/right_side"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.55"/>
 
         <TextView
             android:id="@+id/separator_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
             android:text="@string/separator"
+            android:textSize="16sp"
             app:layout_constraintBottom_toBottomOf="@+id/separator"
-            app:layout_constraintEnd_toStartOf="@+id/separator"
+            app:layout_constraintStart_toStartOf="@+id/right_side"
             app:layout_constraintTop_toTopOf="@+id/separator" />
 
         <Spinner
             android:id="@+id/separator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:columnCount="4"
+            android:layout_marginStart="8dp"
             android:entries="@array/separator"
+            app:layout_constraintStart_toEndOf="@+id/separator_label"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/paper_size_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/page_size"
+            android:textSize="16sp"
+            android:layout_marginTop="8dp"
+            app:layout_constraintTop_toBottomOf="@+id/separator"
+            app:layout_constraintStart_toStartOf="@+id/right_side" />
+
+        <Spinner
+            android:id="@+id/paper_size"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:entries="@array/separator"
+            app:layout_constraintStart_toStartOf="@+id/paper_size_label"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/size" />
+            app:layout_constraintTop_toBottomOf="@+id/paper_size_label" />
+
+        <TextView
+            android:id="@+id/orientation_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/orientation"
+            android:textSize="16sp"
+            android:layout_marginTop="8dp"
+            app:layout_constraintTop_toBottomOf="@+id/paper_size"
+            app:layout_constraintStart_toStartOf="@+id/right_side" />
+
+        <androidx.constraintlayout.widget.Barrier
+            android:id="@+id/barrier2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:barrierDirection="bottom"
+            app:constraint_referenced_ids="orphans, orphans_label, separator, separator_label, paper_size_label, paper_size, orientation_label" />
+
+        <Spinner
+            android:id="@+id/orientation"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:entries="@array/paper_orientation"
+            app:layout_constraintStart_toStartOf="@+id/orientation_label"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/orientation_label" />
 
         <androidx.constraintlayout.widget.Barrier
             android:id="@+id/barrier_print"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:barrierDirection="bottom"
-            app:constraint_referenced_ids="orphans, orphans_label, separator, separator_label" />
+            app:constraint_referenced_ids="orientation" />
 
         <TextView
             android:id="@+id/visible_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:text="@string/include_fields"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/barrier_print" />
+            app:layout_constraintBottom_toTopOf="@+id/barrier_print" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/visible_fields"
@@ -175,7 +223,7 @@
             android:layout_marginTop="8dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/visible_label" />
+            app:layout_constraintTop_toBottomOf="@id/barrier_print" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

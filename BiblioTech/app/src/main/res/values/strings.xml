@@ -206,6 +206,8 @@
     <string name="size">Size:</string>
     <string name="include_fields">Include Fields:</string>
     <string name="preview_page">Page %1$d/%2$d</string>
+    <string name="page_size">Paper Size</string>
+    <string name="orientation">Orientation</string>
     <!-- The column array are the strings displayed in the column spinner.
          column_values are the values associated with the spinner items -->
     <string-array name="column">
@@ -277,5 +279,15 @@
         <item>12.5</item>
         <item>16.0</item>
         <item>20.0</item>
+    </string-array>
+    <!-- The separator array are the strings displayed in the separator spinner.
+         separator_values are the values associated with the spinner items -->
+    <string-array name="paper_orientation">
+        <item>Portrait</item>
+        <item>Landscape</item>
+    </string-array>
+    <string-array name="paper_orientation_values">
+        <item>0</item>
+        <item>1</item>
     </string-array>
 </resources>

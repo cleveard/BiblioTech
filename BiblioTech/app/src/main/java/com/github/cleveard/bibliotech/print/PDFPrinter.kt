@@ -349,6 +349,7 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
             .setResolution(PrintAttributes.Resolution("1", "300DPI", 300, 300))
             .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
             .setMinMargins(PrintAttributes.Margins(500, 500, 500, 500))
+            .setDuplexMode(PrintAttributes.DUPLEX_MODE_NONE)
             .build()
 
         /**
