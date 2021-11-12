@@ -129,7 +129,6 @@ class TagsFragment : Fragment() {
         }
         // Set the layout manager and adapter to the recycler view
         val tags = content.findViewById<RecyclerView>(R.id.tags_list)
-        tags.layoutManager = LinearLayoutManager(activity)
         tags.adapter = tagViewModel.adapter
     }
 

@@ -66,7 +66,6 @@ class ImportCSV {
                         // content.findViewById<TextView>(R.id.ask_message).setText(handler.askTitle)
                         recycler = content.findViewById<RecyclerView>(R.id.imported_list).apply {
                             adapter = handler.startAdapter(content)
-                            layoutManager = LinearLayoutManager(inContext, RecyclerView.VERTICAL, false)
                         }
                         alert.builder.setView(content)
                             .setPositiveButton(R.string.yes, null)

@@ -1421,7 +1421,6 @@ class ScanFragment : Fragment() {
                     // Find the recycler view and set the layout manager and adapter
                     val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
                     access.adapter = BooksAdapter(access, R.layout.books_adapter_book_item_always, 0)
-                    titles.layoutManager = LinearLayoutManager(activity)
                     titles.adapter = access.adapter
 
                     // initialize the title and author filters

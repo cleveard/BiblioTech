@@ -773,7 +773,6 @@ class PrintFragment : Fragment() {
         }.apply {
             submitList(visibleFieldNames)
         }
-        visible.layoutManager = GridLayoutManager(requireContext(), 3, GridLayoutManager.VERTICAL, false)
 
         // Handle the expand/collapse button for the print parameters
         view.findViewById<MaterialButton>(R.id.action_expand).let {button ->
@@ -814,7 +813,6 @@ class PrintFragment : Fragment() {
             }
         }
         preview.adapter = previewAdapter
-        preview.layoutManager = LinearLayoutManager(activity)
         // Calculate the pages for the first preview
         calculatePages()
 
