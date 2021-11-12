@@ -28,7 +28,7 @@ class PrintLayouts(context: Context) {
                         margin.right = 4.5f
                     },
                     LayoutDescription.ColumnBitmapFieldLayoutDescription(true, PointF(72.0f, 112.0f)).apply {
-                        margin.left = 4.5f
+                        margin.right = 4.5f
                     },
                     LayoutDescription.TitleTextFieldLayoutDescription(),
                     LayoutDescription.ColumnTextFieldLayoutDescription(Column.SUBTITLE).apply {
@@ -86,11 +86,11 @@ class PrintLayouts(context: Context) {
                             LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
                         )
                     ),
-                    // Large Thumbnail is at the end
+                    // Large Thumbnail is at the start
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.End,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                     )
                 )
@@ -102,18 +102,12 @@ class PrintLayouts(context: Context) {
                             LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
                         )
                     ),
-                    // Title is to the right of the small thumbnail
+                    // Title is to the right of the small thumbnail or large thumbnail
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
-                        )
-                    ),
-                    // Title is to the left of the large thumbnail
-                    LayoutDescription.HorizontalLayoutAlignment(
-                        LayoutDescription.HorizontalLayoutDimension.Type.End,
-                        listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb),
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, largeThumb)
                         )
                     )
                 )
@@ -130,13 +124,6 @@ class PrintLayouts(context: Context) {
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
                             LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, title)
-                        )
-                    ),
-                    // Subtitle is to the left of the large thumbnail
-                    LayoutDescription.HorizontalLayoutAlignment(
-                        LayoutDescription.HorizontalLayoutDimension.Type.End,
-                        listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
                         )
                     )
                 )
@@ -170,13 +157,6 @@ class PrintLayouts(context: Context) {
                         listOf(
                             LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, by)
                         )
-                    ),
-                    // Authors is to the left of the large thumbnail
-                    LayoutDescription.HorizontalLayoutAlignment(
-                        LayoutDescription.HorizontalLayoutDimension.Type.End,
-                        listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
-                        )
                     )
                 )
                 tagsLabel.layoutAlignment = setOf(
@@ -188,11 +168,12 @@ class PrintLayouts(context: Context) {
                             LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, smallThumb)
                         )
                     ),
-                    // Tags: is aligned with parent start
+                    // Tags: is aligned with parent start or large thumbnail end
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null),
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, largeThumb)
                         )
                     )
                 )
@@ -209,13 +190,6 @@ class PrintLayouts(context: Context) {
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
                             LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, tagsLabel)
-                        )
-                    ),
-                    // Tags is to the left of the large thumbnail
-                    LayoutDescription.HorizontalLayoutAlignment(
-                        LayoutDescription.HorizontalLayoutDimension.Type.End,
-                        listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, largeThumb)
                         )
                     )
                 )

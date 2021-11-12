@@ -752,6 +752,16 @@ class PrintFragment : Fragment() {
                 return IncludedViewHolder(CheckBox(requireContext()))
             }
 
+            private fun getHolder(name: String): IncludedViewHolder? {
+                val recycler = view.findViewById<RecyclerView>(R.id.visible_fields)
+                for (i in 0 until recycler.childCount) {
+                    val holder = recycler.getChildViewHolder(recycler.getChildAt(i)) as IncludedViewHolder
+                    if (holder.field.second == name)
+                        return holder
+                }
+                return null
+            }
+
             override fun onBindViewHolder(holder: IncludedViewHolder, position: Int) {
                 holder.field = getItem(position)
                 (holder.itemView as CheckBox).let {
@@ -761,12 +771,20 @@ class PrintFragment : Fragment() {
                     it.setOnClickListener {
                         if (visibleFields.contains(holder.field.second))
                             visibleFields.remove(holder.field.second)
-                        else
+                        else {
                             visibleFields.add(holder.field.second)
-                            calculatePages()
+                            when (holder.field.second) {
+                                "SmallThumb" -> getHolder("LargeThumb")
+                                "LargeThumb" -> getHolder("SmallThumb")
+                                else -> null
+                            }?.let {other ->
+                                (other.itemView as CheckBox).isChecked = false
+                                visibleFields.remove(other.field.second)
+                            }
+                        }
                         viewModel.pdfPrinter.invalidateLayout()
                         calculatePages()
-                        notifyItemChanged(position)
+                        // notifyItemChanged(position)
                     }
                 }
             }
