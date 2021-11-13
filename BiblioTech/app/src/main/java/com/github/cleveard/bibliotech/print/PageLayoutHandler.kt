@@ -383,7 +383,6 @@ class PageLayoutHandler(
     private fun alignHorizontalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?, rtl: Boolean): Boolean {
         val min: Float
         val max: Float
-        var adjust: Float
 
         if (rtl) {
             // Set min to specified value, or the value of the parent
