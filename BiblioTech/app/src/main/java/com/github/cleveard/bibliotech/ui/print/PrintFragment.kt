@@ -291,10 +291,10 @@ class PrintFragment : Fragment() {
          * @return The handler and generation
          */
         fun acquire(): Pair<PageLayoutHandler, UInt> {
-            return handlers.firstOrNull()?: Pair(
+            return (handlers.firstOrNull()?: Pair(
                 PageLayoutHandler(viewModel.pdfPrinter, viewModel.pdfPrinter.pageDrawBounds),
                 generation
-            ).also {
+            )).also {
                 // Remove the handler, so it won't be acquired again
                 handlers.remove(it)
             }
