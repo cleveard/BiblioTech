@@ -243,7 +243,7 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
                 val pageLayoutHandler = PageLayoutHandler(this, calculateDrawBounds())
                 // Use it to layout the pages
                 pageLayoutHandler.layoutPages(books).let {pages ->
-                    // Not pages, through an exception
+                    // No pages, through an exception
                     if (pages.isEmpty())
                         throw IllegalStateException("No pages were found to print")
                     // Remember the layout
