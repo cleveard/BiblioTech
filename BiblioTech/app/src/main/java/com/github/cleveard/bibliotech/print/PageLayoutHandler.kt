@@ -355,13 +355,14 @@ class PageLayoutHandler(
             // If the bounds are empty, don't include margins
             if (!dl.bounds.isEmpty) {
                 // Add the field bounds to the layout bounds
-                layout.bounds.union(dl.bounds)
+                layout.bounds.union(dl.bounds.left + dl.position.x, dl.bounds.top + dl.position.y,
+                    dl.bounds.right + dl.position.x, dl.bounds.bottom + dl.position.y)
                 // Add the field with margin bounds to the margin bounds
                 layout.marginBounds.union(
-                    dl.bounds.left - if (dl.rtl) dl.margins.right else dl.margins.left,
-                    dl.bounds.top - dl.margins.top,
-                    dl.bounds.right + if (dl.rtl) dl.margins.left else dl.margins.right,
-                    dl.bounds.bottom + dl.margins.bottom
+                    dl.bounds.left - if (dl.rtl) dl.margins.right else dl.margins.left + dl.position.x,
+                    dl.bounds.top - dl.margins.top + dl.position.y,
+                    dl.bounds.right + if (dl.rtl) dl.margins.left else dl.margins.right + dl.position.x,
+                    dl.bounds.bottom + dl.margins.bottom + dl.position.y
                 )
             }
         }
@@ -399,11 +400,11 @@ class PageLayoutHandler(
                 maxSpec != null -> (max - dl.width).coerceAtLeast(0.0f)
                 else -> 0.0f
             } + dl.margins.right
-            // Calculate the adjust to move bounds.right to max
-            adjust = max - dl.bounds.right
+            // Calculate the position to move bounds.right to max
+            dl.position.x = max - dl.bounds.right
             // If the bounds are empty to include the margins
             if (dl.bounds.isEmpty)
-                adjust += dl.margins.left
+                dl.position.x += dl.margins.left
         } else {
             // Set min to specified value, or the value of the parent
             min = when {
@@ -419,15 +420,12 @@ class PageLayoutHandler(
                 minSpec != null -> min + dl.width
                 else -> columnWidth
             } - dl.margins.right
-            // Calculate the adjust to move bounds.left to min
-            adjust = min - dl.bounds.left
+            // Calculate the position to move bounds.left to min
+            dl.position.x = min - dl.bounds.left
             // If the bounds are empty to include the margins
             if (dl.bounds.isEmpty)
-                adjust -= dl.margins.left
+                dl.position.x -= dl.margins.left
         }
-        // Move the bounds
-        dl.bounds.left += adjust
-        dl.bounds.right += adjust
 
         // Don't change the width unless both min and max spec are given
         if (minSpec == null || maxSpec == null)
@@ -461,9 +459,7 @@ class PageLayoutHandler(
 
         // Calculate the adjustment to move the top to min. If the bounds are empty
         // make sure the margins are not included
-        val adjust = (if (dl.bounds.isEmpty) min - dl.margins.top else min) - dl.bounds.top
-        dl.bounds.bottom += adjust
-        dl.bounds.top += adjust
+        dl.position.y = (if (dl.bounds.isEmpty) min - dl.margins.top else min) - dl.bounds.top
 
         // Don't change the height unless both min and max spec are given
         if (minSpec == null || maxSpec == null)
