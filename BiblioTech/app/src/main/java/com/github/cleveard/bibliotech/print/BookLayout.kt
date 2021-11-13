@@ -1,9 +1,6 @@
 package com.github.cleveard.bibliotech.print
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.PointF
-import android.graphics.RectF
+import android.graphics.*
 import android.text.*
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
@@ -439,16 +436,54 @@ data class BookLayout(
         /** The paint used to draw the text */
         private var paint: TextPaint = printer.basePaint
     ): DrawLayout(printer, description, width) {
-        /** Create a StaticLayout to format the text */
-        var textLayout = createLayout()
+        protected inner class LayoutSpan(
+            val position: PointF,
+            val startSpan: Int,
+            val endSpan: Int,
+            val layout: StaticLayout
+        ) {
+            val bounds: RectF = RectF().apply {
+                // Get the length of the longest line
+                val width = printer.horizontalPixelsToPoints(ceil((0 until layout.lineCount).maxOf { layout.getLineMax(it) }).toInt())
+                // Calculate the left and right positions from the rtl flag
+                val left: Float
+                val right: Float
+                if (rtl) {
+                    // Right to left, right is the layout width
+                    right = printer.horizontalPixelsToPoints(layout.width) + position.x
+                    // left is the right position minus the length of longest line
+                    left = right - width
+                } else {
+                    // Left to right, left is the layout position
+                    left = position.x
+                    // Right is the left plus the length of longest line
+                    right = left + width
+                }
+                set(left, position.y, right, printer.verticalPixelsToPoints(layout.height) + position.y)
+            }
+
+            fun move(x: Float, y: Float) {
+                bounds.offset(x - position.x, y - position.y)
+                position.set(x, y)
+            }
+        }
+        /** Create list to hold the static layouts for the field */
+        private val textSpans: ArrayList<LayoutSpan> = ArrayList()
 
         /** @inheritDoc */
         override suspend fun draw(canvas: Canvas) {
+            var lastX = 0.0f
+            var lastY = 0.0f
             if (!clip.isEmpty) {
                 canvas.save()
                 canvas.translate(position.x, position.y)
                 canvas.clipRect(clip)
-                textLayout.draw(canvas)
+                for (span in textSpans) {
+                    canvas.translate(span.position.x - lastX, span.position.y - lastY)
+                    lastX = span.position.x
+                    lastY = span.position.y
+                    span.layout.draw(canvas)
+                }
                 canvas.restore()
             }
         }
@@ -456,33 +491,36 @@ data class BookLayout(
         /**
          * Create the StaticLayout from the current values
          */
-        protected fun createLayout(): StaticLayout {
+        protected fun createInitialLayout() {
+            textSpans.clear()
             // Build the static layout
-            val layout = StaticLayout.Builder.obtain(
+            var layout = StaticLayout.Builder.obtain(
                 text, 0, text.length, paint,
                 printer.pointsToHorizontalPixels(width)
             ).build()
-            // If the field isn't vertically constrained, then return it
-            if (layout.height <= height)
-                return layout
-            // Calculate how many lines we need to be smaller than height
-            var lines = layout.getLineForVertical(printer.pointsToVerticalPixels(height))
-            if (printer.verticalPixelsToPoints(layout.getLineTop(lines)) > height)
-                --lines
-            return (
-                // If we can have some lines, then limit the layout. Otherwise
-                // make the layout an empty string.
-                if (lines > 0)
-                    StaticLayout.Builder.obtain(
-                        text, 0, text.length, paint,
-                        printer.pointsToHorizontalPixels(width)
-                    ).setMaxLines(lines)
-                else
-                    StaticLayout.Builder.obtain(
-                        "", 0, 0, paint,
-                        printer.pointsToHorizontalPixels(width)
-                    )
-            ).build()
+            // If the field is vertically constrained, then constrain the layout
+            if (layout.height > height) {
+                // Calculate how many lines we need to be smaller than height
+                var lines = layout.getLineForVertical(printer.pointsToVerticalPixels(height))
+                if (printer.verticalPixelsToPoints(layout.getLineTop(lines)) > height)
+                    --lines
+                layout = (
+                    // If we can have some lines, then limit the layout. Otherwise
+                    // make the layout an empty string.
+                    if (lines > 0)
+                        StaticLayout.Builder.obtain(
+                            text, 0, text.length, paint,
+                            printer.pointsToHorizontalPixels(width)
+                        ).setMaxLines(lines)
+                    else
+                        StaticLayout.Builder.obtain(
+                            "", 0, 0, paint,
+                            printer.pointsToHorizontalPixels(width)
+                        )
+                    ).build()
+            }
+            // Add the span to the list of spans
+            textSpans.add(LayoutSpan(PointF(0.0f, 0.0f), 0, text.length, layout))
         }
 
         /** @inheritDoc */
@@ -493,7 +531,7 @@ data class BookLayout(
                     super.width = v
                     // Create a new StaticLayout
                     if (it != v)
-                        textLayout = createLayout()
+                        createInitialLayout()
                 }
             }
 
@@ -505,20 +543,23 @@ data class BookLayout(
                     super.height = v
                     // Create a new StaticLayout
                     if (it != v)
-                        textLayout = createLayout()
+                        createInitialLayout()
                 }
             }
 
         /** @inheritDoc */
         override fun getVerticalLineBounds(): Sequence<Pair<Float, Float>>? {
-            return (0 until textLayout.lineCount).asSequence()
-                .filter { bounds.top + printer.verticalPixelsToPoints(textLayout.getLineTop(it)) >= clip.top }
-                .map {
-                    Pair(
-                        bounds.top + printer.verticalPixelsToPoints(textLayout.getLineTop(it)),
-                        bounds.top + printer.verticalPixelsToPoints(textLayout.getLineTop(it + 1))
-                    )
-                }
+            return textSpans.asSequence().map { span ->
+                val spanLayout = span.layout
+                (0 until spanLayout.lineCount).asSequence()
+                    .filter { span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it)) >= clip.top }
+                    .map {
+                        Pair(
+                            span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it)),
+                            span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it + 1))
+                        )
+                    }
+            }.flatten()
         }
 
         /**
@@ -530,12 +571,22 @@ data class BookLayout(
          * then the top of the top line or bottom of the bottom line is returned
          */
         private fun findBoundary(boundary: Float, bottom: Boolean): Float {
+            // If there are no spans, then return 0
+            if (textSpans.isEmpty())
+                return 0.0f
+            // Get the span with the boundary line
+            val span = textSpans.indexOfFirst { boundary < it.position.y }.let {
+                if (it == -1)
+                    textSpans.last()
+                else
+                    textSpans[it]
+            }
             // Find the line at the boundary or before it
-            val line = textLayout.getLineForVertical(printer.pointsToVerticalPixels(boundary))
+            val line = span.layout.getLineForVertical(printer.pointsToVerticalPixels(boundary - span.position.y))
             // Get the top and bottom of the line
-            val t = printer.verticalPixelsToPoints(textLayout.getLineTop(line))
-            val b = printer.verticalPixelsToPoints(textLayout.getLineTop(line + 1))
-            return when {
+            val t = printer.verticalPixelsToPoints(span.layout.getLineTop(line))
+            val b = printer.verticalPixelsToPoints(span.layout.getLineTop(line + 1))
+            return span.position.y + when {
                 // Either the top of the line is on the boundary, or the top line
                 // is below the boundary, so return the top of the line
                 t >= boundary -> t
@@ -556,7 +607,7 @@ data class BookLayout(
                 return false
 
             // If there are not lines in the field, then remove it
-            val lineCount = textLayout.lineCount
+            val lineCount = textSpans.sumOf { it.layout.lineCount }
             if (lineCount <= 0) {
                 clip.top = bounds.top
                 clip.bottom = bounds.top
@@ -574,13 +625,21 @@ data class BookLayout(
             return !clip.isEmpty
         }
 
-        /** The length of the longest line in the field */
-        private val maxLineEnd: Float
-            get() = printer.horizontalPixelsToPoints(ceil((0 until textLayout.lineCount).maxOf { textLayout.getLineMax(it) }).toInt())
-
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
+            if (textSpans.isEmpty())
+                createInitialLayout()
             setContent()
+        }
+
+        /**
+         * Recalculate the bounding box from the current spans
+         */
+        private fun calculateBounds() {
+            // Start with empty box
+            bounds.setEmpty()
+            // Union in the bounds for each span
+            textSpans.fold(bounds) {bounds, span -> bounds.union(span.bounds); bounds }
         }
 
         /**
@@ -588,10 +647,10 @@ data class BookLayout(
          */
         fun setContent() {
             // The text is static, but reset the bounding rectangle of the field
-            bounds.set(0.0f, 0.0f, maxLineEnd, printer.verticalPixelsToPoints(textLayout.height))
+            calculateBounds()
             // Set the baseline, and set the bounds empty if there are no lines
-            baseline = if (!bounds.isEmpty && textLayout.lineCount > 0)
-                printer.verticalPixelsToPoints(textLayout.getLineBaseline(0))
+            baseline = if (!bounds.isEmpty && textSpans.isNotEmpty())
+                printer.verticalPixelsToPoints(textSpans.first().layout.getLineBaseline(0))
             else {
                 bounds.set(0.0f, 0.0f, 0.0f, 0.0f)
                 0.0f
@@ -622,7 +681,7 @@ data class BookLayout(
             // Get the column value
             text = column.desc.getDisplayValue(book)
             // Create the StaticLayout
-            textLayout = createLayout()
+            createInitialLayout()
             // Fill in the bounds and baseline of the field
             super.setContent()
         }
