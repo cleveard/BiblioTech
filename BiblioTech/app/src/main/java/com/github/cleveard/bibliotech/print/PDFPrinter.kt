@@ -20,7 +20,12 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 
 /** Class for printing to a PDF */
-class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?): Closeable {
+class PDFPrinter(
+    private val layouts: PrintLayouts,
+    private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?
+): Closeable {
+    class NoPagesException: IllegalStateException("No pages were found to print")
+    class NoBooksException: IllegalStateException("A list of books must be selected to print")
     /** The pdf document we are printing to */
     private var pdf: PrintedPdfDocument? = null
         private set(v) {
@@ -245,14 +250,14 @@ class PDFPrinter(private val layouts: PrintLayouts, private val getThumbnailCall
                 pageLayoutHandler.layoutPages(books).let {pages ->
                     // No pages, through an exception
                     if (pages.isEmpty())
-                        throw IllegalStateException("No pages were found to print")
+                        throw NoPagesException()
                     // Remember the layout
                     this.pages = pages
                     // Return the pages
                     pages
                 }
             }
-        }?: throw IllegalStateException("A list of books must be selected to print")
+        }?: throw NoBooksException()
     }
 
     /**

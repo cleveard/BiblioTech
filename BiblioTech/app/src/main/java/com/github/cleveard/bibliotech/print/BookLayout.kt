@@ -4,6 +4,9 @@ import android.graphics.*
 import android.text.*
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.math.ceil
 
 /** Class to hold absolute layout for a book */
@@ -26,7 +29,10 @@ data class BookLayout(
     val rtl: Boolean
 ) {
     companion object {
+        // Maximum height for a field
         const val MAX_HEIGHT = Float.MAX_VALUE / 4.0f
+        // Minimum width for overlapping areas
+        const val MIN_WIDTH = 36.0f
     }
 
     /** Interface for fields and the parent to calculate a layout */
@@ -35,12 +41,18 @@ data class BookLayout(
         val position: PointF
         /** The bounds of the field/parent in the fields coordinates */
         val bounds: RectF
+        /** The bounds of the field/parent including margins */
+        val marginBounds: RectF
         /** The offset of the top baseline from the bounds top */
         val baseline: Float
         /** True to layout right to left */
         val rtl: Boolean
         /** alignment criteria for the field */
-        val alignment: MutableMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
+        val alignment: Map<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
+        /** Layouts we need to check that may overlap this one */
+        val overlapping: Set<LayoutBounds>
+        /** Last set of overlapping rectangles */
+        val overlaps: List<RectF>
         /** The field/parent margins. Left is the start margin and right is the end. */
         val margins: RectF
         /** The description of the field. Null means the BookLayout */
@@ -49,6 +61,11 @@ data class BookLayout(
         var width: Float
         /** The maximum height of the field */
         var height: Float
+
+        /**
+         * Wrap the contents of this field around overlapping fields
+         */
+        fun wrapOverlapping(): Boolean = false
     }
 
     /**
@@ -68,7 +85,7 @@ data class BookLayout(
 
         // Calculate the layout clip rectangle for the layout
         val bookBottom = y + bounds.bottom
-        val clipTop = y.coerceAtLeast(0.0f) - y
+        val clipTop = y.coerceAtLeast(-bounds.top) - y + bounds.top
 
         var clipBottom: Float
         var pos = bookBottom.coerceAtMost(columnHeight) -  y
@@ -100,7 +117,7 @@ data class BookLayout(
 
         // The bottom clip is set to exclude lines on the boundary
         clip.bottom = columns.maxOf {
-            if (it.verticalClip(clip.top, clipBottom - clipTop + clip.top, true))
+            if (it.verticalClip(clip.top, clipBottom, true))
                 it.clip.bottom + it.position.y
             else
                 bounds.top
@@ -241,21 +258,24 @@ data class BookLayout(
         /** @inheritDoc */
         override val position: PointF = PointF(0.0f, 0.0f)
         /** @inheritDoc */
-        override val bounds: RectF
-            get() = this@BookLayout.bounds
+        override val bounds: RectF = this@BookLayout.bounds
         /** @inheritDoc */
-        override val baseline: Float
-            get() = 0.0f
+        override val marginBounds: RectF = this@BookLayout.marginBounds
+        /** @inheritDoc */
+        override val baseline: Float = 0.0f
         /** @inheritDoc */
         override val rtl: Boolean
             get() = this@BookLayout.rtl
         /** @inheritDoc */
         override val alignment = HashMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>()
         /** @inheritDoc */
+        override val overlapping: Set<LayoutBounds> = emptySet()
+        /** @inheritDoc */
+        override val overlaps: List<RectF> = emptyList()
+        /** @inheritDoc */
         override val margins: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** @inheritDoc */
-        override val description: LayoutDescription.FieldLayoutDescription?
-            get() = null
+        override val description: LayoutDescription.FieldLayoutDescription? = null
         /** @inheritDoc */
         override var width: Float
             get() = columnWidth
@@ -344,7 +364,9 @@ data class BookLayout(
         /** The position of the field in the book layout */
         override val position: PointF = PointF(0.0f, 0.0f)
         /** The bounds of the field relative to the position */
-        override var bounds: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
+        override val bounds: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
+        /** The bounds of the field/parent including margins */
+        override val marginBounds: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** Height of the field */
         override var height: Float = MAX_HEIGHT
         /** Current clip rectangle, relative to the position */
@@ -354,7 +376,11 @@ data class BookLayout(
         /** True means text is right to left */
         override var rtl: Boolean = false
         /** alignment criteria for the field */
-        override val alignment: MutableMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>> = LinkedHashMap()
+        override lateinit var alignment: Map<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
+        /** Layouts we need to check that may overlap this one */
+        override lateinit var overlapping: Set<LayoutBounds>
+        /** List of overlapping rectangles */
+        override var overlaps: List<RectF> = emptyList()
         /** The field margins */
         override val margins: RectF
             get() = description.margin
@@ -438,8 +464,6 @@ data class BookLayout(
     ): DrawLayout(printer, description, width) {
         protected inner class LayoutSpan(
             val position: PointF,
-            val startSpan: Int,
-            val endSpan: Int,
             val layout: StaticLayout
         ) {
             val bounds: RectF = RectF().apply {
@@ -478,6 +502,7 @@ data class BookLayout(
                 canvas.save()
                 canvas.translate(position.x, position.y)
                 canvas.clipRect(clip)
+                //canvas.drawColor(0x400000ff)  // Color clip region for debugging
                 for (span in textSpans) {
                     canvas.translate(span.position.x - lastX, span.position.y - lastY)
                     lastX = span.position.x
@@ -491,8 +516,20 @@ data class BookLayout(
         /**
          * Create the StaticLayout from the current values
          */
-        protected fun createInitialLayout() {
+        protected fun createInitialSpans() {
+            // Clear the spans
             textSpans.clear()
+            // Add the initial span to the list of spans
+            textSpans.add(LayoutSpan(PointF(0.0f, 0.0f), createInitialLayout()))
+            // Clear the overlaps because the current spans are for no overlaps
+            if (overlaps.isNotEmpty())
+                overlaps = emptyList()
+        }
+
+        /**
+         * Create the StaticLayout from the current values
+         */
+        private fun createInitialLayout(): StaticLayout {
             // Build the static layout
             var layout = StaticLayout.Builder.obtain(
                 text, 0, text.length, paint,
@@ -519,8 +556,8 @@ data class BookLayout(
                         )
                     ).build()
             }
-            // Add the span to the list of spans
-            textSpans.add(LayoutSpan(PointF(0.0f, 0.0f), 0, text.length, layout))
+            // Return the layout
+            return layout
         }
 
         /** @inheritDoc */
@@ -531,7 +568,7 @@ data class BookLayout(
                     super.width = v
                     // Create a new StaticLayout
                     if (it != v)
-                        createInitialLayout()
+                        createInitialSpans()
                 }
             }
 
@@ -543,7 +580,7 @@ data class BookLayout(
                     super.height = v
                     // Create a new StaticLayout
                     if (it != v)
-                        createInitialLayout()
+                        createInitialSpans()
                 }
             }
 
@@ -552,14 +589,310 @@ data class BookLayout(
             return textSpans.asSequence().map { span ->
                 val spanLayout = span.layout
                 (0 until spanLayout.lineCount).asSequence()
-                    .filter { span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it)) >= clip.top }
                     .map {
                         Pair(
-                            span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it)),
-                            span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it + 1))
+                            position.y + span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it)),
+                            position.y + span.position.y + printer.verticalPixelsToPoints(spanLayout.getLineTop(it + 1))
                         )
                     }
             }.flatten()
+        }
+
+        /**
+         * Calculate the overlapping rectangles
+         * @return List of rectangles in the field covered by another fields
+         */
+        private fun getOverlaps(): Boolean {
+            // Set the margins for the overlaps
+            val leftMargin = (if (rtl) margins.right else margins.left)
+            val topMargin = margins.top
+            val rightMargin = (if (rtl) margins.left else margins.right)
+            val bottomMargin = margins.bottom
+
+            // Get a list of overlapping fields and sort it vertically
+            val overlapped = overlapping.fold(ArrayList<RectF>()) {list, item ->
+                // If the overlapping field is empty ignore it
+                if (!item.marginBounds.isEmpty) {
+                    val dx = item.position.x - position.x
+                    val dy = item.position.y - position.y
+                    // translate the other field bounds relative to this fields position
+                    val intersection = RectF(
+                        item.marginBounds.left + dx - rightMargin, item.marginBounds.top + dy - bottomMargin,
+                        item.marginBounds.right + leftMargin + dx, item.marginBounds.bottom + dy + topMargin
+                    )
+                    // If they intersect, add the intersection
+                    if (intersection.intersect(0.0f, 0.0f, width, height)) {
+                        // Ignore very small overlaps
+                        if (intersection.width() >= EPSILON && intersection.height() >= EPSILON)
+                            list.add(intersection)
+                    }
+                }
+                list
+            }
+
+            if (overlapped == overlaps)
+                return false
+            overlaps = overlapped
+            return true
+        }
+
+        /**
+         * Subtract the overlapping fields from this field
+         * @return Horizontal stripes that are not overlapping sorted from top to bottom and right to left
+         */
+        private fun createStripes(): Sequence<RectF> {
+            // Sort from top to bottom then start to end
+            val compare = compareBy<RectF>({ it.top }, { it.left }, { it.right })
+            val stripes = TreeSet(compare)
+            // Break all of the overlapping rectangles base on where they are cut by tops and bottoms
+            for (rect in overlaps) {
+                // First use rect to split any rectangles already in the set
+                // along its top and bottom
+                for (other in stripes) {
+                    // We only need to split other if ot overlaps rect vertically
+                    // and other isn't contained in rect
+                    if ((rect.top > other.top && rect.top < other.bottom) ||
+                        (rect.bottom > other.top && rect.bottom < other.bottom)) {
+                        // Remove the rectangle we are splitting
+                        stripes.remove(other)
+                        // Start splitting at the top
+                        var top = other.top
+                        // If rect.top > top, then split at rect.top
+                        if (rect.top > top) {
+                            stripes.add(RectF(other.left, top, other.right, rect.top))
+                            top = rect.top
+                        }
+                        // If rect.bottom < other.bottom, then split at rect.bottom
+                        if (rect.bottom < other.bottom) {
+                            stripes.add(RectF(other.left, top, other.right, rect.bottom))
+                            top = rect.bottom
+                        }
+                        // Add in the portion at the bottom of other
+                        stripes.add(RectF(other.left, top, other.right, other.bottom))
+                    }
+                }
+
+                // Now split rect along tops and bottoms of rectangles in the set
+                var top = rect.top
+                for (other in stripes) {
+                    // Skip rectangles until we get to one that might overlap
+                    if (other.bottom >= top) {
+                        // We can stop once we get past the bottom of rect.
+                        if (other.top >= rect.bottom)
+                            break
+                        // Split at other top, if it is inside rect
+                        if (other.top > top) {
+                            stripes.add(RectF(rect.left, top, rect.right, other.top))
+                            top = other.top
+                        }
+                        // Split at other bottom, if it is inside rect
+                        if (other.bottom < rect.bottom) {
+                            stripes.add(RectF(rect.left, top, rect.right, other.bottom))
+                            top = other.bottom
+                        }
+                    }
+                }
+                // Add bottom of rect
+                stripes.add(RectF(rect.left, top, rect.right, rect.bottom))
+            }
+
+            return sequence {
+                // The stripe we are working on
+                var top = 0.0f
+                var left = 0.0f
+                var right = width
+                var bottom = 0.0f
+                var gapLeft = width
+                for (rect in stripes) {
+                    // Break if we are done
+                    if (rect.top >= height)
+                        break
+                    // If we are done with this stripe
+                    if (rect.bottom > bottom) {
+                        // If top >= bottom or right <= left, then the stripe is empty
+                        // don't output anything. If gap < width, then the stripe
+                        // has multiple segments and we don't want to output anything, then
+                        if (top < bottom && right > left && gapLeft >= width)
+                            yield(RectF(left, top, right, bottom))
+
+                        // Start the next stripe
+                        top = bottom
+                        bottom = rect.bottom
+                        // if left edge of rect is not at the left edge of the field
+                        // Then the stripe starts at the left edge and goes to the
+                        // left edge of rect.
+                        if (rect.left > EPSILON) {
+                            left = 0.0f
+                            right = rect.left
+                            gapLeft = rect.right
+                        } else {
+                            // Otherwise it starts at rect right and goes
+                            // to the right edge of the fields
+                            left = rect.right
+                            right = width
+                            gapLeft = width
+                        }
+                    }
+
+                    // If there is a vertical gap, output the stripe in the gap
+                    if (rect.top > top) {
+                        yield(RectF(0.0f, top, width, rect.top))
+                        top = rect.top
+                    }
+
+                    // If there is a horizontal gap, then skip the stripe completely
+                    when {
+                        rect.left > gapLeft -> top = bottom
+                        rect.left <= left -> left = rect.right
+                        else -> {
+                            right = rect.right
+                            gapLeft = rect.right
+                        }
+                    }
+                }
+                // If we have a stripe ready then output it
+                if (top < bottom && right > left && gapLeft >= width)
+                    yield(RectF(left, top, right, bottom))
+                // If we run out of stripes, then output the bottom
+                if (bottom < height)
+                    yield(RectF(0.0f, bottom, width, height))
+            }
+        }
+
+        /** @inheritDoc */
+        override fun wrapOverlapping(): Boolean {
+            // If this field doesn't test for overlaps, or the overlaps haven't changed,
+            // then return false
+            if (overlapping.isEmpty() || !getOverlaps())
+                return false
+
+            // Clear existing spans
+            textSpans.clear()
+            // Get the overlapping fields
+            val stripes = createStripes()
+
+            var left = 0.0f         // Left side of current stripe
+            var top = 0.0f          // Top of current stripe
+            var right = width       // Right side of current stripe
+            var bottom = 0.0f       // Bottom of current stripe
+            var start = 0           // Start in text string of current layout
+            var layout: StaticLayout? = null    // The current layout
+
+            /**
+             * Create a layout based on the current variables
+             * @return The layout or null if we are at the end of the text string
+             */
+            fun buildLayout(): StaticLayout? {
+                // If we are at the end of the text string, return null
+                if (start >= text.length)
+                    return null
+                // Return the layout
+                return StaticLayout.Builder.obtain(text, start, text.length, paint,
+                    printer.pointsToHorizontalPixels(right - left)
+                ).build().also {
+                    // Set the new layout in the layout variable
+                    layout = it
+                }
+            }
+
+            /**
+             * Add a span to textSpans
+             */
+            fun addSpan(bottomLine: Int): LayoutSpan? {
+                // Don't add a span if layout is null
+                return layout?.let { l ->
+                    // Get the end character offset of the bottom line
+                    var end = l.getLineEnd(bottomLine)
+                    // Create a layout with from start to end
+                    val spanLayout = StaticLayout.Builder.obtain(text, start, end, paint, l.width).build()
+                    val span = LayoutSpan(PointF(left, top), spanLayout)
+                    // Add a span with the layout
+                    textSpans.add(span)
+                    // Skip whitespace, if any
+                    while (end < text.length && text[end].isWhitespace())
+                        ++end
+                    // Set the start character of the next span
+                    start = end
+                    // Clear the layout
+                    layout = null
+                    span
+                }
+            }
+
+            // Loop over the stripes, accumulate them and add spans to fill them
+            outer@ for (stripe in stripes) {
+                // If there is a gap in the stripes, then start at this stripe
+                if (stripe.top > bottom + EPSILON) {
+                    left = stripe.left
+                    right = stripe.right
+                    top = stripe.top
+                } else {
+                    // Accumulate stripe.
+                    left = left.coerceAtLeast(stripe.left)
+                    right = right.coerceAtMost(stripe.right)
+                }
+                bottom = stripe.bottom
+
+                // If the width get less than the minimum, then skip the accumulated
+                // stripes and start over
+                if (right - left < MIN_WIDTH) {
+                    // Start over at the bottom of this stripe
+                    left = 0.0f
+                    right = width
+                    top = stripe.bottom
+                    continue
+                }
+
+                while (true) {
+                    // Create a layout for the rest of the text, break when we are at the end
+                    val l = if (printer.pointsToHorizontalPixels(right - left) != layout?.width)
+                        buildLayout() ?: break@outer
+                    else
+                        layout ?: buildLayout() ?: break@outer
+
+                    // Continue collecting stripes until we have enough space for at least one line
+                    if (printer.verticalPixelsToPoints(l.getLineBottom(0)) > bottom - top)
+                        break
+
+                    // We have one or more lines, add some spans
+                    val span = if (left > stripe.left || right < stripe.right) {
+                        // This stripe is bigger than the accumulated stripes
+                        // Output the single line at the top and try to
+                        // output more spans using the larger stripe
+                        addSpan(0)
+                    } else {
+                        // Output as many spans as possible
+                        // Find the line at the bottom of the accumulated stripes
+                        var bottomLine = l.getLineForVertical(printer.pointsToVerticalPixels(bottom - top))
+                        if (printer.verticalPixelsToPoints(l.getLineBottom(bottomLine)) > bottom - top + EPSILON)
+                            --bottomLine
+                        addSpan(bottomLine)
+                    }
+                    val lineBottom = span?.bounds?.bottom?: 0.0f
+                    // If the line is at the bottom of the stripe, Then we are done with this stripe
+                    if (lineBottom >= bottom - EPSILON) {
+                        // Expand to full column for next stripe
+                        left = 0.0f
+                        right = width
+                        top = bottom
+                        break
+                    }
+                    // Try to add another span in the stripe
+                    left = stripe.left
+                    right = stripe.right
+                    top = lineBottom
+                }
+            }
+
+            // Return true if the bounds have changed
+            calculateBounds()
+            marginBounds.set(
+                bounds.left - if (rtl) margins.right else margins.left,
+                bounds.top - margins.top,
+                bounds.right + if (rtl) margins.left else margins.right,
+                bounds.bottom + margins.bottom
+            )
+            return true
         }
 
         /**
@@ -575,7 +908,7 @@ data class BookLayout(
             if (textSpans.isEmpty())
                 return 0.0f
             // Get the span with the boundary line
-            val span = textSpans.indexOfFirst { boundary < it.position.y }.let {
+            val span = textSpans.indexOfFirst { boundary <= it.position.y }.let {
                 if (it == -1)
                     textSpans.last()
                 else
@@ -628,7 +961,7 @@ data class BookLayout(
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
             if (textSpans.isEmpty())
-                createInitialLayout()
+                createInitialSpans()
             setContent()
         }
 
@@ -681,7 +1014,7 @@ data class BookLayout(
             // Get the column value
             text = column.desc.getDisplayValue(book)
             // Create the StaticLayout
-            createInitialLayout()
+            createInitialSpans()
             // Fill in the bounds and baseline of the field
             super.setContent()
         }
@@ -801,8 +1134,10 @@ data class BookLayout(
         override fun getBreakPosition(y: Float, columnHeight: Float): Float {
             // If the bottom of the column overlaps the bitmap,
             // then force it to the top of the next column
-            return if (columnHeight > bounds.top + position.y && columnHeight < bounds.bottom + position.y)
-                bounds.top
+            val top = bounds.top + position.y
+            val bottom = bounds.bottom + position.y
+            return if (y <= top && columnHeight < bottom)
+                top
             else
                 columnHeight
         }

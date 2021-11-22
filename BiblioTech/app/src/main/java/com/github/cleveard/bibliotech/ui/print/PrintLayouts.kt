@@ -106,11 +106,18 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb),
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, largeThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                        )
+                    ),
+                    // Title is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                title.overlapping = setOf(largeThumb)
                 subtitle.layoutAlignment = setOf(
                     // Subtitle is below the title
                     LayoutDescription.VerticalLayoutAlignment(
@@ -123,10 +130,18 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, title)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                        )
+                    ),
+                    // Subtitle is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                subtitle.overlapping = setOf(largeThumb)
                 by.layoutAlignment = setOf(
                     // By: is below the subtitle
                     LayoutDescription.VerticalLayoutAlignment(
@@ -139,10 +154,18 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, title)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                        )
+                    ),
+                    // By: is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                by.overlapping = setOf(largeThumb)
                 authors.layoutAlignment = setOf(
                     // Authors baseline is aligned with By:
                     LayoutDescription.VerticalLayoutAlignment(
@@ -155,28 +178,42 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, by)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                        )
+                    ),
+                    // Authors is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                authors.overlapping = setOf(largeThumb, by)
                 tagsLabel.layoutAlignment = setOf(
                     // Tags: is below the authors and icon
                     LayoutDescription.VerticalLayoutAlignment(
                         LayoutDescription.VerticalLayoutDimension.Type.Top,
                         listOf(
-                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, authors),
-                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, smallThumb)
+                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, authors)
                         )
                     ),
-                    // Tags: is aligned with parent start or large thumbnail end
+                    // Tags: is aligned with parent start
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null),
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, largeThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                        )
+                    ),
+                    // Tags: is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                tagsLabel.overlapping = setOf(largeThumb)
                 tags.layoutAlignment = setOf(
                     // Tags baseline is aligned with Tags:
                     LayoutDescription.VerticalLayoutAlignment(
@@ -189,10 +226,18 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, tagsLabel)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                        )
+                    ),
+                    // Tags is to the left of the column end
+                    LayoutDescription.HorizontalLayoutAlignment(
+                        LayoutDescription.HorizontalLayoutDimension.Type.End,
+                        listOf(
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
                         )
                     )
                 )
+                tags.overlapping = setOf(largeThumb, tagsLabel)
             }
         )
     )

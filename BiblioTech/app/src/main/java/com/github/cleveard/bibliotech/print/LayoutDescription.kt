@@ -64,19 +64,23 @@ data class LayoutDescription(
         // Create the layout alignment dependencies in the layout
         for (dl in bookLayout.columns) {
             // Get the alignment for the field in a local variable
-            val align = dl.alignment
-            // For each layout alignment description
-            for (entry in dl.description.layoutAlignment) {
-                // Take the alignment dependencies
-                entry.dimensions.asSequence().map {
-                    // A map them to a layout dimension on the field
-                    map[it.alignTo]?.let {b -> it.align.createAlignment(b) }
-                }.filterNotNull().toList().also {list ->
-                    // If the list isn't empty add it to the field alignment
-                    if (list.isNotEmpty())
-                        align[entry.align] = list
+            dl.alignment = HashMap<LayoutAlignmentType, List<BookLayout.LayoutDimension>>().also {align ->
+                // For each layout alignment description
+                for (entry in dl.description.layoutAlignment) {
+                    // Take the alignment dependencies
+                    entry.dimensions.asSequence().map {
+                        // A map them to a layout dimension on the field
+                        map[it.alignTo]?.let { b -> it.align.createAlignment(b) }
+                    }.filterNotNull().toList().also { list ->
+                        // If the list isn't empty add it to the field alignment
+                        if (list.isNotEmpty())
+                            align[entry.align] = list
+                    }
                 }
             }
+
+            dl.overlapping = dl.description.overlapping?.asSequence()?.map { map[it]!! }?.toSet()?: emptySet()
+
         }
 
         // return the layout
@@ -398,6 +402,9 @@ data class LayoutDescription(
     ) {
         /** The layout alignment for the field */
         lateinit var layoutAlignment: Set<LayoutAlignment>
+
+        /** Set of fields that we need to check overlapping this field */
+        var overlapping: Set<FieldLayoutDescription>? = null
 
         /**
          * Get/Fill the layout for a field

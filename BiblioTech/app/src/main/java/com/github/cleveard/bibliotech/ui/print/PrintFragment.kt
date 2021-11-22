@@ -27,6 +27,7 @@ import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
+import com.github.cleveard.bibliotech.print.PDFPrinter
 import com.github.cleveard.bibliotech.print.PageLayoutHandler
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
@@ -854,10 +855,16 @@ class PrintFragment : Fragment() {
             pageJob = coroutineContext[Job]
             try {
                 // Calculate the pages
-                val pages = if (viewModel.pdfPrinter.bookList != null)
-                    viewModel.pdfPrinter.layoutPages()
-                else
+                val pages = try {
+                    if (viewModel.pdfPrinter.bookList != null)
+                        viewModel.pdfPrinter.layoutPages()
+                    else
+                        null
+                } catch (e: PDFPrinter.NoPagesException) {
                     null
+                } catch (e: PDFPrinter.NoBooksException) {
+                    null
+                }
                 // Set the pages in the preview view and notify changes
                 previewAdapter.submitList(pages)
                 @Suppress("NotifyDataSetChanged")

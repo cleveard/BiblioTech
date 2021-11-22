@@ -9,7 +9,7 @@ import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 
-const val EPSILON = 1.0e-3
+const val EPSILON = 1.0e-3f
 
 /**
  * The class that calculates the layouts of books
@@ -315,9 +315,15 @@ class PageLayoutHandler(
      * Find overlapping fields and adjust their width
      */
     private fun resolveOverlaps(): Boolean {
-        // Not implemented yet. It isn't needed for straight
-        // forward layouts.
-        return false
+        var recalculate = false
+        // Clear the layout working variables
+        clear()
+        // Horizontally position each field in the layout
+        for (dl in layout.columns) {
+            // Calculate the layout for a field in the book
+            recalculate = wrapOverlapping(dl) || recalculate
+        }
+        return recalculate
     }
 
     /**
@@ -333,7 +339,7 @@ class PageLayoutHandler(
         val target = LayoutDescription.AlignmentTarget()
         // Move all of the bounds to (0,0)
         for (dl in layout.columns) {
-            dl.bounds.set(0.0f, 0.0f, dl.bounds.width(), dl.bounds.height())
+            dl.position.set(0.0f, 0.0f)
         }
 
         // Clear the layout working variables
@@ -352,17 +358,22 @@ class PageLayoutHandler(
         for (dl in layout.columns) {
             // Calculate the layout for a field in the book
             recalculate = calculateLayout(dl, false, target) || recalculate
+            dl.marginBounds.set(dl.bounds)
             // If the bounds are empty, don't include margins
             if (!dl.bounds.isEmpty) {
                 // Add the field bounds to the layout bounds
                 layout.bounds.union(dl.bounds.left + dl.position.x, dl.bounds.top + dl.position.y,
                     dl.bounds.right + dl.position.x, dl.bounds.bottom + dl.position.y)
+                dl.marginBounds.left -= if (dl.rtl) dl.margins.right else dl.margins.left
+                dl.marginBounds.top -= dl.margins.top
+                dl.marginBounds.right += if (dl.rtl) dl.margins.left else dl.margins.right
+                dl.marginBounds.bottom += dl.margins.bottom
                 // Add the field with margin bounds to the margin bounds
                 layout.marginBounds.union(
-                    dl.bounds.left - if (dl.rtl) dl.margins.right else dl.margins.left + dl.position.x,
-                    dl.bounds.top - dl.margins.top + dl.position.y,
-                    dl.bounds.right + if (dl.rtl) dl.margins.left else dl.margins.right + dl.position.x,
-                    dl.bounds.bottom + dl.margins.bottom + dl.position.y
+                    dl.marginBounds.left + dl.position.x,
+                    dl.marginBounds.top + dl.position.y,
+                    dl.marginBounds.right + dl.position.x,
+                    dl.marginBounds.bottom + dl.position.y
                 )
             }
         }
@@ -400,7 +411,7 @@ class PageLayoutHandler(
                 else -> 0.0f
             } + dl.margins.right
             // Calculate the position to move bounds.right to max
-            dl.position.x = max - dl.bounds.right
+            dl.position.x = max
             // If the bounds are empty to include the margins
             if (dl.bounds.isEmpty)
                 dl.position.x += dl.margins.left
@@ -420,7 +431,7 @@ class PageLayoutHandler(
                 else -> columnWidth
             } - dl.margins.right
             // Calculate the position to move bounds.left to min
-            dl.position.x = min - dl.bounds.left
+            dl.position.x = min
             // If the bounds are empty to include the margins
             if (dl.bounds.isEmpty)
                 dl.position.x -= dl.margins.left
@@ -458,7 +469,7 @@ class PageLayoutHandler(
 
         // Calculate the adjustment to move the top to min. If the bounds are empty
         // make sure the margins are not included
-        dl.position.y = (if (dl.bounds.isEmpty) min - dl.margins.top else min) - dl.bounds.top
+        dl.position.y = if (dl.bounds.isEmpty) min - dl.margins.top else min
 
         // Don't change the height unless both min and max spec are given
         if (minSpec == null || maxSpec == null)
@@ -480,7 +491,7 @@ class PageLayoutHandler(
      * @param target Combined result of the layout criteria.
      *               Initialized at the top level, and reused
      *               when called recursively
-     * @return The input layout bounds
+     * @return True if the layout needs to be recalculated
      * This method is called recursively to calculate the positions
      * of fields the current fields depends on
      */
@@ -517,5 +528,30 @@ class PageLayoutHandler(
             alignHorizontalBounds(dl, target.left, target.right, target.hCenter, rtl) || recalculate
         else
             alignVerticalBounds(dl, target.top, target.bottom, target.vCenter) || recalculate
+    }
+
+    /**
+     * Wrap a field around overlapping fields
+     * @param dl The field
+     * @return True if the layout needs to be recalculated
+     * This method is called recursively to calculate the positions
+     * of fields the current fields depends on
+     */
+    private fun wrapOverlapping(
+        dl: BookLayout.LayoutBounds
+    ): Boolean {
+        // If the layout has already been calculated, then just return its bounds
+        if (calculated.contains(dl))
+            return false
+
+        var recalculate = false
+        // Mark the layout as calculated. This is used to prevent infinite cycles
+        calculated.add(dl)
+        // Calculate all of the dependencies
+        dl.overlapping.forEach {
+            recalculate = wrapOverlapping(it) || recalculate
+        }
+
+        return dl.wrapOverlapping() || recalculate
     }
 }
