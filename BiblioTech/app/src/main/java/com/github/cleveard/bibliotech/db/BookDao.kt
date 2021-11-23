@@ -494,6 +494,8 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param volumeId The volume id
      * @param sourceId The source id
      */
+    @Transaction
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(value = "SELECT * FROM $BOOK_TABLE WHERE ( ( $VOLUME_ID_COLUMN = :volumeId AND $SOURCE_ID_COLUMN = :sourceId ) ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): BookAndAuthors?
 
