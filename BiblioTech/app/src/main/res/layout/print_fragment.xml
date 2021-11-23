@@ -105,27 +105,25 @@
             android:layout_height="wrap_content"
             android:text="@string/orphans"
             android:textSize="16sp"
-            app:layout_constraintBottom_toBottomOf="@+id/orphans"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="@+id/orphans" />
+            android:layout_marginTop="8dp"
+            app:layout_constraintTop_toBottomOf="@+id/columns"
+            app:layout_constraintStart_toStartOf="parent" />
 
         <TextView
             android:id="@+id/orphans"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginStart="16dp"
             android:textColor="@color/colorPrimary"
             android:textSize="16sp"
-            app:layout_constraintStart_toEndOf="@+id/orphans_label"
-            app:layout_constraintTop_toBottomOf="@+id/columns" />
+            app:layout_constraintStart_toStartOf="@+id/orphans_label"
+            app:layout_constraintTop_toBottomOf="@+id/orphans_label" />
 
         <TextView
             android:id="@+id/size"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/colorPrimary"
-            android:layout_marginTop="8dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintHorizontal_bias="0.55"
             app:layout_constraintTop_toBottomOf="@+id/orphans" />
