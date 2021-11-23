@@ -277,32 +277,42 @@ class PDFPrinter(
 
                 // Create a layout handler to layout the books for printing
                 val handler = PageLayoutHandler(this, pageDrawBounds)
+                // When changing the layout I am getting cases where the pageRanges
+                // goes beyond the number of pages that were laid out. If we don't
+                // output all of the pages, then the print manager detects that as
+                // an error. So we always loop over the pages in the page range
+                var nextPage = Int.MIN_VALUE
+                for (range in pageRanges.sortedBy { it.start }) {
+                    if (range.end >= nextPage) {
+                        // For each page
+                        for (pageNumber in range.start.coerceAtLeast(nextPage)..range.end) {
+                            nextPage = pageNumber + 1
+                            // If the page is not in the range we are printing, go to the next page
+                            if (pageRanges.indexOfFirst { it.start <= pageNumber && it.end >= pageNumber } < 0)
+                                continue
+                            // If we are continuing a range, then just bump the end
+                            if (end + 1 == pageNumber)
+                                ++end
+                            else {
+                                // Write out the current range, if there is one
+                                if (start >= 0)
+                                    writtenRanges.add(PageRange(start, end))
+                                // Set the start and end of the current range
+                                start = pageNumber
+                                end = pageNumber
+                            }
 
-                // For each page
-                for (pageNumber in pages.indices) {
-                    // If the page is not in the range we are printing, go to the next page
-                    if (pageRanges.indexOfFirst { it.start <= pageNumber && it.end >= pageNumber } < 0)
-                        continue
-                    // If we are continuing a range, then just bump the end
-                    if (end + 1 == pageNumber)
-                        ++end
-                    else {
-                        // Write out the current range, if there is one
-                        if (start >= 0)
-                            writtenRanges.add(PageRange(start, end))
-                        // Set the start and end of the current range
-                        start = pageNumber
-                        end = pageNumber
+                            // Get the page
+                            val page = doc.startPage(pageNumber)
+
+                            // Draw the page for printing
+                            if (pageNumber < pages.size)
+                                drawPage(page.canvas, pages[pageNumber], books, handler)
+
+                            // Finish the page
+                            doc.finishPage(page)
+                        }
                     }
-
-                    // Get the page
-                    val page = doc.startPage(pageNumber)
-
-                    // Draw the page for printing
-                    drawPage(page.canvas, pages[pageNumber], books, handler)
-
-                    // Finish the page
-                    doc.finishPage(page)
                 }
 
                 // save the last range we printed

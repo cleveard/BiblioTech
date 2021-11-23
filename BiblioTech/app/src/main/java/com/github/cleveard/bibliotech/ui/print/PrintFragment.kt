@@ -655,29 +655,6 @@ class PrintFragment : Fragment() {
             }
         }
 
-        fun changeMediaSize(size: PrintAttributes.MediaSize, portrait: Boolean) {
-            val oldAttributes = viewModel.pdfPrinter.attributes
-            // If the paper size is square, or the orientation isn't changing
-            // then return because there is nothing to do
-            val newSize = if (size.widthMils == size.heightMils || portrait == (size.heightMils > size.widthMils))
-                size
-            else {
-                PrintAttributes.MediaSize(size.id, size.getLabel(requireContext().packageManager), size.heightMils, size.widthMils)
-            }
-
-            // Duplicate the current attributes, but change the media size
-            val newAttributes = PrintAttributes.Builder()
-                .setColorMode(oldAttributes.colorMode)
-                .setDuplexMode(oldAttributes.duplexMode)
-                .setMediaSize(newSize)
-                .setMinMargins(oldAttributes.minMargins!!)
-                .setResolution(oldAttributes.resolution!!)
-                .build()
-            // set the new attributes
-            viewModel.pdfPrinter.changeLayout(newAttributes)
-            calculatePages()
-        }
-
         // Setup the paper size spinner
         setupSpinner(
             view.findViewById(R.id.paper_size),
@@ -842,6 +819,35 @@ class PrintFragment : Fragment() {
     }
 
     /**
+     * Change the media size for the print preview
+     * @param size The new media size
+     * @param portrait The new portrait setting
+     */
+    private fun changeMediaSize(size: PrintAttributes.MediaSize, portrait: Boolean) {
+        val oldAttributes = viewModel.pdfPrinter.attributes
+        // If the paper size is square, or the orientation isn't changing
+        // then the size is OK, otherwise swap the width and height to match the portrait setting
+        val newSize = if (size.widthMils == size.heightMils || portrait == (size.heightMils > size.widthMils))
+            size
+        else {
+            PrintAttributes.MediaSize(size.id, size.getLabel(requireContext().packageManager), size.heightMils, size.widthMils)
+        }
+
+        // Duplicate the current attributes, but change the media size
+        val newAttributes = PrintAttributes.Builder()
+            .setColorMode(oldAttributes.colorMode)
+            .setDuplexMode(oldAttributes.duplexMode)
+            .setMediaSize(newSize)
+            .setMinMargins(oldAttributes.minMargins!!)
+            .setResolution(oldAttributes.resolution!!)
+            .build()
+
+        // set the new attributes
+        viewModel.pdfPrinter.changeLayout(newAttributes)
+        calculatePages()
+    }
+
+    /**
      * Calculate the pages using the current parameters
      */
     private fun calculatePages() {
@@ -893,10 +899,28 @@ class PrintFragment : Fragment() {
                 val context = requireContext()
                 val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
                 val jobName = "${context.getString(R.string.app_name)} Document"
+                val mediaSize = viewModel.pdfPrinter.attributes.mediaSize
 
                 // Start the print job
-                printManager.print(jobName, BookPrintAdapter(viewModel.pdfPrinter,
-                    context, viewModel.viewModelScope), null)
+                printManager.print(jobName, object: BookPrintAdapter(viewModel.pdfPrinter,
+                    context, viewModel.viewModelScope) {
+                    override fun onFinish() {
+                        super.onFinish()
+                        viewModel.pdfPrinter.attributes.mediaSize?.let {
+                            if (mediaSize != it) {
+                                val orientationSpinner = requireView().findViewById<Spinner>(R.id.orientation)
+                                val portrait = it.isPortrait
+                                if (portrait != (orientationSpinner.selectedItemPosition == 0))
+                                    orientationSpinner.setSelection(if (portrait) 0 else 1)
+                                val paperSizeSpinner = requireView().findViewById<Spinner>(R.id.paper_size)
+                                val id = it.id
+                                val position = paperSizes.indexOfFirst {size -> id == size.id }
+                                paperSizeSpinner.setSelection(position)
+                                changeMediaSize(it, portrait)
+                            }
+                        }
+                    }
+                }, viewModel.pdfPrinter.attributes)
             }
         }
     }

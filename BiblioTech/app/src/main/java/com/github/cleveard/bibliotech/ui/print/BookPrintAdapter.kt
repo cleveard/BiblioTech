@@ -19,7 +19,7 @@ import java.lang.Exception
  * @param context The context used to create the pdf document
  * @param scope The coroutine scope used by the adapter
  */
-class BookPrintAdapter(
+open class BookPrintAdapter(
     /** The printer used for printing */
     private val pdfPrinter: PDFPrinter,
     /** The context used to create the pdf document */
