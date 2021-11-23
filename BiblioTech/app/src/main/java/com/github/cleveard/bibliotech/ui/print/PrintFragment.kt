@@ -412,7 +412,7 @@ class PrintFragment : Fragment() {
             val bitmap = if (width == 0 || h == 0)
                 null
             else
-                Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888, true)
+                Bitmap.createBitmap(width * 2, h * 2, Bitmap.Config.ARGB_8888, true)
             // Set the bitmap on the image view
             val imageView = itemView.findViewById<ImageView>(R.id.preview_page)
             imageView.setImageBitmap(bitmap)
