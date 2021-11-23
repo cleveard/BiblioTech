@@ -1,6 +1,7 @@
 package com.github.cleveard.bibliotech.print
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.RectF
@@ -22,8 +23,10 @@ import kotlin.math.roundToInt
 /** Class for printing to a PDF */
 class PDFPrinter(
     private val layouts: PrintLayouts,
-    private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?
+    private val getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?,
+    private val preferences: SharedPreferences
 ): Closeable {
+    val preferenceEditor: SharedPreferences.Editor = preferences.edit()
     class NoPagesException: IllegalStateException("No pages were found to print")
     class NoBooksException: IllegalStateException("A list of books must be selected to print")
     /** The pdf document we are printing to */
@@ -43,13 +46,20 @@ class PDFPrinter(
         }
 
     /** The page margins */
-    private val margins: RectF = RectF(72.0f, 72.0f, 72.0f, 72.0f)
+    private val margins: RectF = RectF(
+        preferences.getFloat(PREF_MARGINS_LEFT, 72.0f),
+        preferences.getFloat(PREF_MARGINS_TOP, 72.0f),
+        preferences.getFloat(PREF_MARGINS_RIGHT, 72.0f),
+        preferences.getFloat(PREF_MARGINS_BOTTOM, 72.0f)
+    )
+
     /** The print attributes */
     var attributes: PrintAttributes = defaultAttributes
         private set(v) {
             // If the print attributes change, reprint the document
-            if (v != field)
+            if (v != field) {
                 invalidateLayout()
+            }
             field = v
         }
     /** The list of books */
@@ -62,40 +72,79 @@ class PDFPrinter(
     val pageCount: Int
         get() = pages?.size?: 0
     /** Distance in points to separate the books horizontally */
-    var horizontalSeparation: Float = 18.0f
+    var horizontalSeparation: Float = preferences.getFloat(PREF_HORIZONTAL_SEPERATION, 18.0f)
         // If the horizontal separation changes, reprint the document
-        set(v) { if (v != field) invalidateLayout(); field = v }
+        set(v) {
+            if (v != field) {
+                invalidateLayout()
+                preferenceEditor.putFloat(PREF_HORIZONTAL_SEPERATION, v)
+                preferenceEditor.commit()
+            }
+            field = v
+        }
     /** Distance in points to separate print columns vertically */
-    var verticalSeparation: Float = 9.0f
+    var verticalSeparation: Float = preferences.getFloat(PREF_VERTICAL_SEPARATION, 9.0f)
         // If the vertical separation changes, reprint the document
-        set(v) { if (v != field) invalidateLayout(); field = v }
+        set(v) {
+            if (v != field) {
+                invalidateLayout()
+                preferenceEditor.putFloat(PREF_VERTICAL_SEPARATION, v)
+                preferenceEditor.commit()
+            }
+            field = v
+        }
     /** The bounds of the drawing area on the page */
     val pageDrawBounds = RectF()
     /**
      * The width of a separator line
      * Set to 0 to prevent the line from printing
      */
-    var separatorLineWidth: Float = 0.5f
+    var separatorLineWidth: Float = preferences.getFloat(PREF_SEP_LINE_WIDTH, 0.5f)
         // If the separator line changes, reprint the document
-        set(v) { if (v != field) invalidateLayout(); field = v }
+        set(v) {
+            if (v != field) {
+                invalidateLayout()
+                preferenceEditor.putFloat(PREF_SEP_LINE_WIDTH, v)
+                preferenceEditor.commit()
+            }
+            field = v
+        }
     /** The number of print columns */
-    var numberOfColumns: Int = 2
+    var numberOfColumns: Int = preferences.getInt(PREF_NUMBER_OF_COLUMNS, 2)
         // If the number of columns changes, reprint the document
-        set(v) { if (v != field) invalidateLayout(); field = v }
+        set(v) {
+            if (v != field) {
+                invalidateLayout()
+                preferenceEditor.putInt(PREF_NUMBER_OF_COLUMNS, v)
+                preferenceEditor.commit()
+            }
+            field = v
+        }
     /** The smallest number of lines that aren't orphans */
-    var orphans: Int = 1
+    var orphans: Int = preferences.getInt(PREF_ORPHANS, 1)
         // If the orphan count changes, reprint the document
-        set(v) { if (v != field) invalidateLayout(); field = v }
+        set(v) {
+            if (v != field) {
+                invalidateLayout()
+                preferenceEditor.putInt(PREF_ORPHANS, v)
+                preferenceEditor.commit()
+            }
+            field = v
+        }
     /** Set of visible fields in layout */
-    val visibleFields: MutableSet<String> = mutableSetOf(
-        "SmallThumb",
-        Column.TITLE.name,
-        Column.SUBTITLE.name,
-        Column.FIRST_NAME.name
-    )
+    val visibleFields: MutableSet<String> = HashSet<String>().apply {
+        addAll(preferences.getStringSet(PREF_INCLUDED_FIELDS,
+            setOf(
+                "SmallThumb",
+                Column.TITLE.name,
+                Column.SUBTITLE.name,
+                Column.FIRST_NAME.name
+            )
+        )!!)
+    }
     /** The base paint for printing the document */
     val basePaint = TextPaint().apply {
-        textSize = 10.0f
+        textSize = preferences.getFloat(PREF_TEXT_SIZE, 10.0f)
     }
 
     /**
@@ -157,12 +206,16 @@ class PDFPrinter(
 
     /**
      * Change the print attributes and margins
+     * @param context A context to get the media size label
      * @param newAttributes The new print attributes
      * @param newMargins The new margins
      * @return True if the document needs to be reprinted
      */
-    fun changeLayout(newAttributes: PrintAttributes? = null, newMargins: RectF? = null): Boolean {
+    fun changeLayout(context: Context, newAttributes: PrintAttributes? = null, newMargins: RectF? = null): Boolean {
         attributes = newAttributes?: defaultAttributes
+        preferenceEditor.putString(PREF_PAGE_SIZE, attributes.mediaSize?.id?: "")
+        preferenceEditor.putBoolean(PREF_PORTRAIT, attributes.mediaSize?.isPortrait != false)
+        preferenceEditor.putString(PREF_PRINT_PAGE_SIZE_LABEL, attributes.mediaSize?.getLabel(context.packageManager)?: "")
         if (newMargins != null && newMargins != margins) {
             margins.set(newMargins)
             invalidateLayout()
@@ -357,16 +410,31 @@ class PDFPrinter(
         return getThumbnailCallback(bookId, large)
     }
 
-    companion object {
-        /** Default attributes for printing */
-        private val defaultAttributes: PrintAttributes = PrintAttributes.Builder()
-            .setMediaSize(PrintAttributes.MediaSize.NA_LETTER)
-            .setResolution(PrintAttributes.Resolution("1", "300DPI", 300, 300))
-            .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
-            .setMinMargins(PrintAttributes.Margins(500, 500, 500, 500))
-            .setDuplexMode(PrintAttributes.DUPLEX_MODE_NONE)
-            .build()
+    /** Default attributes for printing */
+    private val defaultAttributes: PrintAttributes
+        get() {
+            val id = preferences.getString(PREF_PAGE_SIZE, null)
+            val mediaSize = id?.let {
+                paperSizes.firstOrNull {size -> id == size.id  }
+            }?: PrintAttributes.MediaSize.NA_LETTER
+            val portrait = preferences.getBoolean(PREF_PORTRAIT, mediaSize.isPortrait)
+            // If the paper size is square, or the orientation isn't changing
+            // then the size is OK, otherwise swap the width and height to match the portrait setting
+            val newSize = if (mediaSize.widthMils == mediaSize.heightMils || portrait == (mediaSize.heightMils > mediaSize.widthMils))
+                mediaSize
+            else {
+                PrintAttributes.MediaSize(mediaSize.id, preferences.getString(PREF_PRINT_PAGE_SIZE_LABEL, "")!!, mediaSize.heightMils, mediaSize.widthMils)
+            }
+            return PrintAttributes.Builder()
+                .setMediaSize(newSize)
+                .setResolution(PrintAttributes.Resolution("1", "300DPI", 300, 300))
+                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                .setMinMargins(PrintAttributes.Margins(500, 500, 500, 500))
+                .setDuplexMode(PrintAttributes.DUPLEX_MODE_NONE)
+                .build()
+        }
 
+    companion object {
         /**
          * Convert pixels at a resolution to points
          * @param length Length in pixels
@@ -386,5 +454,104 @@ class PDFPrinter(
         fun pointsToPixels(length: Float, res: Int = 72): Int {
             return ((length * res) / 72.0f).roundToInt()
         }
+
+        val paperSizes = arrayOf(
+            PrintAttributes.MediaSize.NA_FOOLSCAP,
+            PrintAttributes.MediaSize.NA_GOVT_LETTER,
+            PrintAttributes.MediaSize.NA_INDEX_3X5,
+            PrintAttributes.MediaSize.NA_INDEX_4X6,
+            PrintAttributes.MediaSize.NA_INDEX_5X8,
+            PrintAttributes.MediaSize.NA_JUNIOR_LEGAL,
+            PrintAttributes.MediaSize.NA_LEDGER,
+            PrintAttributes.MediaSize.NA_LEGAL,
+            PrintAttributes.MediaSize.NA_LETTER,
+            PrintAttributes.MediaSize.NA_MONARCH,
+            PrintAttributes.MediaSize.NA_QUARTO,
+            PrintAttributes.MediaSize.NA_TABLOID,
+            PrintAttributes.MediaSize.ISO_A0,
+            PrintAttributes.MediaSize.ISO_A1,
+            PrintAttributes.MediaSize.ISO_A10,
+            PrintAttributes.MediaSize.ISO_A2,
+            PrintAttributes.MediaSize.ISO_A3,
+            PrintAttributes.MediaSize.ISO_A4,
+            PrintAttributes.MediaSize.ISO_A5,
+            PrintAttributes.MediaSize.ISO_A6,
+            PrintAttributes.MediaSize.ISO_A7,
+            PrintAttributes.MediaSize.ISO_A8,
+            PrintAttributes.MediaSize.ISO_A9,
+            PrintAttributes.MediaSize.ISO_B0,
+            PrintAttributes.MediaSize.ISO_B1,
+            PrintAttributes.MediaSize.ISO_B10,
+            PrintAttributes.MediaSize.ISO_B2,
+            PrintAttributes.MediaSize.ISO_B3,
+            PrintAttributes.MediaSize.ISO_B4,
+            PrintAttributes.MediaSize.ISO_B5,
+            PrintAttributes.MediaSize.ISO_B6,
+            PrintAttributes.MediaSize.ISO_B7,
+            PrintAttributes.MediaSize.ISO_B8,
+            PrintAttributes.MediaSize.ISO_B9,
+            PrintAttributes.MediaSize.ISO_C0,
+            PrintAttributes.MediaSize.ISO_C1,
+            PrintAttributes.MediaSize.ISO_C10,
+            PrintAttributes.MediaSize.ISO_C2,
+            PrintAttributes.MediaSize.ISO_C3,
+            PrintAttributes.MediaSize.ISO_C4,
+            PrintAttributes.MediaSize.ISO_C5,
+            PrintAttributes.MediaSize.ISO_C6,
+            PrintAttributes.MediaSize.ISO_C7,
+            PrintAttributes.MediaSize.ISO_C8,
+            PrintAttributes.MediaSize.ISO_C9,
+            PrintAttributes.MediaSize.JPN_CHOU2,
+            PrintAttributes.MediaSize.JPN_CHOU3,
+            PrintAttributes.MediaSize.JPN_CHOU4,
+            PrintAttributes.MediaSize.JPN_HAGAKI,
+            PrintAttributes.MediaSize.JIS_B0,
+            PrintAttributes.MediaSize.JIS_B1,
+            PrintAttributes.MediaSize.JIS_B10,
+            PrintAttributes.MediaSize.JIS_B2,
+            PrintAttributes.MediaSize.JIS_B3,
+            PrintAttributes.MediaSize.JIS_B4,
+            PrintAttributes.MediaSize.JIS_B5,
+            PrintAttributes.MediaSize.JIS_B6,
+            PrintAttributes.MediaSize.JIS_B7,
+            PrintAttributes.MediaSize.JIS_B8,
+            PrintAttributes.MediaSize.JIS_B9,
+            PrintAttributes.MediaSize.JIS_EXEC,
+            PrintAttributes.MediaSize.JPN_KAHU,
+            PrintAttributes.MediaSize.JPN_KAKU2,
+            PrintAttributes.MediaSize.JPN_OUFUKU,
+            PrintAttributes.MediaSize.JPN_YOU4,
+            PrintAttributes.MediaSize.OM_DAI_PA_KAI,
+            PrintAttributes.MediaSize.OM_JUURO_KU_KAI,
+            PrintAttributes.MediaSize.OM_PA_KAI,
+            PrintAttributes.MediaSize.PRC_1,
+            PrintAttributes.MediaSize.PRC_10,
+            PrintAttributes.MediaSize.PRC_16K,
+            PrintAttributes.MediaSize.PRC_2,
+            PrintAttributes.MediaSize.PRC_3,
+            PrintAttributes.MediaSize.PRC_4,
+            PrintAttributes.MediaSize.PRC_5,
+            PrintAttributes.MediaSize.PRC_6,
+            PrintAttributes.MediaSize.PRC_7,
+            PrintAttributes.MediaSize.PRC_8,
+            PrintAttributes.MediaSize.PRC_9,
+            PrintAttributes.MediaSize.ROC_16K,
+            PrintAttributes.MediaSize.ROC_8K
+        )
+
+        private const val PREF_MARGINS_LEFT = "print_margins_left"
+        private const val PREF_MARGINS_TOP = "print_margins_top"
+        private const val PREF_MARGINS_RIGHT = "print_margins_right"
+        private const val PREF_MARGINS_BOTTOM = "print_margins_bottom"
+        private const val PREF_HORIZONTAL_SEPERATION = "print_horizontal_separation"
+        private const val PREF_VERTICAL_SEPARATION = "print_vertical_separation"
+        private const val PREF_SEP_LINE_WIDTH = "print_separator_line_width"
+        private const val PREF_NUMBER_OF_COLUMNS = "print_number_of_columns"
+        private const val PREF_ORPHANS = "print_orphans"
+        private const val PREF_PAGE_SIZE = "print_page_size"
+        private const val PREF_PRINT_PAGE_SIZE_LABEL = "print_page_size_label"
+        private const val PREF_PORTRAIT = "print_portrait"
+        const val PREF_TEXT_SIZE = "print_text_size"
+        const val PREF_INCLUDED_FIELDS = "print_included_fields"
     }
 }

@@ -70,90 +70,6 @@ class PrintFragment : Fragment() {
          * Used to display the font size selection characters
          */
         private const val pointsToDips = 160.0f / 72.0f
-
-        private val paperSizes = arrayOf(
-            PrintAttributes.MediaSize.NA_FOOLSCAP,
-            PrintAttributes.MediaSize.NA_GOVT_LETTER,
-            PrintAttributes.MediaSize.NA_INDEX_3X5,
-            PrintAttributes.MediaSize.NA_INDEX_4X6,
-            PrintAttributes.MediaSize.NA_INDEX_5X8,
-            PrintAttributes.MediaSize.NA_JUNIOR_LEGAL,
-            PrintAttributes.MediaSize.NA_LEDGER,
-            PrintAttributes.MediaSize.NA_LEGAL,
-            PrintAttributes.MediaSize.NA_LETTER,
-            PrintAttributes.MediaSize.NA_MONARCH,
-            PrintAttributes.MediaSize.NA_QUARTO,
-            PrintAttributes.MediaSize.NA_TABLOID,
-            PrintAttributes.MediaSize.ISO_A0,
-            PrintAttributes.MediaSize.ISO_A1,
-            PrintAttributes.MediaSize.ISO_A10,
-            PrintAttributes.MediaSize.ISO_A2,
-            PrintAttributes.MediaSize.ISO_A3,
-            PrintAttributes.MediaSize.ISO_A4,
-            PrintAttributes.MediaSize.ISO_A5,
-            PrintAttributes.MediaSize.ISO_A6,
-            PrintAttributes.MediaSize.ISO_A7,
-            PrintAttributes.MediaSize.ISO_A8,
-            PrintAttributes.MediaSize.ISO_A9,
-            PrintAttributes.MediaSize.ISO_B0,
-            PrintAttributes.MediaSize.ISO_B1,
-            PrintAttributes.MediaSize.ISO_B10,
-            PrintAttributes.MediaSize.ISO_B2,
-            PrintAttributes.MediaSize.ISO_B3,
-            PrintAttributes.MediaSize.ISO_B4,
-            PrintAttributes.MediaSize.ISO_B5,
-            PrintAttributes.MediaSize.ISO_B6,
-            PrintAttributes.MediaSize.ISO_B7,
-            PrintAttributes.MediaSize.ISO_B8,
-            PrintAttributes.MediaSize.ISO_B9,
-            PrintAttributes.MediaSize.ISO_C0,
-            PrintAttributes.MediaSize.ISO_C1,
-            PrintAttributes.MediaSize.ISO_C10,
-            PrintAttributes.MediaSize.ISO_C2,
-            PrintAttributes.MediaSize.ISO_C3,
-            PrintAttributes.MediaSize.ISO_C4,
-            PrintAttributes.MediaSize.ISO_C5,
-            PrintAttributes.MediaSize.ISO_C6,
-            PrintAttributes.MediaSize.ISO_C7,
-            PrintAttributes.MediaSize.ISO_C8,
-            PrintAttributes.MediaSize.ISO_C9,
-            PrintAttributes.MediaSize.JPN_CHOU2,
-            PrintAttributes.MediaSize.JPN_CHOU3,
-            PrintAttributes.MediaSize.JPN_CHOU4,
-            PrintAttributes.MediaSize.JPN_HAGAKI,
-            PrintAttributes.MediaSize.JIS_B0,
-            PrintAttributes.MediaSize.JIS_B1,
-            PrintAttributes.MediaSize.JIS_B10,
-            PrintAttributes.MediaSize.JIS_B2,
-            PrintAttributes.MediaSize.JIS_B3,
-            PrintAttributes.MediaSize.JIS_B4,
-            PrintAttributes.MediaSize.JIS_B5,
-            PrintAttributes.MediaSize.JIS_B6,
-            PrintAttributes.MediaSize.JIS_B7,
-            PrintAttributes.MediaSize.JIS_B8,
-            PrintAttributes.MediaSize.JIS_B9,
-            PrintAttributes.MediaSize.JIS_EXEC,
-            PrintAttributes.MediaSize.JPN_KAHU,
-            PrintAttributes.MediaSize.JPN_KAKU2,
-            PrintAttributes.MediaSize.JPN_OUFUKU,
-            PrintAttributes.MediaSize.JPN_YOU4,
-            PrintAttributes.MediaSize.OM_DAI_PA_KAI,
-            PrintAttributes.MediaSize.OM_JUURO_KU_KAI,
-            PrintAttributes.MediaSize.OM_PA_KAI,
-            PrintAttributes.MediaSize.PRC_1,
-            PrintAttributes.MediaSize.PRC_10,
-            PrintAttributes.MediaSize.PRC_16K,
-            PrintAttributes.MediaSize.PRC_2,
-            PrintAttributes.MediaSize.PRC_3,
-            PrintAttributes.MediaSize.PRC_4,
-            PrintAttributes.MediaSize.PRC_5,
-            PrintAttributes.MediaSize.PRC_6,
-            PrintAttributes.MediaSize.PRC_7,
-            PrintAttributes.MediaSize.PRC_8,
-            PrintAttributes.MediaSize.PRC_9,
-            PrintAttributes.MediaSize.ROC_16K,
-            PrintAttributes.MediaSize.ROC_8K
-        )
     }
 
     /** Fragment navigation arguments */
@@ -658,8 +574,8 @@ class PrintFragment : Fragment() {
         // Setup the paper size spinner
         setupSpinner(
             view.findViewById(R.id.paper_size),
-            paperSizes.indexOfFirst { viewModel.pdfPrinter.attributes.mediaSize?.id == it.id },
-            paperSizes.map { PaperSizeName(it) }
+            PDFPrinter.paperSizes.indexOfFirst { viewModel.pdfPrinter.attributes.mediaSize?.id == it.id },
+            PDFPrinter.paperSizes.map { PaperSizeName(it) }
         ) {
             if (it != null)
                 changeMediaSize(it.obj, view.findViewById<Spinner>(R.id.orientation).selectedItemPosition == 0)
@@ -709,6 +625,8 @@ class PrintFragment : Fragment() {
             ) {_, size ->
                 if (viewModel.pdfPrinter.basePaint.textSize != size) {
                     viewModel.pdfPrinter.basePaint.textSize = size
+                    viewModel.pdfPrinter.preferenceEditor.putFloat(PDFPrinter.PREF_TEXT_SIZE, size)
+                    viewModel.pdfPrinter.preferenceEditor.commit()
                     viewModel.pdfPrinter.invalidateLayout()
                     calculatePages()
                 }
@@ -760,6 +678,8 @@ class PrintFragment : Fragment() {
                                 visibleFields.remove(other.field.second)
                             }
                         }
+                        viewModel.pdfPrinter.preferenceEditor.putStringSet(PDFPrinter.PREF_INCLUDED_FIELDS, visibleFields)
+                        viewModel.pdfPrinter.preferenceEditor.commit()
                         viewModel.pdfPrinter.invalidateLayout()
                         calculatePages()
                         // notifyItemChanged(position)
@@ -843,7 +763,7 @@ class PrintFragment : Fragment() {
             .build()
 
         // set the new attributes
-        viewModel.pdfPrinter.changeLayout(newAttributes)
+        viewModel.pdfPrinter.changeLayout(requireContext(), newAttributes)
         calculatePages()
     }
 
@@ -855,6 +775,7 @@ class PrintFragment : Fragment() {
         cancelPages()
         // Invalidate the page layout handlers
         layoutHandlers.invalidate()
+        previewAdapter.submitList(null)
         viewModel.viewModelScope.launch {
             // Wait for the last job to complete
             pageJob?.join()
@@ -914,7 +835,7 @@ class PrintFragment : Fragment() {
                                     orientationSpinner.setSelection(if (portrait) 0 else 1)
                                 val paperSizeSpinner = requireView().findViewById<Spinner>(R.id.paper_size)
                                 val id = it.id
-                                val position = paperSizes.indexOfFirst {size -> id == size.id }
+                                val position = PDFPrinter.paperSizes.indexOfFirst {size -> id == size.id }
                                 paperSizeSpinner.setSelection(position)
                                 changeMediaSize(it, portrait)
                             }

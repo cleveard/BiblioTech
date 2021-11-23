@@ -35,7 +35,7 @@ open class BookPrintAdapter(
         val job = scope.launch {
             try {
                 // Setup the new attributes
-                val changed = pdfPrinter.changeLayout(newAttributes)
+                val changed = pdfPrinter.changeLayout(context, newAttributes)
                 // Layout the pages based on the current attributes
                 val pages = pdfPrinter.computePageCount()
 

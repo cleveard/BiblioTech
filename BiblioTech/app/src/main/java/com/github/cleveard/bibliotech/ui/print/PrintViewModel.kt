@@ -1,8 +1,11 @@
 package com.github.cleveard.bibliotech.ui.print
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.Shader
 import androidx.lifecycle.ViewModel
+import androidx.preference.PreferenceManager
 import com.github.cleveard.bibliotech.print.PDFPrinter
 
 class PrintViewModel : ViewModel() {
@@ -18,6 +21,6 @@ class PrintViewModel : ViewModel() {
      */
     fun initialize(context: Context, getThumbnailCallback: suspend (bookId: Long, large: Boolean) -> Bitmap?) {
         printLayouts = PrintLayouts(context)
-        pdfPrinter = PDFPrinter(printLayouts, getThumbnailCallback)
+        pdfPrinter = PDFPrinter(printLayouts, getThumbnailCallback, PreferenceManager.getDefaultSharedPreferences(context))
     }
 }
