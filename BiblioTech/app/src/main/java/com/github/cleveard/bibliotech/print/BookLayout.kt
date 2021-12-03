@@ -64,6 +64,7 @@ data class BookLayout(
 
         /**
          * Wrap the contents of this field around overlapping fields
+         * @return True if the layout changed
          */
         fun wrapOverlapping(): Boolean = false
     }
@@ -520,7 +521,7 @@ data class BookLayout(
             // Clear the spans
             textSpans.clear()
             // Add the initial span to the list of spans
-            textSpans.add(LayoutSpan(PointF(0.0f, 0.0f), createInitialLayout()))
+            createInitialLayout()?.let { textSpans.add(LayoutSpan(PointF(0.0f, 0.0f), it)) }
             // Clear the overlaps because the current spans are for no overlaps
             if (overlaps.isNotEmpty())
                 overlaps = emptyList()
@@ -529,7 +530,11 @@ data class BookLayout(
         /**
          * Create the StaticLayout from the current values
          */
-        private fun createInitialLayout(): StaticLayout {
+        private fun createInitialLayout(): StaticLayout? {
+            // Don't create anything if the width is too small
+            if (width <= MIN_WIDTH)
+                return null
+
             // Build the static layout
             var layout = StaticLayout.Builder.obtain(
                 text, 0, text.length, paint,
@@ -604,9 +609,9 @@ data class BookLayout(
          */
         private fun getOverlaps(): Boolean {
             // Set the margins for the overlaps
-            val leftMargin = (if (rtl) margins.right else margins.left)
+            val leftMargin = if (rtl) margins.right else margins.left
             val topMargin = margins.top
-            val rightMargin = (if (rtl) margins.left else margins.right)
+            val rightMargin = if (rtl) margins.left else margins.right
             val bottomMargin = margins.bottom
 
             // Get a list of overlapping fields and sort it vertically
@@ -615,10 +620,12 @@ data class BookLayout(
                 if (!item.marginBounds.isEmpty) {
                     val dx = item.position.x - position.x
                     val dy = item.position.y - position.y
+                    val left = if (item.rtl) item.marginBounds.left else 0.0f
+                    val right = if (item.rtl) item.width else item.marginBounds.right
                     // translate the other field bounds relative to this fields position
                     val intersection = RectF(
-                        item.marginBounds.left + dx - rightMargin, item.marginBounds.top + dy - bottomMargin,
-                        item.marginBounds.right + leftMargin + dx, item.marginBounds.bottom + dy + topMargin
+                        left + dx - rightMargin, item.marginBounds.top + dy - bottomMargin,
+                        right + leftMargin + dx, item.marginBounds.bottom + dy + topMargin
                     )
                     // If they intersect, add the intersection
                     if (intersection.intersect(0.0f, 0.0f, width, height)) {
@@ -762,8 +769,8 @@ data class BookLayout(
         /** @inheritDoc */
         override fun wrapOverlapping(): Boolean {
             // If this field doesn't test for overlaps, or the overlaps haven't changed,
-            // then return false
-            if (overlapping.isEmpty() || !getOverlaps())
+            // or the width is smaller than minimum, then return false
+            if (overlapping.isEmpty() || !getOverlaps() || width < MIN_WIDTH)
                 return false
 
             // Clear existing spans

@@ -24,7 +24,7 @@ class PrintLayouts(context: Context) {
             /** A narrow layout */
             Float.POSITIVE_INFINITY, LayoutDescription(
                 listOf(
-                    LayoutDescription.ColumnBitmapFieldLayoutDescription(false, PointF(16.0f, BookLayout.MAX_HEIGHT)).apply {
+                    LayoutDescription.ColumnBitmapFieldLayoutDescription(false, PointF(16.0f, 25.0f)).apply {
                         margin.right = 4.5f
                     },
                     LayoutDescription.ColumnBitmapFieldLayoutDescription(true, PointF(72.0f, 112.0f)).apply {
@@ -63,13 +63,6 @@ class PrintLayouts(context: Context) {
                             LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Top, null)
                         )
                     ),
-                    // Small Thumbnail bottom is at the bottom of the authors
-                    LayoutDescription.VerticalLayoutAlignment(
-                        LayoutDescription.VerticalLayoutDimension.Type.Bottom,
-                        listOf(
-                            LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, authors)
-                        )
-                    ),
                     // Small Thumbnail is at the start
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
@@ -106,7 +99,7 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                     ),
                     // Title is to the left of the column end
@@ -117,7 +110,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                title.overlapping = setOf(largeThumb)
+                title.overlapping = setOf(smallThumb, largeThumb)
                 subtitle.layoutAlignment = setOf(
                     // Subtitle is below the title
                     LayoutDescription.VerticalLayoutAlignment(
@@ -130,7 +123,7 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                     ),
                     // Subtitle is to the left of the column end
@@ -141,7 +134,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                subtitle.overlapping = setOf(largeThumb)
+                subtitle.overlapping = setOf(smallThumb, largeThumb)
                 by.layoutAlignment = setOf(
                     // By: is below the subtitle
                     LayoutDescription.VerticalLayoutAlignment(
@@ -154,7 +147,7 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                     ),
                     // By: is to the left of the column end
@@ -165,7 +158,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                by.overlapping = setOf(largeThumb)
+                by.overlapping = setOf(smallThumb, largeThumb)
                 authors.layoutAlignment = setOf(
                     // Authors baseline is aligned with By:
                     LayoutDescription.VerticalLayoutAlignment(
@@ -178,7 +171,7 @@ class PrintLayouts(context: Context) {
                     LayoutDescription.HorizontalLayoutAlignment(
                         LayoutDescription.HorizontalLayoutDimension.Type.Start,
                         listOf(
-                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, smallThumb)
+                            LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                     ),
                     // Authors is to the left of the column end
@@ -189,7 +182,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                authors.overlapping = setOf(largeThumb, by)
+                authors.overlapping = setOf(smallThumb, largeThumb, by)
                 tagsLabel.layoutAlignment = setOf(
                     // Tags: is below the authors and icon
                     LayoutDescription.VerticalLayoutAlignment(
@@ -213,7 +206,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                tagsLabel.overlapping = setOf(largeThumb)
+                tagsLabel.overlapping = setOf(smallThumb, largeThumb)
                 tags.layoutAlignment = setOf(
                     // Tags baseline is aligned with Tags:
                     LayoutDescription.VerticalLayoutAlignment(
@@ -237,7 +230,7 @@ class PrintLayouts(context: Context) {
                         )
                     )
                 )
-                tags.overlapping = setOf(largeThumb, tagsLabel)
+                tags.overlapping = setOf(smallThumb, largeThumb, tagsLabel)
             }
         )
     )
