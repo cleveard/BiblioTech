@@ -20,6 +20,7 @@ const val EPSILON = 1.0e-3f
 class PageLayoutHandler(
     /** The PDF printer */
     private val printer: PDFPrinter,
+    /** The bounds of the page drawable area */
     pageDrawBounds: RectF,
     /** True to layout right-to-left */
     private val rtl: Boolean = false
@@ -127,10 +128,8 @@ class PageLayoutHandler(
     /** The last book we laid out */
     private var laidOutBook: BookAndAuthors? = null
     /** The layout of the last book we laid out. This layout is shared by all books */
-    private val layout: BookLayout by lazy {
-        printer.getLayout(columnWidth)
-            .createLayout(printer, columnWidth, printer.visibleFields, rtl)
-    }
+    private val layout: BookLayout = printer.getLayout(columnWidth)
+        .createLayout(printer, columnWidth, printer.visibleFields, rtl)
 
     /**
      * Add page and start next one
@@ -392,57 +391,30 @@ class PageLayoutHandler(
      * @return True if the layout needs to be recalculated
      */
     private fun alignHorizontalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?, rtl: Boolean): Boolean {
-        val min: Float
-        val max: Float
+        val startMargin = if (dl.bounds.isEmpty) 0.0f else dl.margins.left
+        val endMargin = if (dl.bounds.isEmpty) 0.0f else dl.margins.right
 
-        if (rtl) {
+        // Calculate the position to move bounds.right to max
+        dl.position.x = if (rtl) {
             // Set min to specified value, or the value of the parent
-            max = when {
-                centerSpec != null -> centerSpec + dl.bounds.width() / 2.0f
-                maxSpec != null -> maxSpec
-                minSpec != null -> (minSpec + dl.width).coerceAtMost(columnWidth)
-                else -> columnWidth
-            } - dl.margins.left
-            // Set max to specified value, or the value of the parent
-            min = when {
-                centerSpec != null -> max - dl.width
-                minSpec != null -> minSpec
-                maxSpec != null -> (max - dl.width).coerceAtLeast(0.0f)
-                else -> 0.0f
-            } + dl.margins.right
-            // Calculate the position to move bounds.right to max
-            dl.position.x = max
-            // If the bounds are empty to include the margins
-            if (dl.bounds.isEmpty)
-                dl.position.x += dl.margins.left
+            when {
+                centerSpec != null -> centerSpec - dl.bounds.width() / 2.0f
+                maxSpec != null -> maxSpec - dl.bounds.width() - startMargin
+                minSpec != null -> minSpec + dl.width - dl.bounds.width() + endMargin
+                else -> columnWidth - dl.bounds.width() - startMargin
+            }.coerceIn(0.0f, columnWidth)
         } else {
             // Set min to specified value, or the value of the parent
-            min = when {
+            when {
                 centerSpec != null -> centerSpec - dl.bounds.width() / 2.0f
-                minSpec != null -> minSpec
-                maxSpec != null -> (maxSpec - dl.width).coerceAtLeast(0.0f)
-                else -> 0.0f
-            } + dl.margins.left
-            // Set max to specified value, or the value of the parent
-            max = when {
-                centerSpec != null -> min + dl.width
-                maxSpec != null -> maxSpec
-                minSpec != null -> min + dl.width
-                else -> columnWidth
-            } - dl.margins.right
-            // Calculate the position to move bounds.left to min
-            dl.position.x = min
-            // If the bounds are empty to include the margins
-            if (dl.bounds.isEmpty)
-                dl.position.x -= dl.margins.left
+                minSpec != null -> minSpec + startMargin
+                maxSpec != null -> maxSpec - dl.bounds.width() - endMargin
+                else -> startMargin
+            }.coerceIn(0.0f, columnWidth)
         }
 
-        // Don't change the width unless both min and max spec are given
-        if (minSpec == null || maxSpec == null)
-            return false
-
         // Calculate the width
-        var width = max - min
+        var width = (maxSpec?: columnWidth) - (minSpec?: 0.0f) - (dl.margins.left + dl.margins.right)
         dl.description?.let { width = width.coerceAtLeast(it.minSize.x).coerceAtMost(it.maxSize.x) }
         return if (abs(width - dl.width) >= EPSILON) {
             dl.width = width
@@ -462,10 +434,11 @@ class PageLayoutHandler(
     private fun alignVerticalBounds(dl: BookLayout.LayoutBounds, minSpec: Float?, maxSpec: Float?, centerSpec: Float?): Boolean {
         val min = when {
             centerSpec != null -> centerSpec - dl.bounds.height() / 2.0f
+            minSpec != null && maxSpec != null -> (minSpec + maxSpec - dl.bounds.height()) / 2.0f
             minSpec != null -> minSpec
-            maxSpec != null -> (maxSpec - dl.height).coerceAtLeast(0.0f)
+            maxSpec != null -> maxSpec - dl.bounds.height()
             else -> 0.0f
-        } + dl.margins.top
+        }.coerceAtLeast(0.0f) + dl.margins.top
 
         // Calculate the adjustment to move the top to min. If the bounds are empty
         // make sure the margins are not included
@@ -476,7 +449,7 @@ class PageLayoutHandler(
             return false
 
         // Calculate the height
-        var height = maxSpec - dl.margins.bottom - minSpec + dl.margins.top
+        var height = maxSpec - minSpec - (dl.margins.bottom + dl.margins.top)
         dl.description?.let { height = height.coerceAtLeast(it.minSize.y).coerceAtMost(it.maxSize.y) }
         return if (abs(height - dl.height) >= EPSILON) {
             dl.height = height
@@ -510,7 +483,7 @@ class PageLayoutHandler(
         // Calculate all of the dependencies
         dl.alignment.asSequence()
             .filter { it.key.horizontal == horizontal }
-            .map { it.value.asSequence() }
+            .map { it.value.dimensions }
             .flatten()
             .forEach {
                 recalculate = calculateLayout(it.bounds, horizontal, target) || recalculate
@@ -520,7 +493,7 @@ class PageLayoutHandler(
         // Calculate all of the alignments and store the results in target
         dl.alignment.forEach {
             if (it.key.horizontal == horizontal)
-                it.key.calculateAlignment(target, it.value.asSequence())
+                it.key.assignAlignment(target, it.value.calculateAlignment(horizontal && target.rtl, target.baseline))
         }
 
         // Align the field and return whether the alignment needs recalculating

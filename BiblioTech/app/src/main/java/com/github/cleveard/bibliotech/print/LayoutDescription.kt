@@ -11,8 +11,6 @@ import kotlin.collections.HashMap
  * Class to hold the description of a book layout
  * @param inColumns The list of field descriptions for the layout
  * @param inHeaders The list of header fields for the layout. Null means no headers
- * @param horizontalSeparation The distance to separate columns
- * @param verticalSeparation The distance to separate books in the same column
  */
 data class LayoutDescription(
     /** Layouts for the columns of the book to print */
@@ -64,7 +62,7 @@ data class LayoutDescription(
         // Create the layout alignment dependencies in the layout
         for (dl in bookLayout.columns) {
             // Get the alignment for the field in a local variable
-            dl.alignment = HashMap<LayoutAlignmentType, List<BookLayout.LayoutDimension>>().also {align ->
+            dl.alignment = HashMap<LayoutAlignmentType, BookLayout.LayoutAlignmentParameters>().also {align ->
                 // For each layout alignment description
                 for (entry in dl.description.layoutAlignment) {
                     // Take the alignment dependencies
@@ -74,12 +72,12 @@ data class LayoutDescription(
                     }.filterNotNull().toList().also { list ->
                         // If the list isn't empty add it to the field alignment
                         if (list.isNotEmpty())
-                            align[entry.align] = list
+                            align[entry.align] = BookLayout.LayoutAlignmentParameters(list.asSequence(), entry)
                     }
                 }
             }
 
-            dl.overlapping = dl.description.overlapping?.asSequence()?.map { map[it]!! }?.toSet()?: emptySet()
+            dl.overlapping = dl.description.overlapping.asSequence().map { map[it]!! }.toSet()
 
         }
 
@@ -101,7 +99,7 @@ data class LayoutDescription(
         /**
          * Calculate the alignment for a dimensions type
          * @param target The object where the result is stored
-         * @param sources The dimensions used to calculate the alignment
+         * @param value The value of the alignment
          * The alignment calculation depends on what is being aligned
          * Vertical dimensions are aligned like this:
          *    Top - align to maximum
@@ -115,7 +113,7 @@ data class LayoutDescription(
          *    End, RTL - align left to maximum
          *    Center - align to midpoint of minimum and maximum
          */
-        fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>)
+        fun assignAlignment(target: AlignmentTarget, value: Float)
     }
 
     /** Interface to a dimension description */
@@ -192,9 +190,9 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // Align the top to the max of the source dimensions
-                    target.top = sources.maxOf { it.dimension }
+                    target.top = value
                 }
             },
             /** Align to bottom */
@@ -206,9 +204,9 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // Align the bottom to the min of the source dimensions
-                    target.bottom = sources.minOf { it.dimension }
+                    target.bottom = value
                 }
             },
             /** Align to baseline */
@@ -220,9 +218,9 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // Align the top to the max of the source dimensions offset by the baseline
-                    target.top = sources.maxOf { it.dimension } - target.baseline
+                    target.top = value
                 }
             },
             /** Align to center */
@@ -234,9 +232,9 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // Align center to center of bounds of sources
-                    target.vCenter = (sources.minOf { it.dimension } + sources.maxOf { it.dimension }) / 2.0f
+                    target.vCenter = value
                 }
             };
 
@@ -251,6 +249,12 @@ data class LayoutDescription(
         val align: LayoutAlignmentType
         /** Dimensions used to calculate the alignment */
         val dimensions: List<LayoutDimensionDescription>
+        /** Linear interpolation between max and min dimensions  */
+        val interpolate: Float
+        /** Additional offset to alignment */
+        val offset: Float
+        /** If true, offset by baseline  */
+        val baselineOffset: Boolean
     }
 
     /**
@@ -262,7 +266,13 @@ data class LayoutDescription(
         /** The dimension this description aligns */
         override val align: VerticalLayoutDimension.Type,
         /** The dimensions used to calculate the alignment */
-        override val dimensions: List<VerticalLayoutDimension>
+        override val dimensions: List<VerticalLayoutDimension>,
+        /** Linear interpolation between max and min dimensions  */
+        override val interpolate: Float,
+        /** Additional offset to alignment */
+        override val offset: Float = 0.0f,
+        /** If true, offset by baseline  */
+        override val baselineOffset: Boolean = false
     ): LayoutAlignment {
         /**
          * @inheritDoc
@@ -306,13 +316,13 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // If right-to-left, align right to min of dimensions
                     // Otherwise align left to max of dimensions
                     return if (target.rtl)
-                        target.right = sources.minOf { it.dimension }
+                        target.right = value
                     else
-                        target.left = sources.maxOf { it.dimension }
+                        target.left = value
                 }
             },
             /** Align to end */
@@ -324,13 +334,13 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // If right-to-left, align left to max of dimensions
                     // Otherwise align right to min of dimensions
                     return if (target.rtl)
-                        target.left = sources.maxOf { it.dimension }
+                        target.left = value
                     else
-                        target.right = sources.minOf { it.dimension }
+                        target.right = value
                 }
             },
             /** Align to center */
@@ -342,9 +352,9 @@ data class LayoutDescription(
                 }
 
                 /** @inheritDoc */
-                override fun calculateAlignment(target: AlignmentTarget, sources: Sequence<BookLayout.LayoutDimension>) {
+                override fun assignAlignment(target: AlignmentTarget, value: Float) {
                     // Align center to center of bounds of sources
-                    target.hCenter = (sources.minOf { it.dimension } + sources.maxOf { it.dimension }) / 2.0f
+                    target.hCenter = value
                 }
             };
 
@@ -362,8 +372,15 @@ data class LayoutDescription(
         /** The dimension this description aligns */
         override val align: HorizontalLayoutDimension.Type,
         /** The dimensions used to calculate the alignment */
-        override val dimensions: List<HorizontalLayoutDimension>
+        override val dimensions: List<HorizontalLayoutDimension>,
+        /** Linear interpolation between max and min dimensions  */
+        override val interpolate: Float,
+        /** Additional offset to alignment */
+        override val offset: Float = 0.0f
     ): LayoutAlignment {
+        override val baselineOffset: Boolean
+            get() = false
+
         /**
          * @inheritDoc
          * Override to prevent duplicates of align in a set
@@ -401,10 +418,10 @@ data class LayoutDescription(
         val maxSize: PointF = PointF(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY),
     ) {
         /** The layout alignment for the field */
-        lateinit var layoutAlignment: Set<LayoutAlignment>
+        val layoutAlignment: MutableSet<LayoutAlignment> = HashSet()
 
         /** Set of fields that we need to check overlapping this field */
-        var overlapping: Set<FieldLayoutDescription>? = null
+        val overlapping: MutableSet<FieldLayoutDescription> = HashSet()
 
         /**
          * Get/Fill the layout for a field
@@ -442,10 +459,9 @@ data class LayoutDescription(
     }
 
     /**
-     * Text field from a book database column
-     * @param column The database column description
+     * Text field for the title from a book
      */
-    class TitleTextFieldLayoutDescription(): FieldLayoutDescription(Column.TITLE.name) {
+    class TitleTextFieldLayoutDescription: FieldLayoutDescription(Column.TITLE.name) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout

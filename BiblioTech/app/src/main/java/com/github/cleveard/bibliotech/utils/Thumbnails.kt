@@ -220,7 +220,7 @@ class Thumbnails(dir: String = "db") {
      * @param url The url to download
      * @param file The cache file
      */
-    private suspend fun downloadBitmap(url: URL, file: File): File? {
+    private suspend fun downloadBitmap(inUrl: URL, file: File): File? {
         @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO) {
             var result = false
@@ -230,6 +230,10 @@ class Thumbnails(dir: String = "db") {
             var buffered: BufferedInputStream? = null
             val tmpFile = File.createTempFile("tmp_bitmap", null, file.parentFile) ?: return@withContext null
             try {
+                val url = if (inUrl.protocol == "http")
+                    URL("https", inUrl.host, inUrl.port, inUrl.file)
+                else
+                    inUrl
                 connection = url.openConnection() as HttpURLConnection
                 output = BufferedOutputStream(FileOutputStream(tmpFile))
                 stream = connection.inputStream
@@ -242,7 +246,9 @@ class Thumbnails(dir: String = "db") {
                 }
                 result = true
             } catch (e: MalformedURLException) {
+                tmpFile.delete()
             } catch (e: IOException) {
+                tmpFile.delete()
             }
             if (output != null) {
                 try {

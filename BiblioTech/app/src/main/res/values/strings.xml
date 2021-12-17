@@ -111,9 +111,11 @@
     <string name="subtitle">Subtitle</string>
     <string name="category">Category</string>
     <string name="source">Source</string>
+    <string name="source_colon">Source:</string>
     <string name="volume">Volume</string>
     <string name="books">Books</string>
     <string name="rating">Rating</string>
+    <string name="rating_colon">Rating:</string>
     <string name="date_added">Date Added</string>
     <string name="date_changed">Date Changed</string>
     <string name="small_thumb">Icon</string>

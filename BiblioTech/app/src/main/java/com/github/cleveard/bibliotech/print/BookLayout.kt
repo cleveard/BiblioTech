@@ -48,7 +48,7 @@ data class BookLayout(
         /** True to layout right to left */
         val rtl: Boolean
         /** alignment criteria for the field */
-        val alignment: Map<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
+        val alignment: Map<LayoutDescription.LayoutAlignmentType, LayoutAlignmentParameters>
         /** Layouts we need to check that may overlap this one */
         val overlapping: Set<LayoutBounds>
         /** Last set of overlapping rectangles */
@@ -103,7 +103,7 @@ data class BookLayout(
         clip.set(bounds.left, clipTop, bounds.right, clipBottom)
 
         // If the book is completely visible, then return the layout
-        if (y >= 0 && bookBottom <= clipBottom)
+        if (y >= 0 && bounds.bottom <= clipBottom + EPSILON)
             return this
 
         // Not completely visible. We need to make sure fields are clipped
@@ -268,7 +268,7 @@ data class BookLayout(
         override val rtl: Boolean
             get() = this@BookLayout.rtl
         /** @inheritDoc */
-        override val alignment = HashMap<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>()
+        override val alignment = HashMap<LayoutDescription.LayoutAlignmentType, LayoutAlignmentParameters>()
         /** @inheritDoc */
         override val overlapping: Set<LayoutBounds> = emptySet()
         /** @inheritDoc */
@@ -349,6 +349,31 @@ data class BookLayout(
                 + bounds.bounds.bottom + bounds.margins.bottom) / 2.0f
     }
 
+    class LayoutAlignmentParameters(
+        /** Dimensions used to calculate the alignment */
+        val dimensions: Sequence<LayoutDimension>,
+        /** Alignment description */
+        private val description: LayoutDescription.LayoutAlignment
+    ) {
+        /**
+         * Calculate the alignment
+         * @param reverse True to reverse the alignment direction
+         * @param baseline Offset from top to baseline
+         * @return The alignment value
+         */
+        fun calculateAlignment(reverse: Boolean, baseline: Float): Float {
+            val min = dimensions.minOf { it.dimension }
+            val max = dimensions.maxOf { it.dimension }
+            var value = if (reverse)
+                max + description.interpolate * (min - max) - description.offset
+            else
+                min + description.interpolate * (max - min) + description.offset
+            if (description.baselineOffset)
+                value -= baseline
+            return value
+        }
+    }
+
     /**
      * The base class for drawable fields
      * @param printer The PDFPrinter we are using. Several attributes are kept there
@@ -377,7 +402,7 @@ data class BookLayout(
         /** True means text is right to left */
         override var rtl: Boolean = false
         /** alignment criteria for the field */
-        override lateinit var alignment: Map<LayoutDescription.LayoutAlignmentType, List<LayoutDimension>>
+        override lateinit var alignment: Map<LayoutDescription.LayoutAlignmentType, LayoutAlignmentParameters>
         /** Layouts we need to check that may overlap this one */
         override lateinit var overlapping: Set<LayoutBounds>
         /** List of overlapping rectangles */
@@ -904,7 +929,7 @@ data class BookLayout(
 
         /**
          * Find the top or bottom of the line on a clip boundary
-         * @param boundary The vertical clip boundary
+         * @param localBoundary The vertical clip boundary
          * @bottom bottom True to find the bottom. False to find the top
          * If top or bottom of a line is exactly on the boundary, then the boundary is returned
          * If the top line is below the boundary, or the bottom line is above the boundary,
@@ -922,17 +947,18 @@ data class BookLayout(
                     textSpans[it]
             }
             // Find the line at the boundary or before it
-            val line = span.layout.getLineForVertical(printer.pointsToVerticalPixels(boundary - span.position.y))
+            val localBoundary = boundary - span.position.y
+            val line = span.layout.getLineForVertical(printer.pointsToVerticalPixels(localBoundary))
             // Get the top and bottom of the line
             val t = printer.verticalPixelsToPoints(span.layout.getLineTop(line))
             val b = printer.verticalPixelsToPoints(span.layout.getLineTop(line + 1))
             return span.position.y + when {
                 // Either the top of the line is on the boundary, or the top line
                 // is below the boundary, so return the top of the line
-                t >= boundary -> t
+                t >= localBoundary -> t
                 // Either the bottom of the line is on the boundary, or the bottom line
                 // is above the boundary, so return the bottom of the line
-                b <= boundary -> b
+                b <= localBoundary -> b
                 // Otherwise return the bottom, if that is what we want
                 bottom -> b
                 // Or the top

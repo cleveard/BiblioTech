@@ -647,6 +647,11 @@ private val description = object: ColumnDataDescriptor(
     override fun getValue(book: BookAndAuthors): String {
         return ""
     }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.book.description
+    }
 }
 
 /** Tags */
