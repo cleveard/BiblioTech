@@ -32,10 +32,7 @@ import com.github.cleveard.bibliotech.print.PageLayoutHandler
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import com.google.android.material.button.MaterialButton
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlin.math.roundToInt
 
 class PrintFragment : Fragment() {
@@ -791,14 +788,13 @@ class PrintFragment : Fragment() {
             pageJob = coroutineContext[Job]
             try {
                 // Calculate the pages
-                val pages = try {
-                    if (viewModel.pdfPrinter.bookList != null)
-                        viewModel.pdfPrinter.layoutPages()
-                    else
-                        null
-                } catch (e: PDFPrinter.NoPagesException) {
-                    null
-                } catch (e: PDFPrinter.NoBooksException) {
+                val pages = withContext(Dispatchers.IO) {
+                    try {
+                        if (viewModel.pdfPrinter.bookList != null)
+                            return@withContext viewModel.pdfPrinter.layoutPages()
+                    } catch (e: PDFPrinter.NoPagesException) {
+                    } catch (e: PDFPrinter.NoBooksException) {
+                    }
                     null
                 }
                 // Set the pages in the preview view and notify changes
