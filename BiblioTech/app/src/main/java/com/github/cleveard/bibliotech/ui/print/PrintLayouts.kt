@@ -248,7 +248,7 @@ class PrintLayouts(context: Context) {
                         )
                     } else {
                         // Position start at the start
-                        end.layoutAlignment.addStartAlignment(
+                        start.layoutAlignment.addStartAlignment(
                             LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
                         )
                         // End follows start
