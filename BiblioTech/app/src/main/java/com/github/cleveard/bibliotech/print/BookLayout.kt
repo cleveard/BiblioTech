@@ -912,7 +912,9 @@ data class BookLayout(
                     // Try to add another span in the stripe
                     left = stripe.left
                     right = stripe.right
-                    top = lineBottom
+                    top = lineBottom - printer.verticalPixelsToPoints(
+                        span?.let { it.layout.bottomPadding - it.layout.topPadding }?: 0
+                    )
                 }
             }
 
