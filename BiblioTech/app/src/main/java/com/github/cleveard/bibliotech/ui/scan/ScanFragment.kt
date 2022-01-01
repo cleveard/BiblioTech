@@ -13,6 +13,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.util.DisplayMetrics
 import android.util.Log
+import android.util.Size
 import android.util.SparseArray
 import android.view.*
 import android.widget.*
@@ -572,10 +573,17 @@ class ScanFragment : Fragment() {
     private fun bindCameraUseCases() {
 
         // Get screen metrics used to setup camera for full screen resolution
-        val metrics = DisplayMetrics().also { viewFinder.display.getRealMetrics(it) }
-        Log.d(TAG, "Screen metrics: ${metrics.widthPixels} x ${metrics.heightPixels}")
+        val metrics = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val metrics: WindowMetrics = requireContext().getSystemService(WindowManager::class.java).currentWindowMetrics
+            Size(metrics.bounds.width(), metrics.bounds.height())
+        } else {
+            @Suppress("DEPRECATION")
+            val metrics = DisplayMetrics().also { viewFinder.display.getRealMetrics(it) }
+            Size(metrics.widthPixels, metrics.heightPixels)
+        }
+        Log.d(TAG, "Screen metrics: ${metrics.width} x ${metrics.height}")
 
-        val screenAspectRatio = aspectRatio(metrics.widthPixels, metrics.heightPixels)
+        val screenAspectRatio = aspectRatio(metrics.width, metrics.height)
         Log.d(TAG, "Preview aspect ratio: $screenAspectRatio")
 
         val rotation = viewFinder.display.rotation
