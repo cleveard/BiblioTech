@@ -11,10 +11,10 @@ apply plugin: 'kotlinx-serialization'
 android {
     signingConfigs {
         upload {
-            storeFile file('C:\\Users\\cleve\\keystores\\BiblioTech.jks')
-            storePassword 'Y_XUWirIc9ihek'
+            storeFile file("${System.env.BIBLIOTECH_SIGN_STORE_FILE}")
+            storePassword "${System.env.BIBLIOTECH_STORE_PASSWORD}"
             keyAlias 'upload'
-            keyPassword 'q-bLHU*u9I1Tu*'
+            keyPassword "${System.env.BIBLIOTECH_KEY_PASSWORD}"
         }
     }
     compileSdkVersion 31
