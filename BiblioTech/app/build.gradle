@@ -17,12 +17,12 @@ android {
             keyPassword 'q-bLHU*u9I1Tu*'
         }
     }
-    compileSdkVersion 30
-    buildToolsVersion "30.0.2"
+    compileSdkVersion 31
+    buildToolsVersion "32.0.0"
     defaultConfig {
         applicationId "com.github.cleveard.BiblioTech"
         minSdkVersion 26
-        targetSdkVersion 30
+        targetSdkVersion 31
         versionCode 7
         versionName "1.0.alpha08"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -61,21 +61,21 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutine_version"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:$coroutine_version"
 
-    implementation 'androidx.appcompat:appcompat:1.3.0'
-    implementation 'androidx.core:core-ktx:1.5.0'
+    implementation 'androidx.appcompat:appcompat:1.4.0'
+    implementation 'androidx.core:core-ktx:1.7.0'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'com.google.android.material:material:1.3.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+    implementation 'com.google.android.material:material:1.4.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.2'
     implementation 'androidx.lifecycle:lifecycle-extensions:2.2.0'
-    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.3.1'
-    implementation 'androidx.fragment:fragment-ktx:1.3.5'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.3.1'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.4.0'
+    implementation 'androidx.fragment:fragment-ktx:1.4.0'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0'
     implementation 'androidx.preference:preference-ktx:1.1.1'
     testImplementation 'junit:junit:4.13.1'
-    androidTestImplementation "androidx.test:runner:1.3.0"
-    androidTestImplementation "androidx.test:core:1.3.0"
-    androidTestImplementation "androidx.test:rules:1.3.0"
-    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
+    androidTestImplementation "androidx.test:runner:1.4.0"
+    androidTestImplementation "androidx.test:core:1.4.0"
+    androidTestImplementation "androidx.test:rules:1.4.0"
+    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'com.google.truth:truth:1.1.2'
 
     implementation "androidx.navigation:navigation-fragment-ktx:$nav_version"
