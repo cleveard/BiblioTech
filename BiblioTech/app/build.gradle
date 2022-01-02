@@ -101,4 +101,8 @@ dependencies {
     implementation "com.google.android.flexbox:flexbox:$flexbox_version"
 
     implementation 'com.quiph.ui:recyclerviewfastscroller:1.0.0'
+
+    implementation project(':annotations')
+    annotationProcessor project(':codegen')
+    kapt project(':codegen')
 }

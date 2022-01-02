@@ -4,6 +4,7 @@ import android.net.Uri
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import com.github.cleveard.bibliotech.annotations.EnvironmentValues
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -16,10 +17,13 @@ import java.net.URL
 import java.util.*
 import kotlin.collections.ArrayList
 
+private const val apiKey = "GOOGLE_BOOKS_API_KEY"
+
 /**
  * Class used to query books on books.google.com
  * Constructor is private because all methods are in the companion object
  */
+@EnvironmentValues(apiKey)
 internal class GoogleBookLookup private constructor() {
     /**
      * Exception thrown when a book query fails
@@ -95,7 +99,7 @@ internal class GoogleBookLookup private constructor() {
 
     companion object {
         @Suppress("SpellCheckingInspection")
-        private const val kKey = "&key=AIzaSyDeQMfnPyhQ23-ndhb9xs9IY_EaSiTxgms"
+        private val kKey = "&key=${GoogleBookLookup_Environment[apiKey]}"
         private const val kURL = "https://www.googleapis.com/books/v1"
         private const val kVolumesCollection = "volumes"
         private const val kISBNParameter = "isbn:%s"
