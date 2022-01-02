@@ -21,8 +21,8 @@ class OrderTable(private val fragment: Fragment) {
      * LiveData object used to let the fragment know when
      * the filter has changed
      */
-    private val _order: MutableLiveData<Array<OrderField>> = MutableLiveData()
-    val order: LiveData<Array<OrderField>>
+    private val _order: MutableLiveData<Array<OrderField>?> = MutableLiveData()
+    val order: LiveData<Array<OrderField>?>
         get() = _order
 
     /**

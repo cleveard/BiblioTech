@@ -78,7 +78,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /**
          * LiveData holding the last item selected
          */
-        val lastSelection: LiveData<Long>
+        val lastSelection: LiveData<Long?>
 
         /**
          * The count of all items
@@ -170,7 +170,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
          * Live data where the last selected id is kept
          */
         @Suppress("PropertyName")
-        protected var _lastSelection: MutableLiveData<Long> = MutableLiveData<Long>(null)
+        protected var _lastSelection: MutableLiveData<Long?> = MutableLiveData(null)
 
         /**
          * Lister for selection changed
@@ -180,7 +180,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /**
          * The last id that was last selected. Only notify when changed
          */
-        override val lastSelection: LiveData<Long> = _lastSelection.distinctUntilChanged()
+        override val lastSelection: LiveData<Long?> = _lastSelection.distinctUntilChanged()
 
         /**
          * Clear the last selected id

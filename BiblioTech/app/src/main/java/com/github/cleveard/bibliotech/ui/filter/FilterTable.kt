@@ -26,8 +26,8 @@ class FilterTable(private val fragment: Fragment) {
      * LiveData object used to let the fragment know when
      * the filter has changed
      */
-    private val _filter: MutableLiveData<Array<FilterField>> = MutableLiveData()
-    val filter: LiveData<Array<FilterField>>
+    private val _filter: MutableLiveData<Array<FilterField>?> = MutableLiveData()
+    val filter: LiveData<Array<FilterField>?>
         get() = _filter
 
     /**

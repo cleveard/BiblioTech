@@ -1,20 +1,19 @@
-apply plugin: 'com.android.application'
 
-apply plugin: 'kotlin-android'
-
-apply plugin: 'androidx.navigation.safeargs.kotlin'
-
-apply plugin: "kotlin-kapt"
-
-apply plugin: 'kotlinx-serialization'
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'androidx.navigation.safeargs.kotlin'
+    id "kotlin-kapt"
+    id 'kotlinx-serialization'
+}
 
 android {
     signingConfigs {
         upload {
-            storeFile file("${System.env.BIBLIOTECH_SIGN_STORE_FILE}")
-            storePassword "${System.env.BIBLIOTECH_STORE_PASSWORD}"
+            storeFile file("${BIBLIOTECH_SIGN_STORE_FILE}")
+            storePassword BIBLIOTECH_STORE_PASSWORD
             keyAlias 'upload'
-            keyPassword "${System.env.BIBLIOTECH_KEY_PASSWORD}"
+            keyPassword BIBLIOTECH_KEY_PASSWORD
         }
     }
     compileSdkVersion 31
