@@ -18,12 +18,13 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 private const val apiKey = "GOOGLE_BOOKS_API_KEY"
+private const val oauthKey = "GOOGLE_BOOK_OAUTH_ID"
 
 /**
  * Class used to query books on books.google.com
  * Constructor is private because all methods are in the companion object
  */
-@EnvironmentValues(apiKey)
+@EnvironmentValues(apiKey, oauthKey)
 internal class GoogleBookLookup private constructor() {
     /**
      * Exception thrown when a book query fails

@@ -97,7 +97,7 @@ class EnvironmentProcessor: AbstractProcessor() {
             |class $name {
             |    companion object {
             |        private val envMap = mapOf(
-            |            ${vals.joinToString(",\n        ")}
+            |            ${vals.joinToString(",\n            ")}
             |        )
             |        operator fun get(key: String): String? = envMap[key]
             |    }
