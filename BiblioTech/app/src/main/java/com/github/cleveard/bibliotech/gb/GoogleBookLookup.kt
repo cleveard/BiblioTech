@@ -18,7 +18,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 private const val apiKey = "GOOGLE_BOOKS_API_KEY"
-private const val oauthKey = "GOOGLE_BOOK_OAUTH_ID"
+private const val oauthKey = "GOOGLE_BOOKS_OAUTH_ID"
 
 /**
  * Class used to query books on books.google.com
