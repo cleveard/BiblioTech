@@ -6,6 +6,8 @@ description: A book tracking application
 
 BiblioTech is an application for keeping track of your books. It keeps a list of books you enter and allows you to organize, filter, sort and print the list.
 
+BiblioTech uses tags to organize you books. You assign tags to books and then you can filter using the tags. You can filter based on whether a book has or doesn't have a specific set of tags. 
+
 Click these links to learn how to use BiblioTech:
 
 - [Adding books to your book list](topics/add-books.html)
