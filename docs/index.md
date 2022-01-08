@@ -12,14 +12,6 @@ Click these links to learn how to use BiblioTech:
 
 - [Adding books to your book list](topics/add-books.html)
 - [Tag books with labels you create](topics/tags.html)
-  - Set tags when adding books to your book list
-  - Add tags to selected books
-  - Remove tags from selecte books
-  - Set tags for selected books
-  - Change the tags for a single book
-  - Create a new tag
-  - Remove a tag
-  - Rename a tag
 - Filter and sort your books
   - Add a sort order
   - Add a filter
