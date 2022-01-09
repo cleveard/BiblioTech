@@ -1,9 +1,6 @@
 ---
 title: "Adding Books"
 ---
-
-# Adding books
-
 Books are added to the book list using the Scan activity. You can add books by scanning ISBN barcode, entering ISBN numbers manually or searching by author and/or title. You can also select the tags assigned when you add a book.
 
 <details><summary><li>Opening the Scan Activity</li></summary>

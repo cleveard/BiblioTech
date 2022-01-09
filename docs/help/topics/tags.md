@@ -4,10 +4,6 @@ title: Managing Tags
 
 Tags are the main organizing method used by BiblioTech. You create tags and assign them to books to identify which groups each book belongs to. Then you  use filtering to display specific groups.
 
-
-
-# Managing Tags
-
 <details><summary><li>The tags are managed using a slide-up panel from the botton of the display</li></summary>
 <p><a id="open-tags"></a>
 
