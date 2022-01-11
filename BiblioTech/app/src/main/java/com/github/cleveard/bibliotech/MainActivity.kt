@@ -1,6 +1,7 @@
 package com.github.cleveard.bibliotech
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.Menu
@@ -46,6 +47,9 @@ interface ManageNavigation {
  */
 class MainActivity : AppCompatActivity(), ManageNavigation {
     companion object {
+        /** Url to the  BiblioTech help web page */
+        private const val HELP_URL: String = "https://cleveard.github.io/BiblioTech/help/"
+
         // The File to the app cache directory. Used to save thumbnails
         private var mCache: File? = null
 
@@ -169,6 +173,10 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
                         R.id.nav_scan -> ScanFragmentDirections.actionNavScanToSettingsFragment()
                         else -> return@setNavigationItemSelectedListener false
                     }
+                }
+                R.id.action_help -> {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HELP_URL)))
+                    return@setNavigationItemSelectedListener true
                 }
                 else -> return@setNavigationItemSelectedListener false
             }
