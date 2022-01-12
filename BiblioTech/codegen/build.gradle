@@ -11,10 +11,6 @@ java {
     targetCompatibility = JavaVersion.VERSION_1_8
 }
 
-kapt {
-    generateStubs = true
-}
-
 sourceSets {
     main {
         java {
