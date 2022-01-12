@@ -29,7 +29,6 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.*
 import com.github.cleveard.bibliotech.R
@@ -75,7 +74,10 @@ fun Editable.setString(text: String): Editable {
     return this
 }
 
-class ScanViewModel: ViewModel()
+internal class ScanViewModel: ViewModel() {
+    /** Lookup to use with this view model */
+    val lookup: GoogleBookLookup = GoogleBookLookup()
+}
 
 /**
  * Bar code scan fragment
@@ -323,7 +325,7 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
-        scanViewModel = ViewModelProvider(this).get(ScanViewModel::class.java)
+        scanViewModel = ViewModelProvider(this)[ScanViewModel::class.java]
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
@@ -641,8 +643,8 @@ class ScanFragment : Fragment() {
                 Toast.LENGTH_LONG
             ).show()
         }
-        if (!lookupISBNs(codes) { GoogleBookLookup.lookupISBN(it) } &&
-            !lookupISBNs(codes) { GoogleBookLookup.generalLookup(it, 0, 20) }) {
+        if (!lookupISBNs(codes) { scanViewModel.lookup.lookupISBN(it) } &&
+            !lookupISBNs(codes) { scanViewModel.lookup.generalLookup(it, 0, 20) }) {
             // If we got here we didn't find anything
             Toast.makeText(
                 context,
@@ -733,8 +735,8 @@ class ScanFragment : Fragment() {
                 }
 
                 // Lookup using title and/or author
-                val spec = GoogleBookLookup.getTitleAuthorQuery(title, author)
-                val result = GoogleBookLookup.generalLookup(spec)
+                val spec = scanViewModel.lookup.getTitleAuthorQuery(title, author)
+                val result = scanViewModel.lookup.generalLookup(spec)
                 // If we still didn't find anything, stop
                 if (result == null || result.list.isEmpty()) {
                     Toast.makeText(
@@ -1444,7 +1446,7 @@ class ScanFragment : Fragment() {
                     val pager = Pager(
                         config
                     ) {
-                        GoogleBookLookup.generalLookupPaging(spec, itemCount, list)
+                        scanViewModel.lookup.generalLookupPaging(spec, itemCount, list)
                     }
                     val flow = pager.flow.cachedIn(scanViewModel.viewModelScope)
                         .combine(filterFlow) {data, b ->

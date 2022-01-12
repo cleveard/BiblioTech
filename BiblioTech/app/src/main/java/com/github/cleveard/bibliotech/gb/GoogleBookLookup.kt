@@ -25,7 +25,7 @@ private const val oauthKey = "GOOGLE_BOOKS_OAUTH_ID"
  * Constructor is private because all methods are in the companion object
  */
 @EnvironmentValues(apiKey, oauthKey)
-internal class GoogleBookLookup private constructor() {
+internal class GoogleBookLookup {
     /**
      * Exception thrown when a book query fails
      */
@@ -46,7 +46,7 @@ internal class GoogleBookLookup private constructor() {
      * @param list The list of item in the first page of the query. We immediately return these
      *             the first time we ask for the first page.
      */
-    private class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null) : PagingSource<Int, Any>() {
+    private inner class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null) : PagingSource<Int, Any>() {
         /**
          * Load a page from the query
          * @param params The params for the load
@@ -140,318 +140,318 @@ internal class GoogleBookLookup private constructor() {
         private const val kMainCategory = "mainCategory"
         private const val kVolumeLink = "infoLink"
         private const val kRating = "averageRating"
+    }
 
-        /**
-         * Look up a book by ISBN
-         * @param isbn The isbn to lookup
-         * @return The LookupResult for the query, or null
-         */
-        @Throws(LookupException::class)
-        suspend fun lookupISBN(isbn: String): LookupResult? {
-            return queryBooks(buildUrl(kVolumesCollection, Uri.encode(String.format(kISBNParameter, isbn))))
-        }
+    /**
+     * Look up a book by ISBN
+     * @param isbn The isbn to lookup
+     * @return The LookupResult for the query, or null
+     */
+    @Throws(LookupException::class)
+    suspend fun lookupISBN(isbn: String): LookupResult? {
+        return queryBooks(buildUrl(kVolumesCollection, Uri.encode(String.format(kISBNParameter, isbn))))
+    }
 
-        /**
-         * Get search terms for title and author lookup
-         * @param title The title to search for
-         * @param author The author to search for
-         * @return The query search terms
-         */
-        fun getTitleAuthorQuery(title: String, author: String): String {
-            return if (title.isNotEmpty()) {
-                if (author.isNotEmpty())
-                    "${String.format(kTitleParameter, title)} ${String.format(kAuthorParameter, author)}"
-                else
-                    String.format(kTitleParameter, title)
-            } else if (author.isNotEmpty())
-                String.format(kAuthorParameter, author)
+    /**
+     * Get search terms for title and author lookup
+     * @param title The title to search for
+     * @param author The author to search for
+     * @return The query search terms
+     */
+    fun getTitleAuthorQuery(title: String, author: String): String {
+        return if (title.isNotEmpty()) {
+            if (author.isNotEmpty())
+                "${String.format(kTitleParameter, title)} ${String.format(kAuthorParameter, author)}"
             else
-                ""
+                String.format(kTitleParameter, title)
+        } else if (author.isNotEmpty())
+            String.format(kAuthorParameter, author)
+        else
+            ""
+    }
+
+    /**
+     * Lookup books using a general query
+     * @param query The query
+     * @param index The index of the result page to return
+     * @param pageCount The number of results to return
+     * @return The LookupResult for the query, or null
+     */
+    @Throws(LookupException::class)
+    suspend fun generalLookup(query: String, index: Int = 0, pageCount: Int = 10): LookupResult? {
+        val loadSize = pageCount.coerceAtMost(40)
+        val spec = buildUrl(
+            kVolumesCollection,
+            "${Uri.encode(query)}&startIndex=${index}&maxResults=${loadSize}"
+        )
+
+        return queryBooks(spec)
+    }
+
+    /**
+     * Lookup books using a general query
+     * @param search The query
+     * @param itemCount The total number of items the query will return, if available
+     * @param list The books in the first page of the query, if available
+     * @return The PagingSource for the book in the query
+     */
+    fun generalLookupPaging(search: String, itemCount: Int = 0, list: List<BookAndAuthors>? = null): PagingSource<Int, Any> {
+        return BookQueryPagingSource(search, itemCount, list)
+    }
+
+    /**
+     * Get a json value from json object
+     * @param <T> The type of the object being returned
+     * @param json The json object
+     * @param name The name of the value
+     * @param defaultValue Default value returned if the value isn't present
+     */
+    @Throws(Exception::class)
+    private inline fun <reified T> getJsonValue(json: JSONObject, name: String, defaultValue: T): T {
+        val value = json.opt(name)
+        return if (value != null && value is T) value else defaultValue
+    }
+
+    /**
+     * Get a list value from a json array object
+     * @param <T> The type of the values in the list
+     * @param <I> The type of the values in the json object
+     * @param json The json object
+     * @param name The name of the list
+     * @param lambda A lambda that converts the json type to the list type
+     * @return The list of values
+     */
+    private inline fun <T, reified I> getJsonValue(json: JSONObject, name: String, lambda: (I) -> (T)): MutableList<T> {
+        // Get the json array and return an empty list if it doesn't exist
+        val array = json.optJSONArray(name)
+        array?: return ArrayList(0)
+
+        // Loop through the array and add them to the result list
+        val count = array.length()
+        val list = ArrayList<T>(count)
+        for (i in 0 until count) {
+            list.add(lambda(array[i] as I))
         }
+        return list
+    }
 
-        /**
-         * Lookup books using a general query
-         * @param query The query
-         * @param index The index of the result page to return
-         * @param pageCount The number of results to return
-         * @return The LookupResult for the query, or null
-         */
-        @Throws(LookupException::class)
-        suspend fun generalLookup(query: String, index: Int = 0, pageCount: Int = 10): LookupResult? {
-            val loadSize = pageCount.coerceAtMost(40)
-            val spec = buildUrl(
-                kVolumesCollection,
-                "${Uri.encode(query)}&startIndex=${index}&maxResults=${loadSize}"
-            )
-
-            return queryBooks(spec)
-        }
-
-        /**
-         * Lookup books using a general query
-         * @param search The query
-         * @param itemCount The total number of items the query will return, if available
-         * @param list The books in the first page of the query, if available
-         * @return The PagingSource for the book in the query
-         */
-        fun generalLookupPaging(search: String, itemCount: Int = 0, list: List<BookAndAuthors>? = null): PagingSource<Int, Any> {
-            return BookQueryPagingSource(search, itemCount, list)
-        }
-
-        /**
-         * Get a json value from json object
-         * @param <T> The type of the object being returned
-         * @param json The json object
-         * @param name The name of the value
-         * @param defaultValue Default value returned if the value isn't present
-         */
-        @Throws(Exception::class)
-        private inline fun <reified T> getJsonValue(json: JSONObject, name: String, defaultValue: T): T {
-            val value = json.opt(name)
-            return if (value != null && value is T) value else defaultValue
-        }
-
-        /**
-         * Get a list value from a json array object
-         * @param <T> The type of the values in the list
-         * @param <I> The type of the values in the json object
-         * @param json The json object
-         * @param name The name of the list
-         * @param lambda A lambda that converts the json type to the list type
-         * @return The list of values
-         */
-        private inline fun <T, reified I> getJsonValue(json: JSONObject, name: String, lambda: (I) -> (T)): MutableList<T> {
-            // Get the json array and return an empty list if it doesn't exist
-            val array = json.optJSONArray(name)
-            array?: return ArrayList(0)
-
-            // Loop through the array and add them to the result list
-            val count = array.length()
-            val list = ArrayList<T>(count)
-            for (i in 0 until count) {
-                list.add(lambda(array[i] as I))
-            }
-            return list
-        }
-
-        /**
-         * Get a thumbnail link from a json object
-         * @param json The json object
-         * @param thumbs The list of possible thumbnail value names in proper order
-         * @return The thumbnail URL or ""
-         * We search for the URL using the names in thumbs and return the first one found
-         */
-        private fun getThumbnail(json: JSONObject, thumbs: Array<String>) : String {
-            // Return "" if there aren't any image links
-            if (!json.has(kImageLinks))
-                return ""
-
-            // Get the image links and search for a URL
-            val links = json.getJSONObject(kImageLinks)
-            for (thumb in thumbs) {
-                val link = getJsonValue(links, thumb, "")
-                // Return the link if we find it
-                if (link != "")
-                    return link
-            }
+    /**
+     * Get a thumbnail link from a json object
+     * @param json The json object
+     * @param thumbs The list of possible thumbnail value names in proper order
+     * @return The thumbnail URL or ""
+     * We search for the URL using the names in thumbs and return the first one found
+     */
+    private fun getThumbnail(json: JSONObject, thumbs: Array<String>) : String {
+        // Return "" if there aren't any image links
+        if (!json.has(kImageLinks))
             return ""
-        }
 
-        /**
-         * Get the ISBN from the array of identifiers
-         * @param identifiers The array of identifiers
-         * @return The ISBN, or null if there isn't one
-         */
-        @Throws(Exception::class)
-        private fun findISBNs(identifiers: JSONArray): ArrayList<IsbnEntity> {
-            val result = ArrayList<IsbnEntity>()
-            var i = identifiers.length()
-            // Loop through the identifiers
-            while (--i >= 0) {
-                // Get the next identifier
-                val id = identifiers.getJSONObject(i)
-                // Get the identifier type
-                val type = id.getString(kType)
-                // If we get an ISBN 13 identifier, then return it
-                if (type == kISBN_13)
-                    result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
-                // If we get an ISBN 10 identifier, then remember it
-                if (type == kISBN_10)
-                    result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
+        // Get the image links and search for a URL
+        val links = json.getJSONObject(kImageLinks)
+        for (thumb in thumbs) {
+            val link = getJsonValue(links, thumb, "")
+            // Return the link if we find it
+            if (link != "")
+                return link
+        }
+        return ""
+    }
+
+    /**
+     * Get the ISBN from the array of identifiers
+     * @param identifiers The array of identifiers
+     * @return The ISBN, or null if there isn't one
+     */
+    @Throws(Exception::class)
+    private fun findISBNs(identifiers: JSONArray): ArrayList<IsbnEntity> {
+        val result = ArrayList<IsbnEntity>()
+        var i = identifiers.length()
+        // Loop through the identifiers
+        while (--i >= 0) {
+            // Get the next identifier
+            val id = identifiers.getJSONObject(i)
+            // Get the identifier type
+            val type = id.getString(kType)
+            // If we get an ISBN 13 identifier, then return it
+            if (type == kISBN_13)
+                result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
+            // If we get an ISBN 10 identifier, then remember it
+            if (type == kISBN_10)
+                result.add(IsbnEntity(id = 0, isbn = id.getString(kIdentifier)))
+        }
+        // Return null or the ISBN 10 identifier, if no ISBN 13 id was found
+        return result
+    }
+
+    /**
+     * Break authors name and put in AuthorEntity
+     * @param in_name The name of the author
+     * @return An AuthorEntity with the name
+     */
+    private fun separateAuthor(in_name: String) : AuthorEntity {
+        return AuthorEntity(0, in_name)
+    }
+
+    /**
+     * Parse a book from a json object
+     * @param json The json object
+     * @return The data from the json object in a BookAndAuthors object
+     */
+    @Throws(Exception::class)
+    fun parseJSON(json: JSONObject): BookAndAuthors {
+        // Make sure the object is formatted properly
+        val volume =
+            json.getJSONObject(kVolumeInfo)
+        val kind =
+            json.getString(kKind)
+        if (kind != kBooksVolume) throw Exception(
+            "Invalid Response"
+        )
+
+        // Get the categories
+        val categories = getJsonValue<CategoryEntity, String>(volume, kCategories) { CategoryEntity(0, it) }
+        // Put the main category at the top of the list, if it isn't there
+        val cat = getJsonValue(volume, kMainCategory, "")
+        val catIndex = categories.indexOfFirst { it.category == cat }
+        if (catIndex > 0) {
+            val tmp = categories[catIndex]
+            for (i in catIndex downTo 1) {
+                categories[i] = categories[i - 1]
             }
-            // Return null or the ISBN 10 identifier, if no ISBN 13 id was found
-            return result
+            categories[0] = tmp
         }
 
-        /**
-         * Break authors name and put in AuthorEntity
-         * @param in_name The name of the author
-         * @return An AuthorEntity with the name
-         */
-        private fun separateAuthor(in_name: String) : AuthorEntity {
-            return AuthorEntity(0, in_name)
-        }
-
-        /**
-         * Parse a book from a json object
-         * @param json The json object
-         * @return The data from the json object in a BookAndAuthors object
-         */
-        @Throws(Exception::class)
-        fun parseJSON(json: JSONObject): BookAndAuthors {
-            // Make sure the object is formatted properly
-            val volume =
-                json.getJSONObject(kVolumeInfo)
-            val kind =
-                json.getString(kKind)
-            if (kind != kBooksVolume) throw Exception(
-                "Invalid Response"
-            )
-
-            // Get the categories
-            val categories = getJsonValue<CategoryEntity, String>(volume, kCategories) { CategoryEntity(0, it) }
-            // Put the main category at the top of the list, if it isn't there
-            val cat = getJsonValue(volume, kMainCategory, "")
-            val catIndex = categories.indexOfFirst { it.category == cat }
-            if (catIndex > 0) {
-                val tmp = categories[catIndex]
-                for (i in catIndex downTo 1) {
-                    categories[i] = categories[i - 1]
-                }
-                categories[0] = tmp
+        // Return the book object
+        return BookAndAuthors(
+            book = BookEntity(
+                id = 0,
+                volumeId = getJsonValue(json, kVolumeID, ""),
+                sourceId = "books.google.com",
+                title = getJsonValue(volume, kTitle, ""),
+                subTitle = getJsonValue(volume, kSubTitle, ""),
+                description = getJsonValue(volume, kDescription, ""),
+                pageCount = getJsonValue(volume, kPageCount, 0),
+                bookCount = 1,
+                linkUrl = getJsonValue(volume, kVolumeLink, ""),
+                rating = getJsonValue(volume, kRating, 1.0),
+                added = Date(0),
+                modified = Date(0),
+                smallThumb = getThumbnail(volume, kSmallThumb),
+                largeThumb = getThumbnail(volume, kThumb),
+                flags = 0
+            ),
+            authors = getJsonValue<AuthorEntity, String>(volume, kAuthors) {
+                separateAuthor(it)
+            },
+            categories = categories,
+            tags = ArrayList(),
+            isbns = run {
+                if (volume.has(kIndustryIdentifiers))
+                    findISBNs(volume.getJSONArray(kIndustryIdentifiers))
+                else
+                    emptyList()
             }
+        )
+    }
 
-            // Return the book object
-            return BookAndAuthors(
-                book = BookEntity(
-                    id = 0,
-                    volumeId = getJsonValue(json, kVolumeID, ""),
-                    sourceId = "books.google.com",
-                    title = getJsonValue(volume, kTitle, ""),
-                    subTitle = getJsonValue(volume, kSubTitle, ""),
-                    description = getJsonValue(volume, kDescription, ""),
-                    pageCount = getJsonValue(volume, kPageCount, 0),
-                    bookCount = 1,
-                    linkUrl = getJsonValue(volume, kVolumeLink, ""),
-                    rating = getJsonValue(volume, kRating, 1.0),
-                    added = Date(0),
-                    modified = Date(0),
-                    smallThumb = getThumbnail(volume, kSmallThumb),
-                    largeThumb = getThumbnail(volume, kThumb),
-                    flags = 0
-                ),
-                authors = getJsonValue<AuthorEntity, String>(volume, kAuthors) {
-                    separateAuthor(it)
-                },
-                categories = categories,
-                tags = ArrayList(),
-                isbns = run {
-                    if (volume.has(kIndustryIdentifiers))
-                        findISBNs(volume.getJSONArray(kIndustryIdentifiers))
-                    else
-                        emptyList()
-                }
-            )
-        }
-
-        /**
-         * Parse the response for a query
-         * @param json The query converted to a json object
-         */
-        @Throws(Exception::class)
-        private fun parseResponse(json: JSONObject): LookupResult? {
-            val list: MutableList<BookAndAuthors> = ArrayList(1)
-            val kind = json.getString(kKind)
-            if (kind == kBooksVolumes) {
-                // We have a list of books
-                try {
-                    // Get the array of books from the object
-                    val items = json.getJSONArray(kItems)
-                    val count = items.length()
-                    // If count is 0, then nothing left to do
-                    if (count == 0)
-                        return null
-                    // Loop through the json array and add each one to the result list
-                    for (i in 0 until count) {
-                        list.add(parseJSON(items.getJSONObject(i)))
-                    }
-                    // Get the total number of items returned by the query
-                    val totalItems = json.getInt(kItemCount)
-                    // Return the result
-                    return LookupResult(list, totalItems)
-                } catch (e: JSONException) {
-                    // Stop on a JSON exception.
+    /**
+     * Parse the response for a query
+     * @param json The query converted to a json object
+     */
+    @Throws(Exception::class)
+    private fun parseResponse(json: JSONObject): LookupResult? {
+        val list: MutableList<BookAndAuthors> = ArrayList(1)
+        val kind = json.getString(kKind)
+        if (kind == kBooksVolumes) {
+            // We have a list of books
+            try {
+                // Get the array of books from the object
+                val items = json.getJSONArray(kItems)
+                val count = items.length()
+                // If count is 0, then nothing left to do
+                if (count == 0)
                     return null
+                // Loop through the json array and add each one to the result list
+                for (i in 0 until count) {
+                    list.add(parseJSON(items.getJSONObject(i)))
                 }
+                // Get the total number of items returned by the query
+                val totalItems = json.getInt(kItemCount)
+                // Return the result
+                return LookupResult(list, totalItems)
+            } catch (e: JSONException) {
+                // Stop on a JSON exception.
+                return null
             }
-            throw Exception("Invalid Response")
         }
+        throw Exception("Invalid Response")
+    }
 
-        /**
-         * For a query url
-         * @param collection The collection we are querying
-         * @param parameters The query parameters
-         * @return The URL
-         */
-        @Suppress("SameParameterValue")
-        private fun buildUrl(collection: String, parameters: String): String {
-            return String.format(
-                "%s/%s?q=%s%s",
-                kURL,
-                collection,
-                parameters,
-                kKey
-            )
-        }
+    /**
+     * For a query url
+     * @param collection The collection we are querying
+     * @param parameters The query parameters
+     * @return The URL
+     */
+    @Suppress("SameParameterValue")
+    private fun buildUrl(collection: String, parameters: String): String {
+        return String.format(
+            "%s/%s?q=%s%s",
+            kURL,
+            collection,
+            parameters,
+            kKey
+        )
+    }
 
-        /**
-         * Run a query and return a result
-         */
-        @Suppress("BlockingMethodInNonBlockingContext")
-        @Throws(LookupException::class)
-        private suspend fun queryBooks(spec: String?) : LookupResult? {
-            // Run in an IO context to handle coroutines properly
-            return withContext(Dispatchers.IO) {
-                var bookClient: HttpURLConnection? = null
-                try {
-                    // Setup the URL to google books
-                    val url = URL(spec)
-                    bookClient = url.openConnection() as HttpURLConnection
-                    // Did we get a valid return
-                    val status = bookClient.responseCode
-                    // If not, through an error
-                    if (status != 200) throw Exception(
-                        String.format(
-                            "HTTP Error %d",
-                            status
-                        )
+    /**
+     * Run a query and return a result
+     */
+    @Suppress("BlockingMethodInNonBlockingContext")
+    @Throws(LookupException::class)
+    private suspend fun queryBooks(spec: String?) : LookupResult? {
+        // Run in an IO context to handle coroutines properly
+        return withContext(Dispatchers.IO) {
+            var bookClient: HttpURLConnection? = null
+            try {
+                // Setup the URL to google books
+                val url = URL(spec)
+                bookClient = url.openConnection() as HttpURLConnection
+                // Did we get a valid return
+                val status = bookClient.responseCode
+                // If not, through an error
+                if (status != 200) throw Exception(
+                    String.format(
+                        "HTTP Error %d",
+                        status
                     )
-                    // Get the data stream for the response
-                    val content: InputStream =
-                        BufferedInputStream(bookClient.inputStream)
-                    val input = InputStreamReader(content)
-                    val reader = BufferedReader(input)
-                    val responseBuilder = StringBuilder()
-                    var lineIn: String?
-                    // Read the response into a single string
-                    while (reader.readLine().also { lineIn = it } != null) {
-                        responseBuilder.append(lineIn)
-                    }
-                    val responseString = responseBuilder.toString()
-                    // Create the json object
-                    val json = JSONObject(responseString)
-                    // Parse the json object
-                    return@withContext  parseResponse(json)
-                } catch (e: MalformedURLException) {
-                    // Throw an exception if we formed a bad URL
-                    throw LookupException("Bad URL: $spec: $e")
-                } catch (e: Exception) {
-                    // Pass on other exceptions
-                    throw LookupException(e.toString())
-                } finally {
-                    // Disconnect from google books
-                    bookClient?.disconnect()
+                )
+                // Get the data stream for the response
+                val content: InputStream =
+                    BufferedInputStream(bookClient.inputStream)
+                val input = InputStreamReader(content)
+                val reader = BufferedReader(input)
+                val responseBuilder = StringBuilder()
+                var lineIn: String?
+                // Read the response into a single string
+                while (reader.readLine().also { lineIn = it } != null) {
+                    responseBuilder.append(lineIn)
                 }
+                val responseString = responseBuilder.toString()
+                // Create the json object
+                val json = JSONObject(responseString)
+                // Parse the json object
+                return@withContext  parseResponse(json)
+            } catch (e: MalformedURLException) {
+                // Throw an exception if we formed a bad URL
+                throw LookupException("Bad URL: $spec: $e")
+            } catch (e: Exception) {
+                // Pass on other exceptions
+                throw LookupException(e.toString())
+            } finally {
+                // Disconnect from google books
+                bookClient?.disconnect()
             }
         }
     }
