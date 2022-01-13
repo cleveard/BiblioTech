@@ -49,6 +49,9 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    packagingOptions {
+        resources.excludes.add("META-INF/*")
+    }
 }
 
 dependencies {
@@ -105,4 +108,13 @@ dependencies {
     implementation project(':annotations')
     annotationProcessor project(':codegen')
     kapt project(':codegen')
+
+    implementation "com.google.http-client:google-http-client:1.41.0"
+    implementation "com.google.http-client:google-http-client-android:1.41.0"
+    implementation "com.google.apis:google-api-services-books:v1-rev20201021-1.32.1"
+    //implementation "com.google.http-client:google-api-client:1.41.0"
+    //implementation "com.google.http-client:google-api-client-android:1.41.0"
+    //implementation "com.google.http-client:google-http-client-gson:1.41.0"
+    //implementation "com.google.http-client:google-http-client-jackson2:1.41.0"
+    //implementation "com.google.http-client:google-http-client-protobuf:1.41.0"
 }
