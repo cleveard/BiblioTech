@@ -1,10 +1,13 @@
 package com.github.cleveard.bibliotech
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.Menu
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
@@ -20,6 +23,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.coroutineScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
@@ -28,11 +32,20 @@ import java.io.File
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
 import com.github.cleveard.bibliotech.ui.scan.ScanFragmentDirections
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.completeWith
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 
 const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"
+
+/** Channel to queue launch requests */
+private val requestChannel: Channel<Pair<Intent,(Intent?)-> Unit>> = Channel()
+/** Channel used to return result */
+private val resultChannel: Channel<Intent?> = Channel()
 
 /**
  * Interface for managing navigation
@@ -42,10 +55,14 @@ interface ManageNavigation {
     fun navigate(action: NavDirections): Boolean
 }
 
+interface LaunchIntentForResult {
+    suspend fun launchForResult(intent: Intent): Intent?
+}
+
 /**
  * The main activity for the app
  */
-class MainActivity : AppCompatActivity(), ManageNavigation {
+class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResult {
     companion object {
         /** Url to the  BiblioTech help web page */
         private const val HELP_URL: String = "https://cleveard.github.io/BiblioTech/help/"
@@ -104,6 +121,22 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
      * We use this so suppress navigating to the same destination twice in a row
      */
     private var lastNavFilter: String = ""
+
+    /** Launcher to start an activity using an intent and return an intent result */
+    private val launcher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(object: ActivityResultContract<Intent, Intent?>() {
+            override fun createIntent(context: Context, input: Intent): Intent {
+                return input
+            }
+
+            override fun parseResult(resultCode: Int, intent: Intent?): Intent? {
+                return intent
+            }
+        }) {
+            MainScope().launch {
+                resultChannel.send(it)
+            }
+        }
 
     /**
      * @inheritDoc
@@ -194,6 +227,19 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         viewNames.observe(this@MainActivity) {
             updateViews(it)
         }
+
+        // Create a job tied to the activity lifecycle that
+        // processes the intent launch requests
+        lifecycle.coroutineScope.launch {
+            flow {
+                for (r in requestChannel)
+                    emit(r)
+            }.collect {request ->
+                launcher.launch(request.first)
+                val result = resultChannel.receive()
+                request.second(result)
+            }
+         }
     }
 
     /**
@@ -288,5 +334,13 @@ class MainActivity : AppCompatActivity(), ManageNavigation {
         }
 
         return super.onKeyDown(keyCode, event)
+    }
+
+    override suspend fun launchForResult(intent: Intent): Intent? {
+        val returnValue = CompletableDeferred<Intent?>()
+        requestChannel.send(Pair(intent) { result ->
+            returnValue.completeWith(Result.success(result))
+        })
+        return returnValue.await()
     }
 }

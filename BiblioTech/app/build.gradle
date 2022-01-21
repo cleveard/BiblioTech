@@ -25,6 +25,9 @@ android {
         versionCode 8
         versionName "1.0.alpha09"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [
+            GOOGLE_BOOKS_REDIRECT_SCHEME: "$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME"
+        ]
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -73,6 +76,7 @@ dependencies {
     implementation 'androidx.fragment:fragment-ktx:1.4.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0'
     implementation 'androidx.preference:preference-ktx:1.1.1'
+    implementation 'androidx.security:security-crypto:1.0.0'
     testImplementation 'junit:junit:4.13.1'
     androidTestImplementation "androidx.test:runner:1.4.0"
     androidTestImplementation "androidx.test:core:1.4.0"
@@ -117,4 +121,5 @@ dependencies {
     //implementation "com.google.http-client:google-http-client-gson:1.41.0"
     //implementation "com.google.http-client:google-http-client-jackson2:1.41.0"
     //implementation "com.google.http-client:google-http-client-protobuf:1.41.0"
+    implementation "net.openid:appauth:0.11.1"
 }
