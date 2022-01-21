@@ -28,7 +28,11 @@ abstract class OAuth(
         Uri.parse(authEndpoint),
         Uri.parse(tokenEndpoint))
     private var authService: AuthorizationService = AuthorizationService(context)
-    private var authState: AuthState = AuthState(authConfig)
+    private var authState: AuthState = try {
+        AuthState.jsonDeserialize(persist.getString(preferenceKey, "")!!)
+    } catch (e: Exception) {
+        AuthState(authConfig)
+    }
     val authorizationException: AuthorizationException?
         get() = authState.authorizationException
     val isAuthorized: Boolean
