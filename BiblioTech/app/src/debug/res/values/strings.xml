@@ -5,4 +5,6 @@
     <string name="menu_books">Books Test</string>
     <string name="menu_scan">Scan Test</string>
     <string name="menu_export_import">Export/Import Test</string>
+    <string name="action_settings">Settings Test</string>
+    <string name="print">Print Test</string>
 </resources>

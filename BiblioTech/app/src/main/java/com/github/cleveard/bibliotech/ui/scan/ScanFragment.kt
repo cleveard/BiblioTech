@@ -331,6 +331,10 @@ class ScanFragment : Fragment() {
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
         }
         tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
+
+        // Let the system know we have an options menu
+        setHasOptionsMenu(true)
+
         return inflater.inflate(R.layout.scan_fragment, container, false)
     }
 
@@ -407,6 +411,31 @@ class ScanFragment : Fragment() {
             } else {
                 view.findViewById<View>(R.id.scan_permissions).visibility = View.VISIBLE
             }
+        }
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        // Inflate the menu
+        inflater.inflate(R.menu.settings_option, menu)
+        super.onCreateOptionsMenu(menu, inflater)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        // Direct action to onActionSelected
+        return when(item.itemId) {
+            R.id.action_to_settingsFragment -> {
+                (activity as? ManageNavigation)?.navigate(
+                    ScanFragmentDirections.actionNavScanToSettingsFragment()
+                )
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
         }
     }
 
