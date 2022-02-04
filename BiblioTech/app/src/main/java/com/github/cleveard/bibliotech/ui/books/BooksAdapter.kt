@@ -395,6 +395,15 @@ internal open class BooksAdapter(
                 // Set the default thumbnails and get the real ones
                 itemView.findViewById<ImageView>(R.id.book_thumb)?.setImageResource(0)
                 bindThumb(book.book.id, true, R.id.book_thumb)
+                // Set the series
+                book.series?.also {
+                    view.findViewById<View>(R.id.book_series)?.visibility = View.VISIBLE
+                    view.findViewById<TextView>(R.id.book_series_title)?.text = it.title
+                    view.findViewById<TextView>(R.id.book_series_volume)?.text = book.book.seriesOrder.toString()
+                }?: run {
+                    view.findViewById<View>(R.id.book_series)?.visibility = View.GONE
+                }
+
                 return
             }
 

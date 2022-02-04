@@ -10,13 +10,57 @@
     android:layout_marginHorizontal="10dp"
     android:layout_marginVertical="3dp">
 
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/book_series"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:id="@+id/book_series_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            android:text="@string/series_colon" />
+
+        <TextView
+            android:id="@+id/book_series_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_marginEnd="3dp"
+            app:layout_constraintBaseline_toBaselineOf="@id/book_series_label"
+            app:layout_constraintStart_toEndOf="@id/book_series_label"
+            app:layout_constraintEnd_toStartOf="@id/book_series_vol_label" />
+
+        <TextView
+            android:id="@+id/book_series_vol_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintBaseline_toBaselineOf="@id/book_series_label"
+            app:layout_constraintEnd_toStartOf="@id/book_series_volume"
+            android:text="@string/vol_colon" />
+
+        <TextView
+            android:id="@+id/book_series_volume"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            app:layout_constraintBaseline_toBaselineOf="@id/book_series_label"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
     <RatingBar
         android:id="@+id/book_list_rating"
         style="@style/Widget.AppCompat.RatingBar.Small"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"/>
+        app:layout_constraintTop_toBottomOf="@+id/book_series"/>
 
     <TextView
         android:id="@+id/book_list_link"
@@ -35,7 +79,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBaseline_toBaselineOf="@id/book_list_link"
-        android:layout_marginStart="3dp"
+        android:layout_marginEnd="3dp"
         app:layout_constraintEnd_toStartOf="@id/book_list_pages_label" />
 
     <TextView
@@ -78,8 +122,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="3dp"
         app:layout_constraintBaseline_toBaselineOf="@id/book_list_added"
-        app:layout_constraintStart_toEndOf="@id/book_id_label"
-        android:layout_toEndOf="@id/book_id_label" />
+        app:layout_constraintStart_toEndOf="@id/book_id_label" />
 
     <TextView
         android:id="@+id/book_list_added_label"
