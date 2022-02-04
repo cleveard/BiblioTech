@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Resources
 import android.graphics.PointF
 import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.print.LayoutDescription
 
@@ -89,8 +90,10 @@ class PrintLayouts(context: Context) {
                     subtitle.overlapping.addAll(smallThumb, largeThumb)
                     // Setup the authors label and authors list
                     authors.simpleLayout(subtitle, smallThumb, largeThumb, fieldOverlapsLabel = true)
+                    // Setup the series label and value
+                    series.simpleLayout(authors.end, smallThumb, largeThumb)
                     // Setup the tags label and tags list
-                    tags.simpleLayout(authors.end, smallThumb, largeThumb, fieldOverlapsLabel = true)
+                    tags.simpleLayout(series, smallThumb, largeThumb, fieldOverlapsLabel = true)
                     // Setup the tags label and tags list
                     categories.simpleLayout(tags.end, smallThumb, largeThumb, fieldOverlapsLabel = true)
                     // Setup the tags label and tags list
@@ -166,8 +169,10 @@ class PrintLayouts(context: Context) {
                     )
                     // Setup the authors label and authors list
                     authors.splitLayout(startSideStart, startSideEnd, subtitle, smallThumb, largeThumb, fieldOverlapsLabel = true)
+                    // Setup the authors label and authors list
+                    series.splitLayout(startSideStart, startSideEnd, authors.end, smallThumb, largeThumb)
                     // Setup the tags label and tags list
-                    tags.splitLayout(startSideStart, startSideEnd, authors.end, smallThumb, largeThumb, fieldOverlapsLabel = true)
+                    tags.splitLayout(startSideStart, startSideEnd, series, smallThumb, largeThumb, fieldOverlapsLabel = true)
                     // Setup the tags label and tags list
                     categories.splitLayout(endSideStart, endSideEnd, subtitle, smallThumb, largeThumb, fieldOverlapsLabel = true)
                     // Setup the tags label and tags list
@@ -198,31 +203,36 @@ class PrintLayouts(context: Context) {
 
     private abstract class LayoutGenerator(resources: Resources, protected val labelMargin: Float, protected val verticalMargin: Float) {
         protected inner class LabeledField(
-            resources: Resources,
-            column: Column,
-            labelId: Int,
+            label: LayoutDescription.FieldLayoutDescription<*>,
+            field: LayoutDescription.FieldLayoutDescription<*>,
             labelFollowsField: Boolean = false
         ) {
-            val start: LayoutDescription.FieldLayoutDescription
-            val end: LayoutDescription.FieldLayoutDescription
-
-            init {
-                val label = LayoutDescription.TextFieldLayoutDescription(column.name, resources.getString(labelId))
-                val field = LayoutDescription.ColumnTextFieldLayoutDescription(column)
-                start = if (labelFollowsField) field else label
-                end = if (labelFollowsField) label else field
-                start.margin.top = verticalMargin
+            val start: LayoutDescription.FieldLayoutDescription<*> = (if (labelFollowsField) field else label).apply {
+                margin.top = verticalMargin
+                // put gap between label and field
+                margin.right = labelMargin
+            }
+            val end: LayoutDescription.FieldLayoutDescription<*> = (if (labelFollowsField) label else field).apply {
                 // Align field and label baselines
-                end.layoutAlignment.addBaselineAlignment(
+                layoutAlignment.addBaselineAlignment(
                     LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.BaseLine, start)
                 )
-                // put gap between label and field
-                start.margin.right = labelMargin
             }
 
+            constructor(
+                resources: Resources,
+                column: Column,
+                labelId: Int,
+                labelFollowsField: Boolean = false
+            ): this(
+                LayoutDescription.TextFieldLayoutDescription(column.name, resources.getString(labelId)),
+                LayoutDescription.ColumnTextFieldLayoutDescription(column),
+                labelFollowsField
+            )
+
             fun simpleLayout(
-                below: LayoutDescription.FieldLayoutDescription,
-                vararg overlaps: LayoutDescription.FieldLayoutDescription,
+                below: LayoutDescription.FieldLayoutDescription<*>,
+                vararg overlaps: LayoutDescription.FieldLayoutDescription<*>,
                 fieldOverlapsLabel: Boolean = false,
                 endAlign: Boolean = false
             ) {
@@ -262,8 +272,8 @@ class PrintLayouts(context: Context) {
             fun splitLayout(
                 sideStart: LayoutDescription.HorizontalLayoutAlignment,
                 sideEnd: LayoutDescription.HorizontalLayoutAlignment,
-                below: LayoutDescription.FieldLayoutDescription,
-                vararg overlaps: LayoutDescription.FieldLayoutDescription,
+                below: LayoutDescription.FieldLayoutDescription<*>,
+                vararg overlaps: LayoutDescription.FieldLayoutDescription<*>,
                 fieldOverlapsLabel: Boolean = false
             ) {
                 start.layoutAlignment.addTopAlignment(
@@ -291,6 +301,45 @@ class PrintLayouts(context: Context) {
             }
         }
 
+        fun LayoutDescription.FieldLayoutDescription<*>.simpleLayout(
+            below: LayoutDescription.FieldLayoutDescription<*>,
+            vararg overlaps: LayoutDescription.FieldLayoutDescription<*>,
+            endAlign: Boolean = false
+        ) {
+            layoutAlignment.addTopAlignment(
+                // Set label/field below the desired field
+                LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, below)
+            )
+            overlapping.addAll(overlaps)
+            if (endAlign) {
+                // Start precedes end
+                layoutAlignment.addEndAlignment(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.End, null)
+                )
+            } else {
+                // Position start at the start
+                layoutAlignment.addStartAlignment(
+                    LayoutDescription.HorizontalLayoutDimension(LayoutDescription.HorizontalLayoutDimension.Type.Start, null)
+                )
+            }
+        }
+
+        fun LayoutDescription.FieldLayoutDescription<*>.splitLayout(
+            sideStart: LayoutDescription.HorizontalLayoutAlignment,
+            sideEnd: LayoutDescription.HorizontalLayoutAlignment,
+            below: LayoutDescription.FieldLayoutDescription<*>,
+            vararg overlaps: LayoutDescription.FieldLayoutDescription<*>
+        ) {
+            layoutAlignment.addTopAlignment(
+                // Set label/field below the desired field
+                LayoutDescription.VerticalLayoutDimension(LayoutDescription.VerticalLayoutDimension.Type.Bottom, below)
+            )
+
+            // Set start field alignment to fill the side
+            layoutAlignment.addAll(sideStart, sideEnd)
+            overlapping.addAll(overlaps)
+        }
+
         protected val smallThumb = LayoutDescription.ColumnBitmapFieldLayoutDescription(false, PointF(16.0f, 25.0f)).apply {
             margin.right = labelMargin
         }
@@ -302,6 +351,14 @@ class PrintLayouts(context: Context) {
             margin.top = verticalMargin
         }
         protected val authors = LabeledField(resources, Column.FIRST_NAME, R.string.authors_by)
+        protected val series = object: LayoutDescription.ColumnTextFieldLayoutDescription(Column.SERIES) {
+            val format = resources.getString(R.string.print_series)
+            override fun getContent(book: BookAndAuthors): String {
+                return book.series?.let {
+                    format.format(book.book.seriesOrder, it.title)
+                }?: ""
+            }
+        }
         protected val tags = LabeledField(resources, Column.TAGS, R.string.tags)
         protected val categories = LabeledField(resources, Column.CATEGORIES, R.string.categories)
         protected val isbns = LabeledField(resources, Column.ISBN, R.string.isbns)
@@ -317,12 +374,13 @@ class PrintLayouts(context: Context) {
 
         protected abstract fun describeLayout()
 
-        fun makeLayout(): List<LayoutDescription.FieldLayoutDescription> {
+        fun makeLayout(): List<LayoutDescription.FieldLayoutDescription<*>> {
             describeLayout()
             return listOf(
                 smallThumb, largeThumb,
                 title, subtitle,
                 authors.start, authors.end,
+                series,
                 tags.start, tags.end,
                 categories.start, categories.end,
                 isbns.start, isbns.end,

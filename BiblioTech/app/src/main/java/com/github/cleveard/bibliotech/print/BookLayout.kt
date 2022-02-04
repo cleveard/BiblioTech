@@ -3,7 +3,6 @@ package com.github.cleveard.bibliotech.print
 import android.graphics.*
 import android.text.*
 import com.github.cleveard.bibliotech.db.BookAndAuthors
-import com.github.cleveard.bibliotech.db.Column
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -56,7 +55,7 @@ data class BookLayout(
         /** The field/parent margins. Left is the start margin and right is the end. */
         val margins: RectF
         /** The description of the field. Null means the BookLayout */
-        val description: LayoutDescription.FieldLayoutDescription?
+        val description: LayoutDescription.FieldLayoutDescription<*>?
         /** The maximum width of the field */
         var width: Float
         /** The maximum height of the field */
@@ -276,7 +275,7 @@ data class BookLayout(
         /** @inheritDoc */
         override val margins: RectF = RectF(0.0f, 0.0f, 0.0f, 0.0f)
         /** @inheritDoc */
-        override val description: LayoutDescription.FieldLayoutDescription? = null
+        override val description: LayoutDescription.FieldLayoutDescription<*>? = null
         /** @inheritDoc */
         override var width: Float
             get() = columnWidth
@@ -383,7 +382,7 @@ data class BookLayout(
         /** The printer */
         val printer: PDFPrinter,
         /** The field description */
-        override val description: LayoutDescription.FieldLayoutDescription,
+        override val description: LayoutDescription.FieldLayoutDescription<*>,
         /** The maximum width of the field */
         override var width: Float
     ): LayoutBounds {
@@ -472,8 +471,7 @@ data class BookLayout(
      * Class for static text
      * @param printer The PDFPrinter we are using. Several attributes are kept there
      * @param width Maximum width of the field
-     * @param description The description of the field layout
-     * @param text The contents of the field
+     * @param textDescription The description of the field layout
      * @param paint The paint used to draw the contents
      */
     open class TextLayout(
@@ -482,12 +480,11 @@ data class BookLayout(
         /** Maximum width of the field */
         width: Float,
         /** The field description */
-        description: LayoutDescription.FieldLayoutDescription,
-        /** The column in the database */
-        protected var text: String,
+        protected val textDescription: LayoutDescription.FieldLayoutDescription<String>,
         /** The paint used to draw the text */
         private var paint: TextPaint = printer.basePaint
-    ): DrawLayout(printer, description, width) {
+    ): DrawLayout(printer, textDescription, width) {
+        protected var text: String = ""
         protected inner class LayoutSpan(
             val position: PointF,
             val layout: StaticLayout
@@ -931,7 +928,7 @@ data class BookLayout(
 
         /**
          * Find the top or bottom of the line on a clip boundary
-         * @param localBoundary The vertical clip boundary
+         * @param boundary The vertical clip boundary
          * @bottom bottom True to find the bottom. False to find the top
          * If top or bottom of a line is exactly on the boundary, then the boundary is returned
          * If the top line is below the boundary, or the bottom line is above the boundary,
@@ -995,8 +992,11 @@ data class BookLayout(
 
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
-            if (textSpans.isEmpty())
+            val value = textDescription.getContent(book)
+            if (value != text || textSpans.isEmpty()) {
+                text = value
                 createInitialSpans()
+            }
             setContent()
         }
 
@@ -1029,8 +1029,7 @@ data class BookLayout(
     /**
      * Class for a field with a book database value
      * @param printer The PDFPrinter we are using. Several attributes are kept there
-     * @param description The description of the field layout
-     * @param column The database column with the field value
+     * @param textDescription The description of the field layout
      */
     open class ColumnTextLayout(
         /** The printer */
@@ -1038,16 +1037,14 @@ data class BookLayout(
         /** Maximum width of the field */
         width: Float,
         /** The field description */
-        description: LayoutDescription.FieldLayoutDescription,
-        /** The database column with the field value */
-        val column: Column,
+        textDescription: LayoutDescription.FieldLayoutDescription<String>,
         /** The paint used to draw the text */
         paint: TextPaint = printer.basePaint
-    ): TextLayout(printer, width, description, "", paint) {
+    ): TextLayout(printer, width, textDescription, paint) {
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
             // Get the column value
-            text = column.desc.getDisplayValue(book)
+            text = textDescription.getContent(book)
             // Create the StaticLayout
             createInitialSpans()
             // Fill in the bounds and baseline of the field
@@ -1059,7 +1056,7 @@ data class BookLayout(
         /** The printer */
         printer: PDFPrinter,
         /** The field description */
-        description: LayoutDescription.FieldLayoutDescription
+        description: LayoutDescription.FieldLayoutDescription<*>
     ): DrawLayout(printer, description, 0.0f) {
         override suspend fun draw(canvas: Canvas) {
         }
@@ -1077,7 +1074,7 @@ data class BookLayout(
     /**
      * Class for a field with a book database value
      * @param printer The PDFPrinter we are using. Several attributes are kept there
-     * @param description The description of the field layout
+     * @param bitmapDescription The description of the field layout
      * @param columnWidth The width of the print column
      * @param large True to display the large thumbnail
      * @param paint The paint used to draw the bitmap
@@ -1086,16 +1083,16 @@ data class BookLayout(
         /** The printer */
         printer: PDFPrinter,
         /** The field description */
-        description: LayoutDescription.FieldLayoutDescription,
+        private val bitmapDescription: LayoutDescription.FieldLayoutDescription<Long>,
         /** The width of the print column */
         private val columnWidth: Float,
         /** True to show the large bitmap */
         val large: Boolean,
         /** The paint used to draw the bitmap */
         private val paint: TextPaint = printer.basePaint
-    ): DrawLayout(printer, description, description.maxSize.x) {
+    ): DrawLayout(printer, bitmapDescription, bitmapDescription.maxSize.x) {
         /** @inheritDoc */
-        override var height: Float = description.maxSize.y
+        override var height: Float = bitmapDescription.maxSize.y
             set(v) {
                 // Set the bounds bottom when the height changes
                 if (v != field)
@@ -1147,7 +1144,7 @@ data class BookLayout(
         /** @inheritDoc */
         override suspend fun setContent(book: BookAndAuthors) {
             // Set the bookId and clear the bitmap
-            bookId = book.book.id
+            bookId = bitmapDescription.getContent(book)
             bitmap = null
             // Set the bounds to the width and height.
             bounds.set(0.0f, 0.0f,

@@ -4,6 +4,7 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.TextPaint
+import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
 import kotlin.collections.HashMap
 
@@ -14,7 +15,7 @@ import kotlin.collections.HashMap
  */
 data class LayoutDescription(
     /** Layouts for the columns of the book to print */
-    val inColumns: List<FieldLayoutDescription>,
+    val inColumns: List<FieldLayoutDescription<*>>,
     /** Columns to print as book header. Set to null to leave out the header */
     val inHeaders: List<Column>?
 ) {
@@ -52,7 +53,7 @@ data class LayoutDescription(
         )
 
         // Map to map field descriptor to a field
-        val map = HashMap<FieldLayoutDescription?, BookLayout.LayoutBounds>()
+        val map = HashMap<FieldLayoutDescription<*>?, BookLayout.LayoutBounds>()
         // Null maps to the layout bounds for the entire layout
         map[null] = bookLayout.layoutBounds
         // Fill in the map for the fields in the layout
@@ -121,7 +122,7 @@ data class LayoutDescription(
         /** The dimension type */
         val align: LayoutAlignmentType
         /** The field with the dimension. Null is the field parent */
-        val alignTo: FieldLayoutDescription?
+        val alignTo: FieldLayoutDescription<*>?
     }
 
     /**
@@ -177,7 +178,7 @@ data class LayoutDescription(
         /** The alignmentType */
         override val align: Type,
         /** Field aligned to */
-        override val alignTo: FieldLayoutDescription?
+        override val alignTo: FieldLayoutDescription<*>?
     ): LayoutDimensionDescription {
         /** The different vertical dimensions we can align to */
         enum class Type: LayoutAlignmentType {
@@ -303,7 +304,7 @@ data class LayoutDescription(
         /** The alignmentType */
         override val align: Type,
         /** Field aligned to */
-        override val alignTo: FieldLayoutDescription?
+        override val alignTo: FieldLayoutDescription<*>?
     ): LayoutDimensionDescription {
         /** The different horizontal dimensions we can align to */
         enum class Type: LayoutAlignmentType {
@@ -407,7 +408,7 @@ data class LayoutDescription(
      * @param minSize The minimum size in points used by the field
      * @param maxSize The maximum size in points used by the field
      */
-    abstract class FieldLayoutDescription(
+    abstract class FieldLayoutDescription<T>(
         /** Flag string used to control visibility for the field */
         val visibleFlag: String,
         /** Additional padding in points */
@@ -421,7 +422,7 @@ data class LayoutDescription(
         val layoutAlignment: MutableSet<LayoutAlignment> = HashSet()
 
         /** Set of fields that we need to check overlapping this field */
-        val overlapping: MutableSet<FieldLayoutDescription> = HashSet()
+        val overlapping: MutableSet<FieldLayoutDescription<*>> = HashSet()
 
         /**
          * Get/Fill the layout for a field
@@ -430,19 +431,28 @@ data class LayoutDescription(
          * @param paint The paint used to draw the field
          */
         abstract fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint = printer.basePaint): BookLayout.DrawLayout
+
+        /**
+         * Get the content for this field
+         */
+        abstract fun getContent(book: BookAndAuthors): T
     }
 
     /**
      * Static text field
      * @param text The static text to display
      */
-    class TextFieldLayoutDescription(visibleFlag: String, private val text: String): FieldLayoutDescription(visibleFlag) {
+    class TextFieldLayoutDescription(visibleFlag: String, private val text: String): FieldLayoutDescription<String>(visibleFlag) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Return a text field with the StaticLayout
-            return BookLayout.TextLayout(printer, columnWidth, this, text, paint).apply {
+            return BookLayout.TextLayout(printer, columnWidth, this, paint).apply {
                 setContent()
             }
+        }
+
+        override fun getContent(book: BookAndAuthors): String {
+            return text
         }
     }
 
@@ -450,22 +460,26 @@ data class LayoutDescription(
      * Text field from a book database column
      * @param column The database column description
      */
-    class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription(column.name) {
+    open class ColumnTextFieldLayoutDescription(private val column: Column): FieldLayoutDescription<String>(column.name) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnTextLayout(printer, columnWidth, this, column, paint)
+            return BookLayout.ColumnTextLayout(printer, columnWidth, this, paint)
+        }
+
+        override fun getContent(book: BookAndAuthors): String {
+            return column.desc.getDisplayValue(book)
         }
     }
 
     /**
      * Text field for the title from a book
      */
-    class TitleTextFieldLayoutDescription: FieldLayoutDescription(Column.TITLE.name) {
+    class TitleTextFieldLayoutDescription: FieldLayoutDescription<String>(Column.TITLE.name) {
         /** @inheritDoc */
         override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
-            return BookLayout.ColumnTextLayout(printer, columnWidth, this, Column.TITLE,
+            return BookLayout.ColumnTextLayout(printer, columnWidth, this,
                 TextPaint(paint).apply {
                     textSize = when(textSize) {
                         8.0f -> 10.0f
@@ -479,13 +493,17 @@ data class LayoutDescription(
                 }
             )
         }
+
+        override fun getContent(book: BookAndAuthors): String {
+            return Column.TITLE.desc.getDisplayValue(book)
+        }
     }
 
     /**
      * Text field from a book database column
      * @param large True to use the large thumbnail
      */
-    class ColumnBitmapFieldLayoutDescription(val large: Boolean, size: PointF): FieldLayoutDescription(
+    class ColumnBitmapFieldLayoutDescription(val large: Boolean, size: PointF): FieldLayoutDescription<Long>(
         if (large) "LargeThumb" else "SmallThumb"
     ) {
         init {
@@ -496,6 +514,10 @@ data class LayoutDescription(
         override fun createLayout(printer: PDFPrinter, columnWidth: Float, paint: TextPaint): BookLayout.DrawLayout {
             // Create the field with the column description, the content holder and the DynamicLayout
             return BookLayout.ColumnBitmapLayout(printer, this, columnWidth, large, paint)
+        }
+
+        override fun getContent(book: BookAndAuthors): Long {
+            return book.book.id
         }
     }
 }

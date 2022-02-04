@@ -59,6 +59,7 @@ class PrintFragment : Fragment() {
             columnName(Column.TITLE),
             columnName(Column.SUBTITLE),
             Pair(R.string.author, Column.FIRST_NAME.name),
+            columnName(Column.SERIES),
             columnName(Column.TAGS),
             columnName(Column.RATING),
             columnName(Column.PAGE_COUNT),

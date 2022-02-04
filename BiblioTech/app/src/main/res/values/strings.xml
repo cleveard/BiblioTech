@@ -216,6 +216,7 @@
     <string name="preview_page">Page %1$d/%2$d</string>
     <string name="page_size">Paper Size</string>
     <string name="orientation">Orientation</string>
+    <string name="print_series">Volume %1$d of %2$s</string>
     <!-- The column array are the strings displayed in the column spinner.
          column_values are the values associated with the spinner items -->
     <string-array name="column">
