@@ -3,6 +3,7 @@ package com.github.cleveard.bibliotech.ui.scan
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.gb.*
 import android.Manifest
+import android.app.Application
 import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
@@ -74,9 +75,9 @@ fun Editable.setString(text: String): Editable {
     return this
 }
 
-internal class ScanViewModel: ViewModel() {
+internal class ScanViewModel(app: Application): AndroidViewModel(app) {
     /** Lookup to use with this view model */
-    val lookup: GoogleBookLookup = GoogleBookLookup()
+    val lookup: GoogleBookLookup = GoogleBookLookup(this)
 }
 
 /**
@@ -325,7 +326,7 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
-        scanViewModel = ViewModelProvider(this)[ScanViewModel::class.java]
+        scanViewModel = MainActivity.getViewModel(activity, ScanViewModel::class.java)
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)

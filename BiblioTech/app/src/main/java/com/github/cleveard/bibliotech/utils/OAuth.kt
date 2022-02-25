@@ -58,6 +58,8 @@ abstract class OAuth(
             if (result != null) {
                 val resp = AuthorizationResponse.fromIntent(result)
                 val ex = AuthorizationException.fromIntent(result)
+                authState.update(resp, ex)
+                save()
                 if (resp != null) {
                     suspendCoroutine<Unit> {resume ->
                         authService.performTokenRequest(
@@ -69,7 +71,6 @@ abstract class OAuth(
                         }
                     }
                 }
-                save()
             }
         }
 

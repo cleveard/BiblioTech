@@ -1,5 +1,7 @@
 package com.github.cleveard.bibliotech.gb
 
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
@@ -8,15 +10,17 @@ import com.github.cleveard.bibliotech.annotations.EnvironmentValues
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.services.books.v1.Books as BooksService
 import com.google.api.client.extensions.android.json.AndroidJsonFactory
+import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
+import com.google.api.client.http.HttpResponseException
 import com.google.api.services.books.v1.BooksRequestInitializer
 import com.google.api.services.books.v1.model.Volume
 import com.google.api.services.books.v1.model.Volumes
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.*
+import kotlinx.coroutines.*
 import java.net.MalformedURLException
 import java.util.*
+import kotlin.collections.ArrayDeque
 import kotlin.collections.ArrayList
+import kotlin.math.roundToInt
 
 private const val apiKey = "GOOGLE_BOOKS_API_KEY"
 
@@ -25,7 +29,7 @@ private const val apiKey = "GOOGLE_BOOKS_API_KEY"
  * Constructor is private because all methods are in the companion object
  */
 @EnvironmentValues(apiKey)
-internal class GoogleBookLookup {
+internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
 
     /**
      * Exception thrown when a book query fails
@@ -74,8 +78,70 @@ internal class GoogleBookLookup {
             get() = true
     }
 
+    private class RateLimit(
+        /** Maximum number of requests allowed */
+        val maxRequests: Int,
+        /** Period that maxRequests requests are allowed */
+        val period: Long,
+        /** Factor of period we used to throttle requests */
+        slowThresh: Double
+    ) {
+        val requests: ArrayDeque<Long> = ArrayDeque(maxRequests)
+        val delayThreshhold: Int = (slowThresh * maxRequests).roundToInt()
+
+        /**
+         * Delay to prevent the rate limit from being exceeded
+         * @param added Time to add to delay because we got a rate limit error
+         */
+        suspend fun delayRequest(added: Long = 0L) {
+            val delayTime = synchronized(this) {
+                val now = Calendar.getInstance().timeInMillis
+                // Remove requests outside of the sample period
+                while (now - (requests.firstOrNull()?: now) > period)
+                    requests.removeFirst()
+                Log.d("RATE_LIMIT", "Requests = ${requests.size}, start = ${now - (requests.firstOrNull()?: now)})}")
+                if (requests.size < delayThreshhold)
+                    return
+                added + (period - (now - requests.first())) / (maxRequests - requests.size)
+            }
+            if (delayTime > 0L) {
+                Log.d("RATE_LIMIT", "Delay $delayTime")
+                delay(delayTime)
+            }
+        }
+
+        suspend fun <T> execute(auth: BookCredentials, callback: (token: String?) -> AbstractGoogleClientRequest<T>): T {
+            return withContext(Dispatchers.IO) {
+                var result: T
+                delayRequest()
+                while (true) {
+                    ensureActive()
+                    try {
+                        synchronized(this@RateLimit) {
+                            requests.addLast(Calendar.getInstance().timeInMillis)
+                        }
+                        result = auth.execute {
+                            val request = callback(it)
+                            @Suppress("BlockingMethodInNonBlockingContext")
+                            request.execute()
+                        }
+                        break
+                    } catch (e: HttpResponseException) {
+                        // If this isn't a too many requests exception then rethrow it
+                        if (e.statusCode != 429)
+                            throw e
+                        delayRequest(2000L)
+                    }
+                }
+                result
+            }
+        }
+
+    }
+
     companion object {
         @Suppress("SpellCheckingInspection")
+        const val kSourceId = "books.google.com"
         private const val kISBNParameter = "isbn:%s"
         private const val kTitleParameter = "title:\"%s\""
         private const val kAuthorParameter = "author:\"%s\""
@@ -100,6 +166,12 @@ internal class GoogleBookLookup {
         val service: BooksService = BooksService.Builder(NetHttpTransport(), AndroidJsonFactory(), null)
             .setBooksRequestInitializer(BooksRequestInitializer(GoogleBookLookup_Environment[apiKey]))
             .build()
+
+        private val rateLimit: RateLimit = RateLimit(100, 60000L, .25)
+
+        suspend fun <T> execute(auth: BookCredentials, viewModel: AndroidViewModel, callback: (token: String?) -> AbstractGoogleClientRequest<T>): T {
+            return rateLimit.execute(auth, callback)
+        }
     }
 
     /**
@@ -154,17 +226,14 @@ internal class GoogleBookLookup {
     }
 
     suspend fun getSeries(auth: BookCredentials, seriesId: String): SeriesEntity? {
-        @Suppress("BlockingMethodInNonBlockingContext")
-        return withContext(Dispatchers.IO) {
-            auth.execute {token ->
-                service.series().get(mutableListOf(seriesId)).apply { accessToken = token }.execute()?.let {
-                    val list = it.series
-                    if (list.isEmpty())
-                        null
-                    else
-                        SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
-                }
-            }
+        return execute(auth, viewModel) {
+            service.series().get(mutableListOf(seriesId)).apply { oauthToken = it }
+        }?.let {
+            val list = it.series
+            if (list.isEmpty())
+                null
+            else
+                SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
         }
     }
 
@@ -245,7 +314,7 @@ internal class GoogleBookLookup {
             book = BookEntity(
                 id = 0,
                 volumeId = volume.id,
-                sourceId = "books.google.com",
+                sourceId = kSourceId,
                 title = info.title?: "",
                 subTitle = info.subtitle?: "",
                 description = info.description?: "",
@@ -296,29 +365,25 @@ internal class GoogleBookLookup {
     /**
      * Run a query and return a result
      */
-    @Suppress("BlockingMethodInNonBlockingContext")
     @Throws(LookupException::class)
     private suspend fun queryBooks(auth: BookCredentials, query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        // Run in an IO context to handle coroutines properly
-        return withContext(Dispatchers.IO) {
-            try {
-                return@withContext auth.execute {token ->
-                    val list = service.volumes().list(query ?: "")
-                    list.prettyPrint = true
-                    list.startIndex = page
-                    list.maxResults = itemCount
-                    list.accessToken = token
-                    val volumes: Volumes = list.execute()
-                    // Parse the json object
-                    mapResponse(volumes)
+        return try {
+            val volumes: Volumes = execute(auth, viewModel) {
+                service.volumes().list(query ?: "").apply {
+                    prettyPrint = true
+                    startIndex = page
+                    maxResults = itemCount
+                    oauthToken = it
                 }
-            } catch (e: MalformedURLException) {
-                // Throw an exception if we formed a bad URL
-                throw LookupException("Bad URL: $query: $e", e)
-            } catch (e: Exception) {
-                // Pass on other exceptions
-                throw LookupException("Unknown Error $e", e)
             }
+            // Parse the json object
+            mapResponse(volumes)
+        } catch (e: MalformedURLException) {
+            // Throw an exception if we formed a bad URL
+            throw LookupException("Bad URL: $query: $e", e)
+        } catch (e: Exception) {
+            // Pass on other exceptions
+            throw LookupException("Unknown Error $e", e)
         }
     }
 }
