@@ -689,7 +689,7 @@ class ScanFragment : Fragment() {
      * @param lookup A callback to lookup each ISBN
      * @return True if a book was found. False otherwise
      */
-    private suspend fun lookupISBNs(codes: Sequence<String>, lookup: suspend (isbn: String) -> GoogleBookLookup.LookupResult?): Boolean {
+    private suspend fun lookupISBNs(codes: Sequence<String>, lookup: suspend (isbn: String) -> GoogleQueryPagingSource.LookupResult<BookAndAuthors>?): Boolean {
         // Look through the codes we found
         for (isbn in codes) {
             try {

@@ -18,30 +18,18 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 private const val apiKey = "GOOGLE_BOOKS_API_KEY"
-private const val oauthKey = "GOOGLE_BOOKS_OAUTH_ID"
 
 /**
  * Class used to query books on books.google.com
  * Constructor is private because all methods are in the companion object
  */
-@EnvironmentValues(apiKey, oauthKey)
+@EnvironmentValues(apiKey)
 internal class GoogleBookLookup {
-    /** The book service object */
-    private val service: BooksService = BooksService.Builder(NetHttpTransport(), AndroidJsonFactory(), null)
-        .setBooksRequestInitializer(BooksRequestInitializer(GoogleBookLookup_Environment[apiKey]))
-        .build()
 
     /**
      * Exception thrown when a book query fails
      */
     class LookupException(message: String?, cause: Throwable? = null) : java.lang.Exception(message, cause)
-
-    /**
-     * Result of a query
-     * @param list List of books in the first page returned by the query
-     * @param itemCount Total number of items returned by the query
-     */
-    data class LookupResult(val list: List<BookAndAuthors>, val itemCount: Int)
 
     /**
      * PagingSource for queries from books.google.com
@@ -51,47 +39,29 @@ internal class GoogleBookLookup {
      * @param list The list of item in the first page of the query. We immediately return these
      *             the first time we ask for the first page.
      */
-    private inner class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null) : PagingSource<Long, Any>() {
+    private inner class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null):
+        GoogleQueryPagingSource<BookAndAuthors, Any>(itemCount)
+    {
         /**
-         * Load a page from the query
-         * @param params The params for the load
+         * Run a query for volumes
+         * @param index The index of the first result returned
+         * @param loadSize The number of items to return
          * @return The result of the load
          */
-        override suspend fun load(params: LoadParams<Long>): LoadResult<Long, Any> {
-            // Get the page size and index we want to load
-            val loadSize = params.loadSize.toLong()
-            val index = params.key?:0
-
-            val result: List<BookAndAuthors>
-            if (index == 0L && list != null && itemCount != 0) {
+        override suspend fun runQuery(index: Long, loadSize: Long): LookupResult<BookAndAuthors>? {
+            val result = if (index == 0L && list != null && itemCount != 0) {
                 // The first time we asl for page 0, return the list we already loaded
-                result = list
+                LookupResult(list, itemCount)
             } else {
-                try {
-                    // query Google books to get the list
-                    val query = generalLookup(query, index, loadSize)
-                    result = query?.list?: emptyList()
-                    itemCount = query?.itemCount?: itemCount
-                } catch (e: Exception) {
-                    // Return an error if we got one
-                    return LoadResult.Error(e)
-                }
+                generalLookup(query, index, loadSize)
             }
 
             // Set a temporary id for the books to be their position in the stream
-            for ((i, b) in result.withIndex())
+            result?.list?.forEachIndexed { i, b ->
                 b.book.id = (index + i)
+            }
 
-            // Calculate the next page key. Add the number of books we loaded to the current page index
-            // If the result is null, or empty or we get to the number of books, set the key to null
-            // which means that we are at the end of the pages
-            val nextKey = if (result.isEmpty() || index + result.size >= itemCount) null else index + result.size
-            // Return the loaded books
-            return LoadResult.Page(
-                data = result,
-                prevKey = null,
-                nextKey = nextKey
-            )
+            return result
         }
 
         /** @inheritDoc */
@@ -124,6 +94,11 @@ internal class GoogleBookLookup {
             { it.extraLarge },
             { it.smallThumbnail }
         )
+
+        /** The book service object */
+        val service: BooksService = BooksService.Builder(NetHttpTransport(), AndroidJsonFactory(), null)
+            .setBooksRequestInitializer(BooksRequestInitializer(GoogleBookLookup_Environment[apiKey]))
+            .build()
     }
 
     /**
@@ -132,7 +107,7 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun lookupISBN(isbn: String): LookupResult? {
+    suspend fun lookupISBN(isbn: String): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         return queryBooks(String.format(kISBNParameter, isbn))
     }
 
@@ -162,7 +137,7 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun generalLookup(query: String, index: Long = 0, pageCount: Long = 10): LookupResult? {
+    suspend fun generalLookup(query: String, index: Long = 0, pageCount: Long = 10): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         return queryBooks(query, index, pageCount.coerceAtMost(40L))
     }
 
@@ -270,7 +245,7 @@ internal class GoogleBookLookup {
      * @param volumes The query response converted to a volumes object
      */
     @Throws(LookupException::class)
-    private fun mapResponse(volumes: Volumes): LookupResult? {
+    private fun mapResponse(volumes: Volumes): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         // Do we have a list of books
         if (volumes.kind == kBooksVolumes) {
             // Get the array of books from the object
@@ -280,7 +255,7 @@ internal class GoogleBookLookup {
             if (count == 0)
                 return null
             // Return the result
-            return LookupResult(
+            return GoogleQueryPagingSource.LookupResult(
                 // Map the Volume to BookAndAuthors
                 items.map { mapVolume(it) },
                 volumes.totalItems
@@ -294,7 +269,7 @@ internal class GoogleBookLookup {
      */
     @Suppress("BlockingMethodInNonBlockingContext")
     @Throws(LookupException::class)
-    private suspend fun queryBooks(query: String?, page: Long = 0, itemCount: Long = 10) : LookupResult? {
+    private suspend fun queryBooks(query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         // Run in an IO context to handle coroutines properly
         return withContext(Dispatchers.IO) {
             try {

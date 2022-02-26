@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResul
          * @param classType The java class for the view model to be created.
          */
         fun <T: ViewModel> getViewModel(activity: FragmentActivity?, classType: Class<T>): T {
-            return ViewModelProvider(activity!!, mViewModelFactory).get(classType)
+            return ViewModelProvider(activity!!, mViewModelFactory)[classType]
         }
     }
 
