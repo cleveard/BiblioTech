@@ -52,7 +52,9 @@ enum class Column(val desc: ColumnDataDescriptor) {
     /** Date book was added to the database */
     DATE_ADDED(dateAdded),
     /** Date book was last modified in the database */
-    DATE_MODIFIED(dateModified);
+    DATE_MODIFIED(dateModified),
+    /** The series title */
+    SERIES(series);
 }
 
 /** An interface used to add components to a query */
@@ -329,7 +331,6 @@ abstract class ColumnDataDescriptor(
         /**
          * Format a date
          * @param date The date to format
-         * @param locale The locale to use for the format
          * @return The formatted date
          */
         fun formatDate(date: Date): String {
@@ -377,7 +378,7 @@ abstract class SubQueryColumnDataDescriptor(
    predicates: Array<Predicate>,
     private val selectColumn: String,
     private val queryTable: BookDatabase.TableDescription,
-    private val joinTable: BookDatabase.TableDescription,
+    private val joinTable: BookDatabase.TableDescription?,
 ) : ColumnDataDescriptor(columnNames, nameResourceId, predicates) {
     /**
      * Add columns to order list
@@ -411,8 +412,11 @@ abstract class SubQueryColumnDataDescriptor(
 
         if (hasExpr) {
             val subExpr = subQuery.createCommand(queryTable.name)
-            val expr =
+            val expr = if (joinTable != null) {
                 "${if (predicate.desc.negate) "NOT " else ""}EXISTS ( SELECT NULL FROM ${joinTable.name} WHERE $selectColumn = ${joinTable.bookIdColumn} AND ${joinTable.linkIdColumn} IN ( $subExpr ) )"
+            } else {
+                "${if (predicate.desc.negate) "NOT " else ""}EXISTS ( SELECT NULL FROM ${queryTable.name} WHERE $selectColumn IN ( $subExpr ) )"
+            }
             buildQuery.addFilterExpression(expr)
             buildQuery.argList.addAll(subQuery.argList)
         }
@@ -447,8 +451,8 @@ private val lastFirst = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getDisplayValue(book: BookAndAuthors): String {
-        return book.authors.asSequence().fold(StringBuilder()) {acc, v ->
-            if (!acc.isEmpty())
+        return book.authors.fold(StringBuilder()) {acc, v ->
+            if (acc.isNotEmpty())
                 acc.append(", ")
             acc.append("${v.lastName}, ${v.remainingName}")
         }.toString()
@@ -482,8 +486,8 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getDisplayValue(book: BookAndAuthors): String {
-        return book.authors.asSequence().fold(StringBuilder()) {acc, v ->
-            if (!acc.isEmpty())
+        return book.authors.fold(StringBuilder()) { acc, v ->
+            if (acc.isNotEmpty())
                 acc.append(", ")
             acc.append("${v.remainingName} ${v.lastName}")
         }.toString()
@@ -681,8 +685,8 @@ private val tags = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getDisplayValue(book: BookAndAuthors): String {
-        return book.tags.asSequence().fold(StringBuilder()) {acc, v ->
-            if (!acc.isEmpty())
+        return book.tags.fold(StringBuilder()) { acc, v ->
+            if (acc.isNotEmpty())
                 acc.append(", ")
             acc.append(v.name)
         }.toString()
@@ -727,8 +731,8 @@ private val categories = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getDisplayValue(book: BookAndAuthors): String {
-        return book.categories.asSequence().fold(StringBuilder()) {acc, v ->
-            if (!acc.isEmpty())
+        return book.categories.fold(StringBuilder()) { acc, v ->
+            if (acc.isNotEmpty())
                 acc.append(", ")
             acc.append(v.category)
         }.toString()
@@ -818,8 +822,8 @@ private val isbns = object: SubQueryColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getDisplayValue(book: BookAndAuthors): String {
-        return book.isbns.asSequence().fold(StringBuilder()) {acc, v ->
-            if (!acc.isEmpty())
+        return book.isbns.fold(StringBuilder()) { acc, v ->
+            if (acc.isNotEmpty())
                 acc.append(", ")
             acc.append(v.isbn)
         }.toString()
@@ -1009,5 +1013,46 @@ private val dateModified = object: ColumnDataDescriptor(
             }
         }
         return hasValues
+    }
+}
+
+/** Series */
+private val series = object: SubQueryColumnDataDescriptor(
+    arrayOf(SERIES_IITLE_COLUMN),
+    R.string.series,
+    arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
+    BOOK_SERIES_COLUMN,
+    BookDatabase.seriesTable,
+    null
+) {
+    /** @inheritDoc */
+    override fun addJoin(buildQuery: BuildQuery) {
+        buildQuery.addJoin(SERIES_TABLE, BOOK_SERIES_COLUMN, SERIES_ID_COLUMN)
+    }
+
+    /** @inheritDoc */
+    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+        return book.sortSeries != other.sortSeries
+    }
+
+    /** @inheritDoc */
+    override fun getValue(book: BookAndAuthors): String {
+        return book.sortSeries?: ""
+    }
+
+    /** @inheritDoc */
+    override fun getDisplayValue(book: BookAndAuthors): String {
+        return book.series?.title?: ""
+    }
+
+    /** @inheritDoc */
+    override fun hasAutoComplete(): Boolean {
+        return true
+    }
+
+    /** @inheritDoc */
+    override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
+        return buildAutoCompleteCursor(repo, BookDatabase.seriesTable,
+            SERIES_IITLE_COLUMN, constraint)
     }
 }

@@ -181,7 +181,8 @@ data class BookAndAuthors(
     @ColumnInfo(name= LAST_NAME_COLUMN) var sortLast: String? = null,
     @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String? = null,
     @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null,
-    @ColumnInfo(name= ISBN_COLUMN) var sortIsbn: String? = null
+    @ColumnInfo(name= ISBN_COLUMN) var sortIsbn: String? = null,
+    @ColumnInfo(name= SERIES_IITLE_COLUMN) var sortSeries: String? = null,
 ) : Parcelable {
     /**
      * @inheritDoc

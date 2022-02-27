@@ -459,7 +459,7 @@ class BookFilterTest {
         val oneValue: BookAndAuthors.(Random) -> String?,
         val orderCompare: BookAndAuthors.(BookAndAuthors) -> Int,
         val orderSequence: Sequence<BookAndAuthors>.() -> Sequence<BookAndAuthors>,
-        val allValues: BookAndAuthors.(p: Predicate) -> Sequence<Sequence<Any>>,
+        val allValues: BookAndAuthors.(p: Predicate) -> Sequence<Sequence<Any?>>,
     ) {
         // Place holder - actual entry is set below
         // Set the entry for the Column.Any column
@@ -583,7 +583,17 @@ class BookFilterTest {
         }),
         BOOK_COUNT(Column.BOOK_COUNT, { book.bookCount.toString() }, { book.bookCount.compareTo(it.book.bookCount) }, { this }, {
             sequenceOf(sequenceOf(book.bookCount))
-        });
+        }),
+        SERIES(Column.SERIES, { series?.title },
+            { (this.series?.title).compareWith(it.series?.title, true) },
+            {
+                map { book ->
+                    (book.series?.let {
+                        book.copy(sortSeries = it.title)
+                    })?: book.copy(sortSeries = null)
+                }
+            }, { sequenceOf(sequenceOf(series?.title)) }
+        );
 
         companion object {
             private fun AuthorEntity.lastFirst(): String {
@@ -718,7 +728,7 @@ class BookFilterTest {
     private enum class PredicateValue(
         val predicate: Predicate,
         val modifyString: String?.(Random) -> String?,
-        val test: Sequence<Sequence<Any>>.(Array<String>) -> Boolean
+        val test: Sequence<Sequence<Any?>>.(Array<String>) -> Boolean
     ) {
         ONE_OF(Predicate.ONE_OF, { this }, { testValues(it, PredicateTests.ONE_OF) }),
         NOT_ONE_OF(Predicate.NOT_ONE_OF, { this }, { !testValues(it, PredicateTests.ONE_OF) }),
@@ -731,7 +741,7 @@ class BookFilterTest {
 
         companion object {
 
-            private fun Sequence<Sequence<Any>>.testValues(filterValues: Array<String>, predicate: PredicateTests): Boolean {
+            private fun Sequence<Sequence<Any?>>.testValues(filterValues: Array<String>, predicate: PredicateTests): Boolean {
                 forEach {values ->
                     values.forEach {
                         val test = when (it) {
