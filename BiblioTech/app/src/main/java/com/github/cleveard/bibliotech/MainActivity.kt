@@ -30,8 +30,10 @@ import androidx.navigation.NavDirections
 import androidx.navigation.fragment.NavHostFragment
 import java.io.File
 import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.gb.GoogleBooksOAuth
 import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
 import com.github.cleveard.bibliotech.ui.scan.ScanFragmentDirections
+import com.github.cleveard.bibliotech.utils.OAuth
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.channels.Channel
@@ -51,18 +53,54 @@ private val resultChannel: Channel<Intent?> = Channel()
  * Interface for managing navigation
  */
 interface ManageNavigation {
+    /**
+     * Set the title and subtitle on the navigation bar
+     * @param title The title
+     * @param subtitle The optional subtitle
+     */
     fun setTitle(title: String?, subtitle: String?)
+
+    /**
+     * Navigate to a destination
+     * @param action The destination to navigate to
+     * @return True if the navigation succeeded
+     */
     fun navigate(action: NavDirections): Boolean
 }
 
-interface LaunchIntentForResult {
-    suspend fun launchForResult(intent: Intent): Intent?
+/**
+ * Interface for handling credentials
+ */
+interface BookCredentials {
+    /**
+     * Authorize the credentials
+     * @return True if the credentials are authorized
+     */
+    suspend fun login(): Boolean
+
+    /**
+     * Remove the credential authorization
+     * @return True if the credentials are authorized
+     */
+    suspend fun logout(): Boolean
+
+    /**
+     * Run an action with a the access token for the credentials
+     * @param The action to run, whose only argument is the access token
+     * @return The return value of the action
+     */
+    suspend fun <T> execute(action: suspend (token:String?) -> T): T
+
+    /** True if the credentials are authorized */
+    val isAuthorized: Boolean
 }
+
+private var googleBooksAuth: OAuth? = null
 
 /**
  * The main activity for the app
  */
-class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResult {
+class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
     companion object {
         /** Url to the  BiblioTech help web page */
         private const val HELP_URL: String = "https://cleveard.github.io/BiblioTech/help/"
@@ -145,6 +183,9 @@ class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResul
         // Create the view model factory
         mViewModelFactory = ViewModelProvider.AndroidViewModelFactory(application)
 
+        // Create the credentials
+        googleBooksAuth = googleBooksAuth?: GoogleBooksOAuth(application)
+
         // Remember the cache directory
         mCache = cacheDir
 
@@ -194,7 +235,16 @@ class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResul
                 // to the books list without any argument
                 R.id.nav_books -> MobileNavigationDirections.filterBooks()
                 // This is the id for the scan destination
-                R.id.nav_scan -> MobileNavigationDirections.scanCodes()
+                R.id.nav_scan -> {
+                    if (!isAuthorized) {
+                        MainScope().launch {
+                            if (login() && navigate(MobileNavigationDirections.scanCodes()))
+                                drawerLayout.closeDrawer(GravityCompat.START)
+                        }
+                        return@setNavigationItemSelectedListener true
+                    }
+                    MobileNavigationDirections.scanCodes()
+                }
                 R.id.action_nav_books_to_exportImportFragment -> {
                     if (lastNavId != R.id.nav_books)
                         return@setNavigationItemSelectedListener false
@@ -336,11 +386,36 @@ class MainActivity : AppCompatActivity(), ManageNavigation, LaunchIntentForResul
         return super.onKeyDown(keyCode, event)
     }
 
-    override suspend fun launchForResult(intent: Intent): Intent? {
-        val returnValue = CompletableDeferred<Intent?>()
-        requestChannel.send(Pair(intent) { result ->
-            returnValue.completeWith(Result.success(result))
-        })
-        return returnValue.await()
+    override suspend fun login(): Boolean {
+        return (googleBooksAuth?.login {intent ->
+            val returnValue = CompletableDeferred<Intent?>()
+            requestChannel.send(Pair(intent) { result ->
+                returnValue.completeWith(Result.success(result))
+            })
+            returnValue.await()
+        })?: false
     }
+
+    override suspend fun logout(): Boolean {
+        return googleBooksAuth?.logout()?: false
+    }
+
+    @Throws(OAuth.AuthException::class)
+    override suspend fun <T> execute(action: suspend (token: String?) -> T): T {
+        if (!isAuthorized)
+            throw OAuth.AuthException("execute: Not authorized", googleBooksAuth?.authorizationException)
+
+        try {
+            return googleBooksAuth!!.execute(action)
+        } catch (e: OAuth.AuthException) {
+            logout()
+        }
+
+        if (!login())
+            throw OAuth.AuthException("Token refresh failed", googleBooksAuth?.authorizationException)
+        return googleBooksAuth!!.execute(action)
+    }
+
+    override val isAuthorized: Boolean
+        get() = googleBooksAuth?.isAuthorized == true
 }

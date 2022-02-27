@@ -672,8 +672,8 @@ class ScanFragment : Fragment() {
                 Toast.LENGTH_LONG
             ).show()
         }
-        if (!lookupISBNs(codes) { scanViewModel.lookup.lookupISBN(it) } &&
-            !lookupISBNs(codes) { scanViewModel.lookup.generalLookup(it, 0, 20) }) {
+        if (!lookupISBNs(codes) { scanViewModel.lookup.lookupISBN(requireActivity() as BookCredentials, it) } &&
+            !lookupISBNs(codes) { scanViewModel.lookup.generalLookup(requireActivity() as BookCredentials, it, 0, 20) }) {
             // If we got here we didn't find anything
             Toast.makeText(
                 context,
@@ -695,7 +695,7 @@ class ScanFragment : Fragment() {
                 // Lookup the series in the database
                 repo.findSeriesBySeriesId(series.seriesId)?: run {
                     // We didn't find it, so look up the series on google books
-                    scanViewModel.lookup.getSeries(series.seriesId)
+                    scanViewModel.lookup.getSeries(requireActivity() as BookCredentials, series.seriesId)
                 }
             }
         }
@@ -786,7 +786,7 @@ class ScanFragment : Fragment() {
 
                 // Lookup using title and/or author
                 val spec = scanViewModel.lookup.getTitleAuthorQuery(title, author)
-                val result = scanViewModel.lookup.generalLookup(spec)
+                val result = scanViewModel.lookup.generalLookup(requireActivity() as BookCredentials, spec)
                 // If we still didn't find anything, stop
                 if (result == null || result.list.isEmpty()) {
                     Toast.makeText(
@@ -1493,7 +1493,7 @@ class ScanFragment : Fragment() {
                     val pager = Pager(
                         config
                     ) {
-                        scanViewModel.lookup.generalLookupPaging(spec, itemCount, list)
+                        scanViewModel.lookup.generalLookupPaging(requireActivity() as BookCredentials, spec, itemCount, list)
                     }
                     val flow = pager.flow.cachedIn(scanViewModel.viewModelScope)
                         .combine(filterFlow) {data, b ->

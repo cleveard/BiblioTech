@@ -293,4 +293,7 @@
         <item>0</item>
         <item>1</item>
     </string-array>
+
+    <string name="login">Login</string>
+    <string name="logout">Logout</string>
 </resources>

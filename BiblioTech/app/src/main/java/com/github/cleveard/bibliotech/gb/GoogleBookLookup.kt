@@ -3,6 +3,7 @@ package com.github.cleveard.bibliotech.gb
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.annotations.EnvironmentValues
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.services.books.v1.Books as BooksService
@@ -39,7 +40,7 @@ internal class GoogleBookLookup {
      * @param list The list of item in the first page of the query. We immediately return these
      *             the first time we ask for the first page.
      */
-    private inner class BookQueryPagingSource(private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null):
+    private inner class BookQueryPagingSource(private val auth: BookCredentials, private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null):
         GoogleQueryPagingSource<BookAndAuthors, Any>(itemCount)
     {
         /**
@@ -53,7 +54,7 @@ internal class GoogleBookLookup {
                 // The first time we asl for page 0, return the list we already loaded
                 LookupResult(list, itemCount)
             } else {
-                generalLookup(query, index, loadSize)
+                generalLookup(auth, query, index, loadSize)
             }
 
             // Set a temporary id for the books to be their position in the stream
@@ -107,8 +108,8 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun lookupISBN(isbn: String): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        return queryBooks(String.format(kISBNParameter, isbn))
+    suspend fun lookupISBN(auth: BookCredentials, isbn: String): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+        return queryBooks(auth, String.format(kISBNParameter, isbn))
     }
 
     /**
@@ -137,8 +138,8 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun generalLookup(query: String, index: Long = 0, pageCount: Long = 10): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        return queryBooks(query, index, pageCount.coerceAtMost(40L))
+    suspend fun generalLookup(auth: BookCredentials, query: String, index: Long = 0, pageCount: Long = 10): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+        return queryBooks(auth, query, index, pageCount.coerceAtMost(40L))
     }
 
     /**
@@ -148,19 +149,21 @@ internal class GoogleBookLookup {
      * @param list The books in the first page of the query, if available
      * @return The PagingSource for the book in the query
      */
-    fun generalLookupPaging(search: String, itemCount: Int = 0, list: List<BookAndAuthors>? = null): PagingSource<Long, Any> {
-        return BookQueryPagingSource(search, itemCount, list)
+    fun generalLookupPaging(auth: BookCredentials, search: String, itemCount: Int = 0, list: List<BookAndAuthors>? = null): PagingSource<Long, Any> {
+        return BookQueryPagingSource(auth, search, itemCount, list)
     }
 
-    suspend fun getSeries(seriesId: String): SeriesEntity? {
+    suspend fun getSeries(auth: BookCredentials, seriesId: String): SeriesEntity? {
         @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO) {
-            service.series().get(mutableListOf(seriesId)).execute()?.let {
-                val list = it.series
-                if (list.isEmpty())
-                    null
-                else
-                    SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
+            auth.execute {token ->
+                service.series().get(mutableListOf(seriesId)).apply { accessToken = token }.execute()?.let {
+                    val list = it.series
+                    if (list.isEmpty())
+                        null
+                    else
+                        SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
+                }
             }
         }
     }
@@ -227,10 +230,9 @@ internal class GoogleBookLookup {
             categories[0] = tmp
         }
 
-        val seriesOrder: Int?
-        val series = volume.volumeInfo.seriesInfo.volumeSeries.let {
+        var seriesOrder: Int? = null
+        val series = volume.volumeInfo.seriesInfo?.volumeSeries?.let {
             if (it.isEmpty()) {
-                seriesOrder = null
                 null
             } else {
                 seriesOrder = it[0].orderNumber
@@ -296,17 +298,20 @@ internal class GoogleBookLookup {
      */
     @Suppress("BlockingMethodInNonBlockingContext")
     @Throws(LookupException::class)
-    private suspend fun queryBooks(query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+    private suspend fun queryBooks(auth: BookCredentials, query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         // Run in an IO context to handle coroutines properly
         return withContext(Dispatchers.IO) {
             try {
-                val list = service.volumes().list(query?: "")
-                list.prettyPrint = true
-                list.startIndex = page
-                list.maxResults = itemCount
-                val volumes: Volumes = list.execute()
-                // Parse the json object
-                return@withContext  mapResponse(volumes)
+                return@withContext auth.execute {token ->
+                    val list = service.volumes().list(query ?: "")
+                    list.prettyPrint = true
+                    list.startIndex = page
+                    list.maxResults = itemCount
+                    list.accessToken = token
+                    val volumes: Volumes = list.execute()
+                    // Parse the json object
+                    mapResponse(volumes)
+                }
             } catch (e: MalformedURLException) {
                 // Throw an exception if we formed a bad URL
                 throw LookupException("Bad URL: $query: $e", e)

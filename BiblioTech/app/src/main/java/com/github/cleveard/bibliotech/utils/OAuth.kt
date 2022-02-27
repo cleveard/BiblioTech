@@ -1,11 +1,11 @@
 package com.github.cleveard.bibliotech.utils
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
-import com.github.cleveard.bibliotech.LaunchIntentForResult
 import net.openid.appauth.*
 import java.lang.Exception
 import kotlin.coroutines.resume
@@ -42,7 +42,7 @@ abstract class OAuth(
 
     abstract fun AuthorizationRequest.Builder.setupRequest()
 
-    suspend fun login(launcher: LaunchIntentForResult): Boolean {
+    suspend fun login(launcher: suspend (Intent) -> Intent?): Boolean {
         if (!authState.isAuthorized) {
             val req = AuthorizationRequest.Builder(
                 authConfig,
@@ -54,7 +54,7 @@ abstract class OAuth(
                 .build()
 
             val intent = authService.getAuthorizationRequestIntent(req)
-            val result = launcher.launchForResult(intent)
+            val result = launcher(intent)
             if (result != null) {
                 val resp = AuthorizationResponse.fromIntent(result)
                 val ex = AuthorizationException.fromIntent(result)
@@ -83,21 +83,6 @@ abstract class OAuth(
         }
 
         return authState.isAuthorized
-    }
-
-    @Throws(AuthException::class)
-    suspend fun <T> execute(launcher: LaunchIntentForResult, action: suspend (token:String?) -> T): T {
-        if (!isAuthorized)
-            throw AuthException("execute: Not authorized", authorizationException)
-
-        try {
-            return execute(action)
-        } catch (e: AuthException) {
-        }
-
-        if (!login(launcher))
-            throw AuthException("Token refresh failed", authorizationException)
-        return execute(action)
     }
 
     @Throws(AuthException::class)

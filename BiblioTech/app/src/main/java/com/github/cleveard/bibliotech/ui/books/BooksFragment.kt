@@ -23,10 +23,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.bibliotech.MainActivity
-import com.github.cleveard.bibliotech.ManageNavigation
-import com.github.cleveard.bibliotech.MobileNavigationDirections
-import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.*
 import com.github.cleveard.bibliotech.db.BookFilter
 import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
 import com.github.cleveard.bibliotech.db.UndoTransactionEntity
@@ -78,6 +75,11 @@ class BooksFragment : Fragment() {
      * The menu item to select no books
      */
     private var selectNone: MenuItem? = null
+
+    /**
+     * The menu item to select no books
+     */
+    private var logoutMenuItem: MenuItem? = null
 
     /**
      * Drawable to use in drawerMenuItem when the edit and filter drawer is visible
@@ -397,6 +399,7 @@ class BooksFragment : Fragment() {
         deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
         selectAll = menu.findItem(R.id.action_select_all)
         selectNone = menu.findItem(R.id.action_select_none)
+        logoutMenuItem = menu.findItem(R.id.action_logout)
         super.onCreateOptionsMenu(menu, inflater)
         updateMenuAndButtons()
     }
@@ -474,6 +477,17 @@ class BooksFragment : Fragment() {
                     BooksFragmentDirections.actionNavBooksToSettingsFragment()
                 )
             }
+            R.id.action_logout -> {
+                (activity as? BookCredentials)?.let {credentials ->
+                    booksViewModel.viewModelScope.launch {
+                        if (credentials.isAuthorized)
+                            credentials.logout()
+                        else
+                            credentials.login()
+                        updateMenuAndButtons()
+                    }
+                }
+            }
             R.id.action_to_print_fragment -> {
                 (activity as? ManageNavigation)?.navigate(
                     BooksFragmentDirections.actionNavBooksToPrintFragment(booksViewModel.filterName)
@@ -512,6 +526,11 @@ class BooksFragment : Fragment() {
         selectNone?.isEnabled = booksSelected > 0
         // Enable select all when something is not selected
         selectAll?.isEnabled = booksSelected < booksCount
+        // Enable logout menu item
+        logoutMenuItem?.title = if ((requireActivity() as? BookCredentials)?.isAuthorized == true)
+            requireContext().resources.getString(R.string.logout)
+        else
+            requireContext().resources.getString(R.string.login)
 
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?
