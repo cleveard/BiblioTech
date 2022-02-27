@@ -299,6 +299,28 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
+        },
+        /** Add a SeriesEntity operation */
+        ADD_SERIES(AddDataDescriptor(BookDatabase.seriesTable)) {
+            override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
+                dao.record(this, id)
+            }
+        },
+        /** Delete a SeriesEntity operation */
+        DELETE_SERIES(DeleteDataDescriptor(BookDatabase.seriesTable)) {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+                return dao.recordDelete(this, expression, delete)
+            }
+        },
+        /** Update a SeriesEntity operation */
+        CHANGE_SERIES(ChangeDataDescriptor(BookDatabase.seriesTable) {
+            swapView(it.curId, it.oldId)
+        }) {
+            override suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
+                if (dao.started > 0)
+                    return dao.recordUpdate(this, id, dao.copyForSeriesUndo(id), update)
+                return update()
+            }
         };
 
         /**
@@ -1095,8 +1117,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     @Transaction
     protected open suspend fun copyForBookUndo(bookId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $BOOK_TABLE ( $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS )
-                | SELECT NULL, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS | ${BookEntity.HIDDEN} FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = ?
+            """INSERT INTO $BOOK_TABLE ( $BOOK_ID_COLUMN, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $BOOK_SERIES_COLUMN, $SERIES_ORDER_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS )
+                | SELECT NULL, $VOLUME_ID_COLUMN, $SOURCE_ID_COLUMN, $TITLE_COLUMN, $SUBTITLE_COLUMN, $DESCRIPTION_COLUMN, $PAGE_COUNT_COLUMN, $BOOK_COUNT_COLUMN, $VOLUME_LINK, $RATING_COLUMN, $BOOK_SERIES_COLUMN, $SERIES_ORDER_COLUMN, $DATE_ADDED_COLUMN, $DATE_MODIFIED_COLUMN, $SMALL_THUMB_COLUMN, $LARGE_THUMB_COLUMN, $BOOK_FLAGS | ${BookEntity.HIDDEN} FROM $BOOK_TABLE WHERE $BOOK_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(bookId)
         ))
@@ -1118,17 +1140,32 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
-     * Make a copy of a view entity
-     * @param bookId The id of the view entity
+     * Make a copy of a tag entity
+     * @param seriesId The id of the tag entity
      * @return The id of the copy
      */
     @Transaction
-    protected open suspend fun copyForViewUndo(bookId: Long): Long {
+    protected open suspend fun copyForSeriesUndo(seriesId: Long): Long {
+        return db.execInsert(SimpleSQLiteQuery(
+            """INSERT INTO $SERIES_TABLE ( $SERIES_ID_COLUMN, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN )
+                | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN | ${TagEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
+            """.trimMargin(),
+            arrayOf(seriesId)
+        ))
+    }
+
+    /**
+     * Make a copy of a view entity
+     * @param viewId The id of the view entity
+     * @return The id of the copy
+     */
+    @Transaction
+    protected open suspend fun copyForViewUndo(viewId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
             """INSERT INTO $VIEWS_TABLE ( $VIEWS_ID_COLUMN, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FILTER_COLUMN, $VIEWS_FLAGS )
                 | SELECT NULL, $VIEWS_NAME_COLUMN, $VIEWS_DESC_COLUMN, $VIEWS_FILTER_COLUMN, $VIEWS_FLAGS | ${ViewEntity.HIDDEN} FROM $VIEWS_TABLE WHERE $VIEWS_ID_COLUMN = ?
             """.trimMargin(),
-            arrayOf(bookId)
+            arrayOf(viewId)
         ))
     }
 

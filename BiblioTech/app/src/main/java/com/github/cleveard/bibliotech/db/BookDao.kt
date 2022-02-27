@@ -7,6 +7,7 @@ import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
+import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.idWithFilter
@@ -30,6 +31,8 @@ const val PAGE_COUNT_COLUMN = "books_page_count"        // Page count
 const val BOOK_COUNT_COLUMN = "books_count"             // Number of books being tracked
 const val VOLUME_LINK = "books_volume_link"             // Link to book on the web
 const val RATING_COLUMN = "books_rating"                // Rating of the book
+const val BOOK_SERIES_COLUMN = "books_series_id"        // Series id
+const val SERIES_ORDER_COLUMN = "books_series_order"    // Order of book in series
 const val DATE_ADDED_COLUMN = "books_date_added"        // Date the book was added
 const val DATE_MODIFIED_COLUMN = "books_date_modified"  // Date the book was last modified
 const val SMALL_THUMB_COLUMN = "books_small_thumb"      // Link to small thumbnail of book cover
@@ -39,7 +42,7 @@ val ALL_BOOK_COLUMNS = arrayOf(                         // Array of all book col
     BOOK_ID_COLUMN, VOLUME_ID_COLUMN, SOURCE_ID_COLUMN,
     TITLE_COLUMN, SUBTITLE_COLUMN,
     DESCRIPTION_COLUMN, PAGE_COUNT_COLUMN, BOOK_COUNT_COLUMN,
-    VOLUME_LINK, RATING_COLUMN, DATE_ADDED_COLUMN,
+    VOLUME_LINK, RATING_COLUMN, BOOK_SERIES_COLUMN, SERIES_ORDER_COLUMN, DATE_ADDED_COLUMN,
     DATE_MODIFIED_COLUMN, SMALL_THUMB_COLUMN, LARGE_THUMB_COLUMN, BOOK_FLAGS)
 
 // Type convert to convert between dates in the data base, which are longs, and Date objects
@@ -62,13 +65,21 @@ class DateConverters {
 @Entity(tableName = BOOK_TABLE,
     indices = [
         Index(value = [BOOK_ID_COLUMN],unique = true),
-        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN])
-    ])
+        Index(value = [VOLUME_ID_COLUMN, SOURCE_ID_COLUMN]),
+        Index(value = [BOOK_SERIES_COLUMN])
+    ],
+    foreignKeys = [
+        ForeignKey(entity = SeriesEntity::class,
+            parentColumns = [SERIES_ID_COLUMN],
+            childColumns = [BOOK_SERIES_COLUMN],
+            onDelete = CASCADE
+        )
+    ]
+)
 data class BookEntity constructor(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
     @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
-    @ColumnInfo(name = "books_isbn") var unused1: String?, // Removed in version 6 of the database
     @ColumnInfo(name = TITLE_COLUMN,defaultValue = "") var title: String,
     @ColumnInfo(name = SUBTITLE_COLUMN,defaultValue = "") var subTitle: String,
     @ColumnInfo(name = DESCRIPTION_COLUMN,defaultValue = "") var description: String,
@@ -76,47 +87,14 @@ data class BookEntity constructor(
     @ColumnInfo(name = BOOK_COUNT_COLUMN,defaultValue = "1") var bookCount: Int,
     @ColumnInfo(name = VOLUME_LINK,defaultValue = "") var linkUrl: String,
     @ColumnInfo(name = RATING_COLUMN,defaultValue = "-1.0") var rating: Double,
+    @ColumnInfo(name = BOOK_SERIES_COLUMN, defaultValue = "NULL") var seriesId: Long?,
+    @ColumnInfo(name = SERIES_ORDER_COLUMN, defaultValue = "NULL") var seriesOrder: Int?,
     @ColumnInfo(name = DATE_ADDED_COLUMN,defaultValue = "0") var added: Date,
     @ColumnInfo(name = DATE_MODIFIED_COLUMN,defaultValue = "0") var modified: Date,
     @ColumnInfo(name = SMALL_THUMB_COLUMN) var smallThumb: String?,
     @ColumnInfo(name = LARGE_THUMB_COLUMN) var largeThumb: String?,
     @ColumnInfo(name = BOOK_FLAGS,defaultValue = "0") var flags: Int
 ) {
-    // This constructor initializes the unused1 field to null
-    constructor(
-        id: Long,
-        volumeId: String?,
-        sourceId: String?,
-        title: String,
-        subTitle: String,
-        description: String,
-        pageCount: Int,
-        bookCount: Int,
-        linkUrl: String,
-        rating: Double,
-        added: Date,
-        modified: Date,
-        smallThumb: String?,
-        largeThumb: String?,
-        flags: Int
-    ): this(id = id,
-        volumeId = volumeId,
-        sourceId = sourceId,
-        unused1 = null,
-        title = title,
-        subTitle = subTitle,
-        description = description,
-        pageCount = pageCount,
-        bookCount = bookCount,
-        linkUrl = linkUrl,
-        rating = rating,
-        added = added,
-        modified = modified,
-        smallThumb = smallThumb,
-        largeThumb = largeThumb,
-        flags = flags
-    )
-
     var isSelected: Boolean
         get() = ((flags and SELECTED) != 0)
         set(v) {
@@ -147,6 +125,12 @@ data class BookEntity constructor(
  */
 data class BookAndAuthors(
     @Embedded var book: BookEntity,
+    @Relation(
+        entity = SeriesEntity::class,
+        parentColumn = BOOK_SERIES_COLUMN,
+        entityColumn = SERIES_ID_COLUMN
+    )
+    var series: SeriesEntity?,
     @Relation(
         entity = AuthorEntity::class,
         parentColumn = BOOK_ID_COLUMN,
@@ -235,6 +219,7 @@ data class BookAndAuthors(
 
     override fun writeToParcel(dest: Parcel, flags: Int) {
         writeBook(dest, book)
+        writeSeries(dest, series)
         dest.writeInt(authors.size)
         for (i in authors) {
             writeAuthor(dest, i)
@@ -268,11 +253,23 @@ data class BookAndAuthors(
         dest.writeInt(book.bookCount)
         dest.writeString(book.linkUrl)
         dest.writeDouble(book.rating)
+        dest.writeLong(book.seriesId?: -1L)
+        dest.writeInt(book.seriesOrder?: -1)
         dest.writeLong(book.added.time)
         dest.writeLong(book.modified.time)
         dest.writeString(book.smallThumb)
         dest.writeString(book.largeThumb)
         dest.writeInt(book.flags)
+    }
+
+    private fun writeSeries(dest: Parcel, series: SeriesEntity?) {
+        series?.let {
+            dest.writeByte(1.toByte())
+            dest.writeLong(it.id)
+            dest.writeString(it.seriesId)
+            dest.writeString(it.title)
+            dest.writeInt(it.flag)
+        }?: dest.writeByte(0.toByte())
     }
 
     private fun writeAuthor(dest: Parcel, author: AuthorEntity) {
@@ -304,6 +301,7 @@ data class BookAndAuthors(
         val CREATOR = object : Parcelable.Creator<BookAndAuthors> {
             override fun createFromParcel(src: Parcel): BookAndAuthors {
                 val book = readBook(src)
+                val series = readSeries(src)
                 var count = src.readInt()
                 val authors = ArrayList<AuthorEntity>(count)
                 for (i in 0 until count) {
@@ -325,7 +323,7 @@ data class BookAndAuthors(
                     isbns.add(readIsbn(src))
                 }
 
-                return BookAndAuthors(book, authors, categories, tags, isbns)
+                return BookAndAuthors(book, series, authors, categories, tags, isbns)
             }
 
             override fun newArray(size: Int): Array<BookAndAuthors?> {
@@ -344,6 +342,8 @@ data class BookAndAuthors(
             val bookCount = src.readInt()
             val linkUrl = src.readString()
             val rating = src.readDouble()
+            val seriesId = src.readLong().let { if (it == -1L) null else it }
+            val seriesOrder= src.readInt().let { if (it == -1) null else it }
             val added = Date(src.readLong())
             val modified = Date(src.readLong())
             val smallThumb = src.readString()
@@ -360,11 +360,28 @@ data class BookAndAuthors(
                 bookCount = bookCount,
                 linkUrl = linkUrl?:"",
                 rating = rating,
+                seriesId = seriesId,
+                seriesOrder = seriesOrder,
                 added = added,
                 modified = modified,
                 smallThumb = smallThumb,
                 largeThumb = largeThumb,
                 flags = flags
+            )
+        }
+
+        private fun readSeries(src: Parcel): SeriesEntity? {
+            if (src.readByte() == 0.toByte())
+                return null
+            val id = src.readLong()
+            val seriesId = src.readString()
+            val title = src.readString()
+            val flag = src.readInt()
+            return SeriesEntity(
+                id = id,
+                seriesId = seriesId!!,
+                title = title!!,
+                flag
             )
         }
 
@@ -527,6 +544,21 @@ abstract class BookDao(private val db: BookDatabase) {
             book.book.sourceId = book.book.sourceId?: ""
         }
 
+        book.series = book.series?.let {
+            // Series is not null
+            if (it.id == 0L && db.getSeriesDao().addWithUndo(it) == 0L)
+                return@let null
+            // Make sure the series id and order are valid
+            book.book.seriesId = it.id
+            book.book.seriesOrder = book.book.seriesOrder?: 1
+            it
+        }?: run {
+            // The series is null, make sue the seriesId and order are null, too
+            book.book.seriesId = null
+            book.book.seriesOrder = null
+            null
+        }
+
         // Look for a conflict
         val bookConflict = findConflict(book.book.volumeId, book.book.sourceId)
         if (bookConflict == null) {
@@ -546,7 +578,8 @@ abstract class BookDao(private val db: BookDatabase) {
                 update(book.book) > 0
             }) {
                 book.book.id = 0L
-            }
+            } else if (bookConflict.series != null && bookConflict.series != book.series)
+                db.getSeriesDao().deleteWithUndo(true)
         } else
             book.book.id = 0L
 
@@ -605,8 +638,11 @@ abstract class BookDao(private val db: BookDatabase) {
         }
 
         // Finally delete the books
-        return deleteBooksWithUndo(bookIds, filter)
-
+        return deleteBooksWithUndo(bookIds, filter).also {
+            // Delete unused series, if we deleted anything
+            if (it > 0)
+                db.getSeriesDao().deleteWithUndo(true)
+        }
     }
 
     /**

@@ -17,6 +17,8 @@ fun makeBook(unique: Int = 0, flags: Int = 0, uniqueString: String = unique.toSt
         bookCount = 5 + unique,
         linkUrl = "linkUrl@unique",
         rating = 3.14 + unique.toFloat() / 10.0f,
+        seriesId = null,
+        seriesOrder = unique + 4,
         added = Date(bookTestNow + unique.toLong() * (60 * 60* 24)),
         modified = Date(bookTestNow + (unique.toLong() + 22) * (60 * 60* 24)),
         smallThumb = "smallThumb$unique",
@@ -31,6 +33,7 @@ fun makeBookAndAuthors(unique: Int = 0, flags: Int = 0, uniqueString: String = u
         authors = emptyList(),
         categories = emptyList(),
         tags = emptyList(),
-        isbns = emptyList()
+        isbns = emptyList(),
+        series = null
     )
 }

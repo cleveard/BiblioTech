@@ -152,6 +152,19 @@ internal class GoogleBookLookup {
         return BookQueryPagingSource(search, itemCount, list)
     }
 
+    suspend fun getSeries(seriesId: String): SeriesEntity? {
+        @Suppress("BlockingMethodInNonBlockingContext")
+        return withContext(Dispatchers.IO) {
+            service.series().get(mutableListOf(seriesId)).execute()?.let {
+                val list = it.series
+                if (list.isEmpty())
+                    null
+                else
+                    SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
+            }
+        }
+    }
+
     /**
      * Get a thumbnail link from a json object
      * @param info The volume info object
@@ -214,6 +227,17 @@ internal class GoogleBookLookup {
             categories[0] = tmp
         }
 
+        val seriesOrder: Int?
+        val series = volume.volumeInfo.seriesInfo.volumeSeries.let {
+            if (it.isEmpty()) {
+                seriesOrder = null
+                null
+            } else {
+                seriesOrder = it[0].orderNumber
+                SeriesEntity(0L, it[0].seriesId, "", 0)
+            }
+        }
+
         // Return the book object
         return BookAndAuthors(
             book = BookEntity(
@@ -227,12 +251,15 @@ internal class GoogleBookLookup {
                 bookCount = 1,
                 linkUrl = info.infoLink?: "",
                 rating = info.averageRating?: 0.0,
+                seriesId = null,
+                seriesOrder = seriesOrder,
                 added = Date(0),
                 modified = Date(0),
                 smallThumb = getThumbnail(info, kSmallThumb),
                 largeThumb = getThumbnail(info, kThumb),
                 flags = 0
             ),
+            series = series,
             authors = info.authors?.filter { !it.isNullOrEmpty() }?.map { AuthorEntity(0, it) }?: emptyList(),
             categories = categories,
             tags = ArrayList(),

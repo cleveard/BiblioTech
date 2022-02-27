@@ -683,6 +683,29 @@ class ScanFragment : Fragment() {
         }
     }
 
+    private suspend fun addBook(book: BookAndAuthors) {
+        val repo = booksViewModel.repo
+        // If we have a series, then we need to add make sure it
+        // is in the database.
+        book.series = book.series?.let {series ->
+            // If the series matches the id in the book, then we are done
+            if (series.id == book.book.seriesId)
+                series
+            else {
+                // Lookup the series in the database
+                repo.findSeriesBySeriesId(series.seriesId)?: run {
+                    // We didn't find it, so look up the series on google books
+                    scanViewModel.lookup.getSeries(series.seriesId)
+                }
+            }
+        }
+
+        // Select the book
+        book.book.isSelected = true
+        // Add the book to the database
+        repo.addOrUpdateBook(book)
+    }
+
     /**
      * Lookup a book using isbn
      * @param codes The ISBNs to use for the lookup
@@ -713,12 +736,10 @@ class ScanFragment : Fragment() {
                             add(IsbnEntity(id = 0, isbn = isbn))
                         }
                     }
-                    // Select the book
-                    book.book.isSelected = true
                     // Deselect everything else
                     booksViewModel.selection.selectAll(false)
                     // Add the book to the database
-                    booksViewModel.repo.addOrUpdateBook(book)
+                    addBook(book)
                     // Stop looking
                     return true
                 }
@@ -780,13 +801,10 @@ class ScanFragment : Fragment() {
                 val array = selectBook(result.list, spec, result.itemCount, true)
                 // Deselect all
                 booksViewModel.selection.selectAll(false)
-                val repo = booksViewModel.repo
                 for (i in 0 until array.size()) {
                     val book = array.valueAt(i)
-                    // Select each book
-                    book.book.isSelected = true
                     // Add the book to the database
-                    repo.addOrUpdateBook(book)
+                    addBook(book)
                 }
             } catch (e: GoogleBookLookup.LookupException) {
                 // Display and error if we found one

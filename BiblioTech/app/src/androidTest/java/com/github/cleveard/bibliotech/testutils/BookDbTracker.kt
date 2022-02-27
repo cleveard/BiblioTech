@@ -28,6 +28,7 @@ fun StandardSubjectBuilder.compareBooks(actual: BookAndAuthors?, expected: BookA
         that(actual.categories).containsExactlyElementsIn(expected.categories)
         that(actual.tags).containsExactlyElementsIn(expected.tags)
         that(actual.isbns).containsExactlyElementsIn(expected.isbns)
+        that(actual.series).isEqualTo(expected.series)
     }
 
 }
@@ -159,6 +160,13 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     }
 
     /**
+     * Get a list of all series that aren't hidden
+     */
+    private suspend fun getSeries(): List<SeriesEntity> {
+        return db.getSeriesDao().get()
+    }
+
+    /**
      * Add a tag to the database
      * @param tag The tag to add
      * @param callback A callback to decide whether to update or reject conflicts
@@ -220,10 +228,11 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.authorEntities.checkCounts("$message: Authors", bookSequence.map { it.authors.asSequence() }.flatten()) { it.name }
         tables.categoryEntities.checkCounts("$message: Categories", bookSequence.map { it.categories.asSequence() }.flatten()) { it.category }
         tables.isbnEntities.checkCounts("$message: Isbns", bookSequence.map { it.isbns.asSequence() }.flatten()) { it.isbn }
+        tables.seriesEntities.checkCounts("$message: Series", bookSequence.map { it.series }.filterNotNull()) { it.title }
     }
 
     /**
-     * Compare the exptected database with the actual one
+     * Compare the expected database with the actual one
      * @param message A message for assertion failures
      * @param args Arguments for %s in message
      */
@@ -246,6 +255,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             that(getCategories()).containsExactlyElementsIn(tables.categoryEntities.entities.toList())
             that(getViews()).containsExactlyElementsIn(tables.viewEntities.entities.toList())
             that(getIsbns()).containsExactlyElementsIn(tables.isbnEntities.entities.toList())
+            that(getSeries()).containsExactlyElementsIn(tables.seriesEntities.entities.toList())
         }
     }
 
@@ -291,12 +301,24 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         book.tags = tables.tagEntities.createRelationList(2, random)
         // Add 0 to 3 random isbns
         book.isbns = tables.isbnEntities.createRelationList(3, random)
+        // Add options series
+        book.series = if (!random.nextBoolean()) null else tables.seriesEntities.createRelation(random.nextBoolean(), random)
 
         assertWithMessage("%s: Add %s", message, book.book.title).apply {
             // Add the book
             tags = addOrUpdate(book, tags)
             // Expect the add/update to work
             that(book.book.id).isNotEqualTo(0L)
+            // Expect the series to be consistent
+            book.series?.also {
+                // If the series is not null, expect that the series id and order number are not null
+                that(book.book.seriesId).isEqualTo(it.id)
+                that(book.book.seriesOrder).isNotNull()
+            }?: run {
+                // If the series is null, expect that the series id and order number are null
+                that(book.book.seriesId).isNull()
+                that(book.book.seriesOrder).isNull()
+            }
             // Combine the additional tags with the tags in the book. If tags, is null, then
             // the additional tags are the selected tags
             book.tags = (tags?: tables.tagEntities.entities.filter { it.isSelected }.map { it.id }.toList().toTypedArray()).let {
@@ -335,8 +357,9 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.tagEntities.linkRelation(book.tags)
         tables.categoryEntities.linkRelation(book.categories)
         tables.authorEntities.linkRelation(book.authors)
-        tables.bookEntities.linked(book)
         tables.isbnEntities.linkRelation(book.isbns)
+        book.series?.let { tables.seriesEntities.linked(it) }
+        tables.bookEntities.linked(book)
     }
 
     /**
@@ -347,8 +370,9 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         tables.tagEntities.unlinkRelation(book.tags)
         tables.categoryEntities.unlinkRelation(book.categories)
         tables.authorEntities.unlinkRelation(book.authors)
-        tables.bookEntities.unlinked(book)
         tables.isbnEntities.unlinkRelation(book.isbns)
+        book.series?.let { tables.seriesEntities.unlinked(it) }
+        tables.bookEntities.unlinked(book)
     }
 
     /**
@@ -364,6 +388,10 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             tables.categoryEntities.updateRelation(prev.categories, book.categories)
             tables.authorEntities.updateRelation(prev.authors, book.authors)
             tables.isbnEntities.updateRelation(prev.isbns, book.isbns)
+            if (prev.series != book.series) {
+                prev.series?.let { tables.seriesEntities.unlinked(it) }
+                book.series?.let { tables.seriesEntities.linked(it) }
+            }
         } else
             linkBook(book) // No previous, just link in the new book
     }
@@ -444,7 +472,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 var book: BookAndAuthors
                 do {
                     book = tables.bookEntities[random.nextInt(tables.bookEntities.size)]
-                } while (book.book.isSelected != selected && values.contains(book.book.title))
+                } while (book.book.isSelected != selected || values.contains(book.book.title))
                 values.add(book.book.title)
             }
         }
@@ -893,26 +921,39 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             // Get number of existing entities for the list
             var existing = random.nextInt(count + 1).coerceAtMost(size)
             repeat (count) {
-                // Add another entities
-                if (existing > 0 && random.nextBoolean()) {
-                    // Add an exisiting entity
+                val fromList = existing > 0 && random.nextBoolean()
+                returnList.add(createRelation(fromList, random, returnList))
+                if (fromList)
                     --existing
-                    var entity: T
-                    // Don't add any entities twice
-                    do {
-                        entity = this[random.nextInt(size)]
-                    } while (returnList.contains(entity))
-                    returnList.add(entity)
-                } else {
-                    // Add a new entity - Tags are the only linked entities with flags
-                    val flags = if (random.nextInt(5) > 3)
-                        TagEntity.SELECTED
-                    else
-                        0
-                    returnList.add(new(flags))
-                }
             }
             return returnList
+        }
+
+        /**
+         * Create a relation entity
+         * @param fromList True to return existing entities from the list
+         * @param returnList List of relations already created. Used to prevent duplicates
+         * @param random A random number generator
+         * @return The entity
+         */
+        fun createRelation(fromList: Boolean, random: Random, returnList: List<T>? = null) : T {
+            // Add another entities
+            if (fromList && size > 0) {
+                // Add an exisiting entity
+                var entity: T
+                // Don't add any entities twice
+                do {
+                    entity = this[random.nextInt(size)]
+                } while (returnList?.contains(entity) == true)
+                return entity
+            } else {
+                // Add a new entity - Tags are the only linked entities with flags
+                val flags = if (random.nextInt(5) > 3)
+                    TagEntity.SELECTED
+                else
+                    0
+                return new(flags)
+            }
         }
 
         /**
@@ -1075,6 +1116,23 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 return e1.isbn.compareTo(e2.isbn, true)
             }
         }
+        val seriesEntities: Table<SeriesEntity> = object: Table<SeriesEntity>(
+            // Create a series entity
+            {_, _, unique -> SeriesEntity(0L, "series$unique", "title$unique", 0) },
+            // Copy id from one series to another
+            {entity, prev ->  prev?.let { entity.id = it.id } },
+            // Determine whether two isbns have the same id
+            {e1, e2 -> e1.id == e2.id }
+            // Do delete isbns when they are no longer referenced
+        ) {
+            /**
+             * @inheritDoc
+             * Series conflict when the values are the same
+             */
+            override fun compare(e1: SeriesEntity, e2: SeriesEntity): Int {
+                return e1.seriesId.compareTo(e2.seriesId)
+            }
+        }
         /**
          * The expected values for the books table
          */
@@ -1172,6 +1230,8 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 t.categoryEntities.copy(categoryEntities) { it }
                 // Copy the isbns and share the entities between all tables
                 t.isbnEntities.copy(isbnEntities) { it }
+                // Copy the series making copies of the SeriesEntities
+                t.seriesEntities.copy(seriesEntities) { it.copy() }
                 // Copy the books
                 t.bookEntities.copy(bookEntities) {book ->
                     // Make copies of the books

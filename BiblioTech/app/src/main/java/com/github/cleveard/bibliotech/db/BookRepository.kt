@@ -396,6 +396,15 @@ class BookRepository private constructor(context: Context) {
         }
     }
 
+    /**
+     * Find a series in the database using the series id
+     * @param seriesId The series id
+     * @return The SeriesEntity or null if not found
+     */
+    suspend fun findSeriesBySeriesId(seriesId: String): SeriesEntity? {
+        return db.getSeriesDao().findSeriesBySeriesId(seriesId)
+    }
+
     /** The current maximum undo levels kept in the database */
     val maxUndoLevels
         get() = db.getUndoRedoDao().maxUndoLevels

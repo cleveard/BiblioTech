@@ -337,7 +337,8 @@ class BookDatabaseClassesTest {
                authors = listOf(AuthorEntity(0L, "sourceId volumeId")),
                categories = listOf(makeCategory()),
                tags = listOf(makeTag()),
-               isbns = listOf(makeIsbn())
+               isbns = listOf(makeIsbn()),
+               series = null
            )
        }
 
