@@ -229,6 +229,10 @@ GEM
     nokogiri (1.13.3)
       mini_portile2 (~> 2.8.0)
       racc (~> 1.4)
+    nokogiri (1.13.3-x64-mingw-ucrt)
+      racc (~> 1.4)
+    nokogiri (1.13.3-x86_64-linux)
+      racc (~> 1.4)
     octokit (4.21.0)
       faraday (>= 0.9)
       sawyer (~> 0.8.0, >= 0.5.3)
@@ -267,10 +271,12 @@ GEM
       unf_ext
     unf_ext (0.0.8)
     unicode-display_width (1.8.0)
+    wdm (0.1.1)
     webrick (1.7.0)
     zeitwerk (2.5.3)
 
 PLATFORMS
+  x64-mingw-ucrt
   x64-unknown
   x86_64-linux
 
@@ -280,6 +286,7 @@ DEPENDENCIES
   minima (~> 2.5)
   tzinfo (~> 1.2)
   tzinfo-data
+  wdm (>= 0.1.0)
   webrick
 
 BUNDLED WITH
