@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.gb
 
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
@@ -29,7 +28,7 @@ private const val apiKey = "GOOGLE_BOOKS_API_KEY"
  * Constructor is private because all methods are in the companion object
  */
 @EnvironmentValues(apiKey)
-internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
+internal class GoogleBookLookup {
 
     /**
      * Exception thrown when a book query fails
@@ -87,7 +86,7 @@ internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
         slowThresh: Double
     ) {
         val requests: ArrayDeque<Long> = ArrayDeque(maxRequests)
-        val delayThreshhold: Int = (slowThresh * maxRequests).roundToInt()
+        val delayThreshold: Int = (slowThresh * maxRequests).roundToInt()
 
         /**
          * Delay to prevent the rate limit from being exceeded
@@ -100,7 +99,7 @@ internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
                 while (now - (requests.firstOrNull()?: now) > period)
                     requests.removeFirst()
                 Log.d("RATE_LIMIT", "Requests = ${requests.size}, start = ${now - (requests.firstOrNull()?: now)})}")
-                if (requests.size < delayThreshhold)
+                if (requests.size < delayThreshold)
                     return
                 added + (period - (now - requests.first())) / (maxRequests - requests.size)
             }
@@ -169,7 +168,7 @@ internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
 
         private val rateLimit: RateLimit = RateLimit(100, 60000L, .25)
 
-        suspend fun <T> execute(auth: BookCredentials, viewModel: AndroidViewModel, callback: (token: String?) -> AbstractGoogleClientRequest<T>): T {
+        suspend fun <T> execute(auth: BookCredentials, callback: (token: String?) -> AbstractGoogleClientRequest<T>): T {
             return rateLimit.execute(auth, callback)
         }
     }
@@ -226,7 +225,7 @@ internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
     }
 
     suspend fun getSeries(auth: BookCredentials, seriesId: String): SeriesEntity? {
-        return execute(auth, viewModel) {
+        return execute(auth) {
             service.series().get(mutableListOf(seriesId)).apply { oauthToken = it }
         }?.let {
             val list = it.series
@@ -368,7 +367,7 @@ internal class GoogleBookLookup(private val viewModel: AndroidViewModel) {
     @Throws(LookupException::class)
     private suspend fun queryBooks(auth: BookCredentials, query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
         return try {
-            val volumes: Volumes = execute(auth, viewModel) {
+            val volumes: Volumes = execute(auth) {
                 service.volumes().list(query ?: "").apply {
                     prettyPrint = true
                     startIndex = page

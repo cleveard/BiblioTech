@@ -3,7 +3,6 @@ package com.github.cleveard.bibliotech.ui.scan
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.gb.*
 import android.Manifest
-import android.app.Application
 import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
@@ -27,6 +26,7 @@ import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.createViewModelLazy
 import androidx.lifecycle.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
@@ -75,9 +75,9 @@ fun Editable.setString(text: String): Editable {
     return this
 }
 
-internal class ScanViewModel(app: Application): AndroidViewModel(app) {
+internal class ScanViewModel: ViewModel() {
     /** Lookup to use with this view model */
-    val lookup: GoogleBookLookup = GoogleBookLookup(this)
+    val lookup: GoogleBookLookup = GoogleBookLookup()
 }
 
 /**
@@ -88,7 +88,9 @@ class ScanFragment : Fragment() {
      * Scan view model
      * Only used for its viewModelScope
      */
-    private lateinit var scanViewModel: ScanViewModel
+    private val scanViewModel: ScanViewModel by createViewModelLazy(
+        ScanViewModel::class, { viewModelStore }
+    )
 
     /**
      * The books view model
@@ -326,7 +328,6 @@ class ScanFragment : Fragment() {
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?): View? {
-        scanViewModel = MainActivity.getViewModel(activity, ScanViewModel::class.java)
         booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
             it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
             it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
