@@ -69,5 +69,9 @@
             app:nullable="true"
             android:defaultValue="@null" />
     </fragment>
+    <dialog
+        android:id="@+id/googleBookLoginFragment"
+        android:name="com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment"
+        android:label="fragment_google_book_login" />
 
 </navigation>

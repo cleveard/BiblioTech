@@ -36,6 +36,7 @@ import com.github.cleveard.bibliotech.*
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.ui.books.BooksAdapter
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
+import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
 import com.github.cleveard.bibliotech.ui.tags.TagViewModel
 import com.github.cleveard.bibliotech.ui.tags.TagsFragment
 import com.github.cleveard.bibliotech.ui.widget.ChipBox
@@ -412,6 +413,9 @@ class ScanFragment : Fragment() {
                 view.findViewById<View>(R.id.scan_permissions).visibility = View.VISIBLE
             }
         }
+
+        // Make sure we are logged in
+        GoogleBookLoginFragment.login(this)
     }
 
     /**

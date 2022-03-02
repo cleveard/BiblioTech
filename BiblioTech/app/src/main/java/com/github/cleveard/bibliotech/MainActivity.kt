@@ -217,16 +217,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
                 // to the books list without any argument
                 R.id.nav_books -> MobileNavigationDirections.filterBooks()
                 // This is the id for the scan destination
-                R.id.nav_scan -> {
-                    if (!isAuthorized) {
-                        MainScope().launch {
-                            if (login() && navigate(MobileNavigationDirections.scanCodes()))
-                                drawerLayout.closeDrawer(GravityCompat.START)
-                        }
-                        return@setNavigationItemSelectedListener true
-                    }
-                    MobileNavigationDirections.scanCodes()
-                }
+                R.id.nav_scan -> MobileNavigationDirections.scanCodes()
                 R.id.action_nav_books_to_exportImportFragment -> {
                     if (lastNavId != R.id.nav_books)
                         return@setNavigationItemSelectedListener false

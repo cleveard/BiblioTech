@@ -302,4 +302,12 @@
 
     <string name="login">Login</string>
     <string name="logout">Logout</string>
+    <string name="login_message">BiblioTech requires access to Google Books to search for your books.
+        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.\n\n
+        Do you want to allow access to Google Books?
+    </string>
+    <string name="login_retry">The login failed.\n\nBiblioTech requires access to Google Books to search for your books.
+        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.\n\n
+        Do you want to try again?
+    </string>
 </resources>
