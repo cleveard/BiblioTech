@@ -26,7 +26,8 @@ import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.createViewModelLazy
+import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
@@ -88,19 +89,17 @@ class ScanFragment : Fragment() {
      * Scan view model
      * Only used for its viewModelScope
      */
-    private val scanViewModel: ScanViewModel by createViewModelLazy(
-        ScanViewModel::class, { viewModelStore }
-    )
+    private val scanViewModel: ScanViewModel by viewModels()
 
     /**
      * The books view model
      */
-    private lateinit var booksViewModel: BooksViewModel
+    private val booksViewModel: BooksViewModel by activityViewModels()
 
     /**
      * The tags view model
      */
-    private lateinit var tagViewModel: TagViewModel
+    private val tagViewModel: TagViewModel by activityViewModels()
 
     /**
      * The current tags
@@ -327,12 +326,11 @@ class ScanFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?): View? {
-        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
-            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
-            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
-        }
-        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java)
+        savedInstanceState: Bundle?
+    ): View? {
+        // Initialize view model observers
+        booksViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+        booksViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
 
         // Let the system know we have an options menu
         setHasOptionsMenu(true)

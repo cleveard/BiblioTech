@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.ui.books
 
 import android.app.Activity
-import android.app.Application
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.SpannableStringBuilder
@@ -18,6 +17,7 @@ import androidx.core.view.GravityCompat
 import androidx.core.view.children
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
@@ -44,12 +44,12 @@ class BooksFragment : Fragment() {
     /**
      * The view model for the books fragment
      */
-    private lateinit var booksViewModel: BooksViewModel
+    private val booksViewModel: BooksViewModel by activityViewModels()
 
     /**
      * The view model for the tags fragment
      */
-    private lateinit var tagViewModel: TagViewModel
+    private val tagViewModel: TagViewModel by activityViewModels()
 
     /**
      * The drawer layout for the edit and filter drawer
@@ -188,17 +188,13 @@ class BooksFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Get the books and tags view models
-        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java).also {
-            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
-            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
-            it.filterView.observe(viewLifecycleOwner, filterViewObserver)
-            it.undoList.observe(viewLifecycleOwner, undoListObserver)
-        }
-        tagViewModel = MainActivity.getViewModel(activity, TagViewModel::class.java).also {
-            it.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
-            it.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
-        }
+        // Initialize the view model observers
+        booksViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+        booksViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
+        booksViewModel.filterView.observe(viewLifecycleOwner, filterViewObserver)
+        booksViewModel.undoList.observe(viewLifecycleOwner, undoListObserver)
+        tagViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
+        tagViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
 
         // Get the edit and filter drawer menu icons
         context?.let {context ->

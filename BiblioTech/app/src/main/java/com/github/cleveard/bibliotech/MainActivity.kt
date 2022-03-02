@@ -19,10 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.coroutineScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
@@ -86,7 +83,7 @@ interface BookCredentials {
 
     /**
      * Run an action with a the access token for the credentials
-     * @param The action to run, whose only argument is the access token
+     * @param action The action to run, whose only argument is the access token
      * @return The return value of the action
      */
     suspend fun <T> execute(action: suspend (token:String?) -> T): T
@@ -114,18 +111,6 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
          */
         val cache: File?
             get() = mCache
-
-        // Factory used to create AndroidViewModel view models
-        private lateinit var mViewModelFactory: ViewModelProvider.Factory
-
-        /**
-         * Create an AndroidViewModel view model for a fragment
-         * @param activity The fragments activity
-         * @param classType The java class for the view model to be created.
-         */
-        fun <T: ViewModel> getViewModel(activity: FragmentActivity?, classType: Class<T>): T {
-            return ViewModelProvider(activity!!, mViewModelFactory)[classType]
-        }
     }
 
     /**
@@ -180,9 +165,6 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
      * @inheritDoc
      */
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Create the view model factory
-        mViewModelFactory = ViewModelProvider.AndroidViewModelFactory(application)
-
         // Create the credentials
         googleBooksAuth = googleBooksAuth?: GoogleBooksOAuth(application)
 

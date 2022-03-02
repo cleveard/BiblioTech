@@ -19,6 +19,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.*
@@ -184,7 +185,7 @@ class PrintFragment : Fragment() {
      * View model for the books fragment
      * Used to access the database and to get thumbnails
      */
-    private lateinit var booksViewModel: BooksViewModel
+    private val booksViewModel: BooksViewModel by activityViewModels()
 
     /** Adapter for the print preview recycler view */
     private lateinit var previewAdapter: ListAdapter<PageLayoutHandler.Page, PreviewViewHolder>
@@ -502,8 +503,6 @@ class PrintFragment : Fragment() {
                 booksViewModel.getThumbnail(id, large)
             }
         }
-        // Get the books view model
-        booksViewModel = MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Create the ViewName for the filter from the arguments
         filter = ViewName.makeDisplay(args.filterName, requireContext().resources)

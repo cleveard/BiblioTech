@@ -5,6 +5,7 @@ import androidx.appcompat.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.github.cleveard.bibliotech.MainActivity
@@ -153,16 +154,13 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doAddTags(fragment: Fragment) {
-            val activity = fragment.requireActivity()
-            val booksViewModel: BooksViewModel =
-                MainActivity.getViewModel(activity, BooksViewModel::class.java)
-            val tagViewModel: TagViewModel =
-                MainActivity.getViewModel(activity, TagViewModel::class.java)
+            val booksViewModel: BooksViewModel by fragment.activityViewModels()
+            val tagViewModel: TagViewModel by fragment.activityViewModels()
             if (booksViewModel.selection.hasSelection &&
                     tagViewModel.selection.hasSelection) {
                 addTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
-                TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
+                TagModalAction(fragment, booksViewModel, tagViewModel).start(fragment.requireActivity())
             }
         }
 
@@ -172,16 +170,13 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doRemoveTags(fragment: Fragment) {
-            val activity = fragment.requireActivity()
-            val booksViewModel: BooksViewModel =
-                MainActivity.getViewModel(activity, BooksViewModel::class.java)
-            val tagViewModel: TagViewModel =
-                MainActivity.getViewModel(activity, TagViewModel::class.java)
+            val booksViewModel: BooksViewModel by fragment.activityViewModels()
+            val tagViewModel: TagViewModel by fragment.activityViewModels()
             if (booksViewModel.selection.hasSelection &&
                     tagViewModel.selection.hasSelection) {
                 removeTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
-                TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
+                TagModalAction(fragment, booksViewModel, tagViewModel).start(fragment.requireActivity())
             }
         }
 
@@ -191,15 +186,12 @@ class TagModalAction private constructor(
          * If no books are selected, start the delete modal action
          */
         fun doReplaceTags(fragment: Fragment) {
-            val activity = fragment.requireActivity()
-            val booksViewModel: BooksViewModel =
-                MainActivity.getViewModel(activity, BooksViewModel::class.java)
-            val tagViewModel: TagViewModel =
-                MainActivity.getViewModel(activity, TagViewModel::class.java)
+            val booksViewModel: BooksViewModel by fragment.activityViewModels()
+            val tagViewModel: TagViewModel by fragment.activityViewModels()
             if (booksViewModel.selection.hasSelection) {
                 replaceTags(fragment.requireContext(), booksViewModel, tagViewModel)
             } else {
-                TagModalAction(fragment, booksViewModel, tagViewModel).start(activity)
+                TagModalAction(fragment, booksViewModel, tagViewModel).start(fragment.requireActivity())
             }
         }
 

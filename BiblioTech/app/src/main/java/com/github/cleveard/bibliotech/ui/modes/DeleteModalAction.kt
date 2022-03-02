@@ -5,6 +5,7 @@ import androidx.appcompat.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.github.cleveard.bibliotech.MainActivity
@@ -128,13 +129,11 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
          * If no books are selected, start the delete modal action
          */
         fun doDelete(fragment: Fragment) {
-            val activity = fragment.requireActivity()
-            val viewModel: BooksViewModel =
-                MainActivity.getViewModel(activity, BooksViewModel::class.java)
+            val viewModel: BooksViewModel by fragment.activityViewModels()
             if (viewModel.selection.hasSelection) {
                 delete(fragment.requireContext(), viewModel)
             } else {
-                DeleteModalAction(fragment, viewModel).start(activity)
+                DeleteModalAction(fragment, viewModel).start(fragment.requireActivity())
             }
         }
 

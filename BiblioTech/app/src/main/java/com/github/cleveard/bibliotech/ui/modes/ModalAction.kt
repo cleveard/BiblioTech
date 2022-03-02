@@ -76,9 +76,8 @@ open class ModalAction(protected val title: String, protected val subTitle: Stri
      * Start the modal action.
      * @param activity The current activity
      */
-    fun start(activity: Activity?): ActionMode {
-        val a = activity as? AppCompatActivity
-        return a?.startSupportActionMode(this)!!
+    fun start(activity: Activity): ActionMode {
+        return (activity as? AppCompatActivity)?.startSupportActionMode(this)!!
     }
 
     /**

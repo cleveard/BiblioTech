@@ -9,12 +9,12 @@ import android.widget.TextView
 import androidx.appcompat.widget.ActionMenuView
 import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
@@ -37,12 +37,12 @@ class TagsFragment : Fragment() {
     /**
      * The view model for the tags fragment
      */
-    private lateinit var tagViewModel: TagViewModel
+    private val tagViewModel: TagViewModel by activityViewModels()
 
     /**
      * The view model for the tags fragment
      */
-    private lateinit var booksViewModel: BooksViewModel
+    private val booksViewModel: BooksViewModel by activityViewModels()
 
     /**
      * Coroutine job for handling the pager flow
@@ -69,11 +69,6 @@ class TagsFragment : Fragment() {
     ): View? {
         // Inflate the layout for this fragment
         val content = inflater.inflate(R.layout.tags_fragment, container, false)
-        // Get the view models
-        tagViewModel =
-            MainActivity.getViewModel(activity, TagViewModel::class.java)
-        booksViewModel =
-            MainActivity.getViewModel(activity, BooksViewModel::class.java)
 
         // Setup the tag recycler view
         setupRecyclerView(content)

@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
@@ -38,7 +39,7 @@ class FilterTable(private val fragment: Fragment) {
     /**
      * View model
      */
-    private lateinit var booksViewModel: BooksViewModel
+    private val booksViewModel: BooksViewModel by fragment.activityViewModels()
 
     /**
      * The table layout for the filter list
@@ -478,9 +479,6 @@ class FilterTable(private val fragment: Fragment) {
     fun onCreateView(inflater: LayoutInflater, tableLayout: TableLayout) {
         // Tear down anything already setup
         onDestroyView()
-
-        // Get the view model
-        booksViewModel = MainActivity.getViewModel(fragment.activity, BooksViewModel::class.java)
 
         // Initialize the column spinner
         initColumnSpinnerAdapter(inflater.context)
