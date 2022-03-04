@@ -53,7 +53,7 @@ class GoogleBookLoginFragment : DialogFragment() {
         return AlertDialog.Builder(requireContext())
             .setMessage(R.string.login_message)                 // Message
             .setPositiveButton(R.string.yes, null)       // Yes response is handled in setOnShowListener
-            .setNegativeButton(R.string.no) { dialog, which ->  // No respose cancels the dialog
+            .setNegativeButton(R.string.no) { dialog, _ ->  // No respose cancels the dialog
                 dialog.cancel()
             }
             .setCancelable(true)                                // Dialog is cancelable
