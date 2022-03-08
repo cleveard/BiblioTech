@@ -56,6 +56,7 @@ data class TagEntity(
     companion object {
         const val SELECTED = 1
         const val HIDDEN = 2
+        const val PRESERVE = 0
     }
 }
 
@@ -293,16 +294,9 @@ abstract class TagDao(private val db: BookDatabase) {
     @RawQuery(observedEntities = [TagEntity::class])
     protected abstract suspend fun queryTagCount(query: SupportSQLiteQuery): Int?
 
-    /**
-     * Delete a tag using the tag id
-     * @param tagId The tag id to delete
-     */
-    @Query("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ${TagEntity.HIDDEN} WHERE $TAGS_ID_COLUMN = :tagId AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 )")
-    abstract suspend fun delete(tagId: Long): Int
-
     suspend fun deleteWithUndo(tagId: Long): Int {
         return UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), tagId) {
-            delete(tagId)
+            db.setHidden(BookDatabase.tagsTable, tagId)
         }
     }
 
@@ -335,9 +329,7 @@ abstract class TagDao(private val db: BookDatabase) {
             false                                     // Delete ids or not ids
         )?.let {e ->
             UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), e) {
-                db.execUpdateDelete(
-                    SimpleSQLiteQuery("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ${TagEntity.HIDDEN}${it.expression}", it.args)
-                )
+                db.setHidden(BookDatabase.tagsTable, e)
             }
         }?: 0
     }

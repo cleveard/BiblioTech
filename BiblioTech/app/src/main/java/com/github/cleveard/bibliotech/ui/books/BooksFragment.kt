@@ -24,10 +24,7 @@ import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.*
-import com.github.cleveard.bibliotech.db.BookFilter
-import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
-import com.github.cleveard.bibliotech.db.UndoTransactionEntity
-import com.github.cleveard.bibliotech.db.ViewEntity
+import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.ui.filter.FilterTable
 import com.github.cleveard.bibliotech.ui.filter.OrderTable
 import com.github.cleveard.bibliotech.ui.modes.DeleteModalAction
@@ -36,6 +33,7 @@ import com.github.cleveard.bibliotech.utils.BaseViewModel
 import com.github.cleveard.bibliotech.utils.coroutineAlert
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.util.*
 
 /**
  * Fragment to display the book list
@@ -77,9 +75,14 @@ class BooksFragment : Fragment() {
     private var selectNone: MenuItem? = null
 
     /**
-     * The menu item to select no books
+     * The menu item to login/logout
      */
     private var logoutMenuItem: MenuItem? = null
+
+    /**
+     * The menu item to update the series for older books in the database
+     */
+    private var findSeriesMenuItem: MenuItem? = null
 
     /**
      * Drawable to use in drawerMenuItem when the edit and filter drawer is visible
@@ -287,6 +290,9 @@ class BooksFragment : Fragment() {
         booksViewModel.applyView(args.filterName)
         ColumnDataDescriptor.setDateLocale(requireContext().resources.configuration.locales[0])
 
+        booksViewModel.seriesCount.observe(viewLifecycleOwner) {
+            findSeriesMenuItem?.isVisible = it != 0
+        }
     }
 
     /**
@@ -396,7 +402,21 @@ class BooksFragment : Fragment() {
         selectAll = menu.findItem(R.id.action_select_all)
         selectNone = menu.findItem(R.id.action_select_none)
         logoutMenuItem = menu.findItem(R.id.action_logout)
+        findSeriesMenuItem = menu.findItem(R.id.find_series).also {
+            it.isVisible = !(booksViewModel.seriesCount.value == 0)
+        }
+        if (BuildConfig.DEBUG) {
+            menu.add("Clear Series").apply {
+                setOnMenuItemClickListener {
+                    booksViewModel.viewModelScope.launch {
+                        booksViewModel.repo.bookFlags.changeBits(false, BookEntity.SERIES, null)
+                    }
+                    true
+                }
+            }
+        }
         super.onCreateOptionsMenu(menu, inflater)
+
         updateMenuAndButtons()
     }
 
@@ -487,6 +507,11 @@ class BooksFragment : Fragment() {
             R.id.action_to_print_fragment -> {
                 (activity as? ManageNavigation)?.navigate(
                     BooksFragmentDirections.actionNavBooksToPrintFragment(booksViewModel.filterName)
+                )
+            }
+            R.id.find_series -> {
+                (activity as? ManageNavigation)?.navigate(
+                    BooksFragmentDirections.actionNavBooksToUpdateSeriesFragment()
                 )
             }
             else -> return false

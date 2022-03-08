@@ -24,6 +24,9 @@
         <action
             android:id="@+id/action_nav_books_to_printFragment"
             app:destination="@id/printFragment" />
+        <action
+            android:id="@+id/action_nav_books_to_updateSeriesFragment"
+            app:destination="@id/updateSeriesFragment" />
     </fragment>
 
     <fragment
@@ -72,6 +75,11 @@
     <dialog
         android:id="@+id/googleBookLoginFragment"
         android:name="com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment"
-        android:label="fragment_google_book_login" />
+        android:label="@string/login" />
+    <fragment
+        android:id="@+id/updateSeriesFragment"
+        android:name="com.github.cleveard.bibliotech.ui.books.UpdateSeriesFragment"
+        android:label="@string/update_series"
+        tools:layout="@layout/fragment_update_series" />
 
 </navigation>

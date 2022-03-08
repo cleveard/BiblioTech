@@ -51,6 +51,7 @@ class GoogleBookLoginFragment : DialogFragment() {
         stateHandle.set(kLoginResult, LoginResult.SUCCEEDED)
         // Build the dialog
         return AlertDialog.Builder(requireContext())
+            .setTitle(R.string.login)
             .setMessage(R.string.login_message)                 // Message
             .setPositiveButton(R.string.yes, null)       // Yes response is handled in setOnShowListener
             .setNegativeButton(R.string.no) { dialog, _ ->  // No respose cancels the dialog

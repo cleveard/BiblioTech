@@ -241,6 +241,10 @@ class BookRepository private constructor(context: Context) {
         }
     }
 
+    suspend fun getBooksWithoutSeriesUpdate(): List<BookAndAuthors>? {
+        return db.getBookDao().getBooksWithoutSeriesUpdate()
+    }
+
     /**
      * Get all tags
      * @return PagingSource containing the tags

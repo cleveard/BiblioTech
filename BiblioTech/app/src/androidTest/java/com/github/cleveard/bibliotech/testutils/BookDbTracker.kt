@@ -426,7 +426,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     suspend fun addBooks(message:String, count: Int): BookDbTracker {
         repeat (count) {
             // Add each book randomly setting flags
-            addOneBook(message, random.nextInt(BookEntity.SELECTED or BookEntity.EXPANDED), false)
+            addOneBook(message, random.nextFlags(BookEntity.SELECTED or BookEntity.EXPANDED or BookEntity.SERIES), false)
         }
         // Make sure the tracker is consistent
         checkConsistency(message)
@@ -788,6 +788,34 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 if (count > 0)
                     addTags(message).addBooks(message, count)
             }
+        }
+
+        /**
+         * Randomly set flags bits
+         * @param mask The mask of bits to randomly set
+         * @return The random flags
+         */
+        private fun Random.nextFlags(mask: Int): Int {
+            // Get the random patter
+            var ran = nextInt(mask.countOneBits()).toUInt()
+            var result = mask.toUInt()
+            var bit = 1u
+            // Loop through the bits in the mask
+            while (bit > 0u && result >= bit) {
+                // If the current bit is on in the mask
+                if ((result and bit) != 0u) {
+                    // If the next random bit is off
+                    // then clear the bit in the result
+                    if ((ran and 1u) == 0u)
+                        result = result xor bit
+                    // Go to the next random bit
+                    ran = ran shr 1
+                }
+                // Go to the next flag bit
+                bit = bit shl 1
+            }
+            // return the result
+            return result.toInt()
         }
     }
 

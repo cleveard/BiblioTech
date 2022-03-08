@@ -3,6 +3,8 @@ package com.github.cleveard.bibliotech.db
 import androidx.lifecycle.LiveData
 import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import java.lang.IllegalStateException
 
 // Names for the undo transaction table
@@ -314,7 +316,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Update a SeriesEntity operation */
         CHANGE_SERIES(ChangeDataDescriptor(BookDatabase.seriesTable) {
-            swapView(it.curId, it.oldId)
+            swapSeries(it.curId, it.oldId)
         }) {
             override suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
                 if (dao.started > 0)
@@ -660,36 +662,38 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         // } catch (e: Exception) {
         //     throw UndoException(e)
         } finally {
-            // Start a transaction to turn off undo. This is for thread safety
-            db.withTransaction {
-                initUndo()
-                // If we didn't finish, then there was an error
-                if (!finished)
-                    errorInUndo = true
-                // Are we at the outermost undo
-                if (--started <= 0) {
-                    // Yes, make sure started is 0
-                    started = 0
-                    // Did we get an error, or not record anything
-                    if (errorInUndo || operationCount == 0) {
-                        // Yes, discard this undo, and reset the error flag
-                        errorInUndo = false
-                        --undoId
-                        maxUndoId = undoId
-                        discard(false, undoId + 1, undoId + 1)
-                    } else {
-                        // We recorded something, discard extra undo levels
-                        maxUndoId = undoId
-                        if (maxUndoId - minUndoId >= maxUndoLevels) {
-                            discard(false, minUndoId, maxUndoId - maxUndoLevels)
-                            minUndoId = maxUndoId - maxUndoLevels + 1
+            withContext(NonCancellable) {
+                // Start a transaction to turn off undo. This is for thread safety
+                db.withTransaction {
+                    initUndo()
+                    // If we didn't finish, then there was an error
+                    if (!finished)
+                        errorInUndo = true
+                    // Are we at the outermost undo
+                    if (--started <= 0) {
+                        // Yes, make sure started is 0
+                        started = 0
+                        // Did we get an error, or not record anything
+                        if (errorInUndo || operationCount == 0) {
+                            // Yes, discard this undo, and reset the error flag
+                            errorInUndo = false
+                            --undoId
+                            maxUndoId = undoId
+                            discard(false, undoId + 1, undoId + 1)
+                        } else {
+                            // We recorded something, discard extra undo levels
+                            maxUndoId = undoId
+                            if (maxUndoId - minUndoId >= maxUndoLevels) {
+                                discard(false, minUndoId, maxUndoId - maxUndoLevels)
+                                minUndoId = maxUndoId - maxUndoLevels + 1
+                            }
+                            // Once the undo counter gets high enough, set the min back to 1
+                            if (maxUndoId >= resetUndoAt)
+                                resetUndo(minUndoId - 1)
                         }
-                        // Once the undo counter gets high enough, set the min back to 1
-                        if (maxUndoId >= resetUndoAt)
-                            resetUndo(minUndoId - 1)
                     }
+                    isRecording?.set(0, started > 0)
                 }
-                isRecording?.set(0, started > 0)
             }
         }
     }
@@ -1025,9 +1029,9 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     protected open suspend fun swapBook(curId: Long, copyId: Long): Int {
         return swapEntity(queryBook(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
             // Copy flags from current to copy
-            copy.flags = flags
+            copy.flags = (copy.flags and BookEntity.PRESERVE) or (flags and BookEntity.PRESERVE.inv())
             // Hide current
-            flags = BookEntity.HIDDEN
+            flags = (flags and BookEntity.PRESERVE) or BookEntity.HIDDEN
             // Swap ids
             id = copy.id.also {copy.id = id }
         }?.let {
@@ -1053,9 +1057,9 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     protected open suspend fun swapTag(curId: Long, copyId: Long): Int {
         return swapEntity(queryTag(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
             // Copy flags from current to copy
-            copy.flags = flags
+            copy.flags = (copy.flags and TagEntity.PRESERVE) or (flags and TagEntity.PRESERVE.inv())
             // Hide current
-            flags = TagEntity.HIDDEN
+            flags = (flags and TagEntity.PRESERVE) or TagEntity.HIDDEN
             // Swap ids
             id = copy.id.also {copy.id = id }
         }?.let {
@@ -1074,6 +1078,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      */
     @Update
     protected abstract suspend fun updateView(entity: ViewEntity): Int
+
     /**
      * Swap a view entity with its copy
      */
@@ -1081,14 +1086,43 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     protected open suspend fun swapView(curId: Long, copyId: Long): Int {
         return swapEntity(queryView(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
             // Copy flags from current to copy
-            copy.flags = flags
+            copy.flags = (copy.flags and ViewEntity.PRESERVE) or (flags and ViewEntity.PRESERVE.inv())
             // Hide current
-            flags = ViewEntity.HIDDEN
+            flags = (flags and ViewEntity.PRESERVE) or ViewEntity.HIDDEN
             // Swap ids
             id = copy.id.also {copy.id = id }
         }?.let {
             // Update the views
             updateView(it[0]) + updateView(it[1])
+        }?: 0
+    }
+
+    /**
+     * Get a view entity and its copy
+     */
+    @Query("SELECT * FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $SERIES_ID_COLUMN")
+    protected abstract suspend fun querySeries(id1: Long, id2: Long): List<SeriesEntity>
+    /**
+     * Update a view entity
+     */
+    @Update
+    protected abstract suspend fun updateSeries(entity: SeriesEntity): Int
+
+    /**
+     * Swap a view entity with its copy
+     */
+    @Transaction
+    protected open suspend fun swapSeries(curId: Long, copyId: Long): Int {
+        return swapEntity(querySeries(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
+            // Copy flags from current to copy
+            copy.flags = (copy.flags and SeriesEntity.PRESERVE) or (flags and SeriesEntity.PRESERVE.inv())
+            // Hide current
+            flags = (flags and SeriesEntity.PRESERVE) or SeriesEntity.HIDDEN
+            // Swap ids
+            id = copy.id.also {copy.id = id }
+        }?.let {
+            // Update the series
+            updateSeries(it[0]) + updateSeries(it[1])
         }?: 0
     }
 
@@ -1148,7 +1182,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     protected open suspend fun copyForSeriesUndo(seriesId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
             """INSERT INTO $SERIES_TABLE ( $SERIES_ID_COLUMN, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN )
-                | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN | ${TagEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
+                | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN | ${SeriesEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(seriesId)
         ))

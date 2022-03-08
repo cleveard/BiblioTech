@@ -4,6 +4,8 @@
     <string name="nav_header_subtitle">Books for Everyone</string>
     <string name="nav_header_desc">Navigation header</string>
     <string name="action_settings">Settings</string>
+    <string name="find_series">Update Series</string>
+    <string name="update_series">Updating Series</string>
 
     <string name="menu_books">Books</string>
     <string name="menu_scan">Scan</string>
@@ -303,11 +305,18 @@
     <string name="login">Login</string>
     <string name="logout">Logout</string>
     <string name="login_message">BiblioTech requires access to Google Books to search for your books.
-        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.\n\n
-        Do you want to allow access to Google Books?
+        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.
+        \n\nDo you want to allow access to Google Books?
     </string>
     <string name="login_retry">The login failed.\n\nBiblioTech requires access to Google Books to search for your books.
-        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.\n\n
-        Do you want to try again?
+        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.
+        \n\nDo you want to try again?
+    </string>
+
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="update_series_message">You have some books that were added before BiblioTech kept track of book series.
+        BiblioTech can search to find series that your books belong to.
+        \n\nPress the Start button to start the process. You can Stop it an any time and restart from where you left off.
     </string>
 </resources>

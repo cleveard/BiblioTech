@@ -117,6 +117,8 @@ data class BookEntity constructor(
         const val SELECTED = 1
         const val EXPANDED = 2
         const val HIDDEN = 4
+        const val SERIES = 8
+        const val PRESERVE = SERIES
     }
 }
 
@@ -269,7 +271,7 @@ data class BookAndAuthors(
             dest.writeLong(it.id)
             dest.writeString(it.seriesId)
             dest.writeString(it.title)
-            dest.writeInt(it.flag)
+            dest.writeInt(it.flags)
         }?: dest.writeByte(0.toByte())
     }
 
@@ -456,10 +458,7 @@ abstract class BookDao(private val db: BookDatabase) {
             false
         )?.let {e ->
             UndoRedoDao.OperationType.DELETE_BOOK.recordDelete(db.getUndoRedoDao(), e) {
-                db.execUpdateDelete(
-                    SimpleSQLiteQuery("UPDATE $BOOK_TABLE SET $BOOK_FLAGS = ${BookEntity.HIDDEN}${it.expression}",
-                        it.args)
-                )
+                db.setHidden(BookDatabase.bookTable, e)
             }
         }?: 0
     }
@@ -705,6 +704,16 @@ abstract class BookDao(private val db: BookDatabase) {
             getBookList(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
         }
     }
+
+    /**
+     * Get books modified before a specific time.
+     * This is used to find books that may need the series updated
+     * @param time The time in milliseconds
+     */
+    @Transaction
+    @Query("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ( ${BookEntity.HIDDEN} | ${BookEntity.SERIES} ) ) = 0 )")
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
+    abstract suspend fun getBooksWithoutSeriesUpdate(): List<BookAndAuthors>?
 
     /**
      * Get the small thumbnail url for a book

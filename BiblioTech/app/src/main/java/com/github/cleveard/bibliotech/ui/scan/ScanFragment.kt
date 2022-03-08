@@ -12,7 +12,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.DisplayMetrics
-import android.util.Log
+//import android.util.Log
 import android.util.Size
 import android.util.SparseArray
 import android.view.*
@@ -294,7 +294,7 @@ class ScanFragment : Fragment() {
         override fun onDisplayRemoved(displayId: Int) = Unit
         override fun onDisplayChanged(displayId: Int) = view?.let { view ->
             if (displayId == this@ScanFragment.displayId) {
-                Log.d(TAG, "Rotation changed: ${view.display.rotation}")
+                // Log.d(TAG, "Rotation changed: ${view.display.rotation}")
                 this@ScanFragment.imageCapture?.targetRotation = view.display.rotation
             }
         } ?: Unit
@@ -405,7 +405,7 @@ class ScanFragment : Fragment() {
             // Keep track of the display in which this view is attached
             displayId = viewFinder.display.displayId
 
-            Log.d(TAG, "ViewFinder: ${viewFinder.width}x${viewFinder.height}")
+            // Log.d(TAG, "ViewFinder: ${viewFinder.width}x${viewFinder.height}")
             if (hasPermissions(requireContext())) {
                 setUpCamera()
                 view.findViewById<View>(R.id.scan_permissions).visibility = View.GONE
@@ -616,10 +616,10 @@ class ScanFragment : Fragment() {
             val metrics = DisplayMetrics().also { viewFinder.display.getRealMetrics(it) }
             Size(metrics.widthPixels, metrics.heightPixels)
         }
-        Log.d(TAG, "Screen metrics: ${metrics.width} x ${metrics.height}")
+        // Log.d(TAG, "Screen metrics: ${metrics.width} x ${metrics.height}")
 
         val screenAspectRatio = aspectRatio(metrics.width, metrics.height)
-        Log.d(TAG, "Preview aspect ratio: $screenAspectRatio")
+        // Log.d(TAG, "Preview aspect ratio: $screenAspectRatio")
 
         val rotation = viewFinder.display.rotation
 
@@ -658,7 +658,7 @@ class ScanFragment : Fragment() {
             // Attach the viewfinder's surface provider to preview use case
             preview?.setSurfaceProvider(viewFinder.surfaceProvider)
         } catch(e: Exception) {
-            Log.e(TAG, "Use case binding failed", e)
+            // Log.e(TAG, "Use case binding failed", e)
         }
     }
 
@@ -883,7 +883,7 @@ class ScanFragment : Fragment() {
             }
             focused
         } catch (e: CameraInfoUnavailableException) {
-            Log.d(TAG, "cannot access camera", e)
+            // Log.d(TAG, "cannot access camera", e)
             false
         } finally {
             focusing = false
@@ -908,12 +908,12 @@ class ScanFragment : Fragment() {
 
                             override fun onError(exception: ImageCaptureException) {
                                 super.onError(exception)
-                                Log.d(TAG, "Start capture failed $exception")
+                                // Log.d(TAG, "Start capture failed $exception")
                                 cont.resume(null)
                             }
                         })
                 } catch (e: Exception) {
-                    Log.d(TAG, "Start capture failed $e")
+                    // Log.d(TAG, "Start capture failed $e")
                     cont.resume(null)
                 }
             }
@@ -1020,7 +1020,7 @@ class ScanFragment : Fragment() {
             val result = try {
                 scanner.scanImage(barcode)
             } catch (e: Exception) {
-                Log.d(TAG, "ZBar failed $e")
+                // Log.d(TAG, "ZBar failed $e")
                 0
             }
 
@@ -1051,10 +1051,10 @@ class ScanFragment : Fragment() {
     }
 
     companion object {
-        /**
-         * Tag for Logging
-         */
-        private const val TAG = "CameraXBasic"
+        ///**
+        // * Tag for Logging
+        // */
+        //private const val TAG = "CameraXBasic"
 
         /**
          * Common camera ratios

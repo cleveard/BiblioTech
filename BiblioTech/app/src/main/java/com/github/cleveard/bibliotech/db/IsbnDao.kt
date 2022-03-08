@@ -32,6 +32,7 @@ data class IsbnEntity(
 ) {
     companion object {
         const val HIDDEN = 1
+        const val PRESERVE = 0
     }
 }
 
@@ -108,7 +109,7 @@ abstract class IsbnDao(private val db: BookDatabase) {
                         val list: List<BookAndIsbnEntity> = findById(isbn, 1)
                         if (list.isEmpty()) {
                             UndoRedoDao.OperationType.DELETE_ISBN.recordDelete(db.getUndoRedoDao(), isbn) {
-                                deleteIsbn(isbn)
+                                db.setHidden(BookDatabase.isbnTable, isbn)
                             }
                         }
                     }
@@ -198,13 +199,6 @@ abstract class IsbnDao(private val db: BookDatabase) {
     }
 
     /**
-     * Delete all books for an isbn
-     * @param isbnsId The id of the isbn
-     */
-    @Query("UPDATE $ISBNS_TABLE SET $ISBNS_FLAGS = ${IsbnEntity.HIDDEN} WHERE $ISBNS_ID_COLUMN = :isbnsId AND ( ( $ISBNS_FLAGS & ${IsbnEntity.HIDDEN} ) = 0 )")
-    protected abstract suspend fun deleteIsbn(isbnsId: Long): Int
-
-    /**
      * Find an isbn by name
      * @param isbns The name of the isbn
      */
@@ -250,7 +244,7 @@ abstract class IsbnDao(private val db: BookDatabase) {
                     val list: List<BookAndIsbnEntity> = findById(isbn, 1)
                     if (list.isEmpty()) {
                         UndoRedoDao.OperationType.DELETE_ISBN.recordDelete(db.getUndoRedoDao(), isbn) {
-                            deleteIsbn(isbn)
+                            db.setHidden(BookDatabase.isbnTable, isbn)
                         }
                     }
                 }

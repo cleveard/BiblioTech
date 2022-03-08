@@ -53,6 +53,7 @@ data class ViewEntity(
 ) {
     companion object {
         const val HIDDEN = 1
+        const val PRESERVE = 0
     }
 }
 
@@ -96,11 +97,7 @@ abstract class ViewDao(private val db: BookDatabase) {
         val expression = WhereExpression(" WHERE $VIEWS_NAME_COLUMN LIKE ? ESCAPE '\\' AND ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0",
             arrayOf(viewName))
         return UndoRedoDao.OperationType.DELETE_VIEW.recordDelete(db.getUndoRedoDao(), expression) {
-            db.execUpdateDelete(
-                SimpleSQLiteQuery("UPDATE $VIEWS_TABLE SET $VIEWS_FLAGS = ${ViewEntity.HIDDEN}${it.expression}",
-                    it.args
-                )
-            )
+            db.setHidden(BookDatabase.viewsTable, it)
         }
     }
 

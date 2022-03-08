@@ -35,6 +35,7 @@ data class AuthorEntity(
 ) {
     companion object {
         const val HIDDEN = 1
+        const val PRESERVE = 0
     }
 
     /**
@@ -139,7 +140,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
                         val list: List<BookAndAuthorEntity> = findById(author, 1)
                         if (list.isEmpty()) {
                             UndoRedoDao.OperationType.DELETE_AUTHOR.recordDelete(db.getUndoRedoDao(), author) {
-                                deleteAuthor(author)
+                                db.setHidden(BookDatabase.authorsTable, author)
                             }
                         }
                     }
@@ -226,13 +227,6 @@ abstract class AuthorDao(private val db: BookDatabase) {
     }
 
     /**
-     * Delete books for an author
-     * @param authorId The id of the authors whose books are deleted
-     */
-    @Query("UPDATE $AUTHORS_TABLE SET $AUTHORS_FLAGS = ${AuthorEntity.HIDDEN} WHERE $AUTHORS_ID_COLUMN = :authorId AND ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) = 0 )")
-    protected abstract suspend fun deleteAuthor(authorId: Long): Int
-
-    /**
      * Find an author by name
      * @param last The author last name
      * @param remaining The rest of the author name
@@ -298,7 +292,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
                     val list: List<BookAndAuthorEntity> = findById(author, 1)
                     if (list.isEmpty()) {
                         UndoRedoDao.OperationType.DELETE_AUTHOR.recordDelete(db.getUndoRedoDao(), author) {
-                            deleteAuthor(author)
+                            db.setHidden(BookDatabase.authorsTable, author)
                         }
                     }
                 }

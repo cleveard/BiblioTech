@@ -40,6 +40,12 @@
         android:title="@string/print"
         app:showAsAction="never" />
     <item
+        android:id="@+id/find_series"
+        android:orderInCategory="99"
+        android:title="@string/find_series"
+        android:visible="false"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_to_settingsFragment"
         android:orderInCategory="100"
         android:title="@string/action_settings"

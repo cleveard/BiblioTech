@@ -177,6 +177,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         adapter.refresh()
     }.also { selection.onSelectionChanged.add(it) }
 
+    /** Live data that counts rows without SERIES bit set */
+    val seriesCount: LiveData<Int> = repo.bookFlags.countBitsLive(BookEntity.SERIES, 0, true, null, null)
+
     /**
      * @inheritDoc
      */

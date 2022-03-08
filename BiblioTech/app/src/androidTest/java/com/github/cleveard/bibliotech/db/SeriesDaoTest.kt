@@ -54,9 +54,9 @@ class SeriesDaoTest {
     private suspend fun doTestAddUpdateDelete() {
         val seriesDao = db.getSeriesDao()
         val series = listOf(
-            SeriesEntity(id = 0L, seriesId = "series1", title = "title1", flag = 0),
-            SeriesEntity(id = 0L, seriesId = "series\\", title = "title\\", flag = 0),
-            SeriesEntity(id = 0L, seriesId = "series%", title = "title%", flag = 0),
+            SeriesEntity(id = 0L, seriesId = "series1", title = "title1", flags = 0),
+            SeriesEntity(id = 0L, seriesId = "series\\", title = "title\\", flags = 0),
+            SeriesEntity(id = 0L, seriesId = "series%", title = "title%", flags = 0),
         )
 
         // Add series

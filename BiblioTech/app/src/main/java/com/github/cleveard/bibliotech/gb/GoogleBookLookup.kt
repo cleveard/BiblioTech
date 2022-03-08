@@ -1,6 +1,5 @@
 package com.github.cleveard.bibliotech.gb
 
-import android.util.Log
 import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
@@ -98,13 +97,11 @@ internal class GoogleBookLookup {
                 // Remove requests outside of the sample period
                 while (now - (requests.firstOrNull()?: now) > period)
                     requests.removeFirst()
-                Log.d("RATE_LIMIT", "Requests = ${requests.size}, start = ${now - (requests.firstOrNull()?: now)})}")
                 if (requests.size < delayThreshold)
                     return
                 added + (period - (now - requests.first())) / (maxRequests - requests.size)
             }
             if (delayTime > 0L) {
-                Log.d("RATE_LIMIT", "Delay $delayTime")
                 delay(delayTime)
             }
         }
@@ -327,7 +324,7 @@ internal class GoogleBookLookup {
                 modified = Date(0),
                 smallThumb = getThumbnail(info, kSmallThumb),
                 largeThumb = getThumbnail(info, kThumb),
-                flags = 0
+                flags = BookEntity.SERIES
             ),
             series = series,
             authors = info.authors?.filter { !it.isNullOrEmpty() }?.map { AuthorEntity(0, it) }?: emptyList(),
@@ -359,6 +356,14 @@ internal class GoogleBookLookup {
             )
         }
         throw LookupException("Invalid Response")
+    }
+
+    suspend fun getVolume(auth: BookCredentials, volumeId: String): BookAndAuthors? {
+        return execute(auth) {
+            service.volumes().get(volumeId)
+        }?.let {
+            mapVolume(it)
+        }
     }
 
     /**

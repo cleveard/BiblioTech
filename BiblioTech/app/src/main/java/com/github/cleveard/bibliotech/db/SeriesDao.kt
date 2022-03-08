@@ -20,10 +20,11 @@ data class SeriesEntity (
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = SERIES_ID_COLUMN) var id: Long,
     @ColumnInfo(name = SERIES_SERIES_ID_COLUMN) var seriesId: String,
     @ColumnInfo(name = SERIES_IITLE_COLUMN) var title: String,
-    @ColumnInfo(name = SERIES_FLAG_COLUMN, defaultValue = "0") var flag: Int
+    @ColumnInfo(name = SERIES_FLAG_COLUMN, defaultValue = "0") var flags: Int
 ) {
     companion object {
         const val HIDDEN = 1
+        const val PRESERVE = 0
     }
 }
 
@@ -100,12 +101,7 @@ abstract class SeriesDao(private val db: BookDatabase) {
                         builder.append(", ?")
                     builder.append(" ) )")
                     count = UndoRedoDao.OperationType.DELETE_SERIES.recordDelete(db.getUndoRedoDao(), WhereExpression(builder.toString(), seriesIds)) {
-                        db.execUpdateDelete(
-                            SimpleSQLiteQuery(
-                                "UPDATE $SERIES_TABLE SET $SERIES_FLAG_COLUMN = ${SeriesEntity.HIDDEN}${it.expression}",
-                                it.args
-                            )
-                        )
+                        db.setHidden(BookDatabase.seriesTable, it)
                     }
                 }
             }

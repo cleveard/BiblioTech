@@ -23,7 +23,7 @@ class TagDaoTest {
     private lateinit var context: Context
 
     @Before fun startUp() {
-        context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext()
         BookDatabase.initialize(context, true)
         db = BookDatabase.db
         undo = UndoTracker(db.getUndoRedoDao())
@@ -104,7 +104,7 @@ class TagDaoTest {
         }
 
         // Make sure we can delete using id
-        tagDao.delete(update.id)
+        db.setHidden(BookDatabase.tagsTable, update.id)
         assertWithMessage("Delete %s", update.name).that(tagDao.get(update.id)).isNull()
 
         // Delete selected

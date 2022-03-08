@@ -32,6 +32,7 @@ data class CategoryEntity(
 ) {
     companion object {
         const val HIDDEN = 1
+        const val PRESERVE = 0
     }
 }
 
@@ -108,7 +109,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
                         val list: List<BookAndCategoryEntity> = findById(category, 1)
                         if (list.isEmpty()) {
                             UndoRedoDao.OperationType.DELETE_CATEGORY.recordDelete(db.getUndoRedoDao(), category) {
-                                deleteCategory(category)
+                                db.setHidden(BookDatabase.categoriesTable, category)
                             }
                         }
                     }
@@ -198,13 +199,6 @@ abstract class CategoryDao(private val db: BookDatabase) {
     }
 
     /**
-     * Delete all books for a category
-     * @param categoryId The id of the category
-     */
-    @Query("UPDATE $CATEGORIES_TABLE SET $CATEGORIES_FLAGS = ${CategoryEntity.HIDDEN} WHERE $CATEGORIES_ID_COLUMN = :categoryId AND ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) = 0 )")
-    protected abstract suspend fun deleteCategory(categoryId: Long): Int
-
-    /**
      * Find a category by name
      * @param category The name of the category
      */
@@ -250,7 +244,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
                     val list: List<BookAndCategoryEntity> = findById(category, 1)
                     if (list.isEmpty()) {
                         UndoRedoDao.OperationType.DELETE_CATEGORY.recordDelete(db.getUndoRedoDao(), category) {
-                            deleteCategory(category)
+                            db.setHidden(BookDatabase.categoriesTable, category)
                         }
                     }
                 }
