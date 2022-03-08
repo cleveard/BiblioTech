@@ -172,22 +172,24 @@ internal class UpdateSeriesFragment : Fragment() {
                 // is in the database.
                 online?.series?.let { series ->
                     // Lookup the series in the database
-                    book.series = repo.findSeriesBySeriesId(series.seriesId) ?: run {
+                    (repo.findSeriesBySeriesId(series.seriesId) ?: run {
                         // We didn't find it, so look up the series on google books
                         viewModel.lookup.getSeries(requireActivity() as BookCredentials, series.seriesId)
-                    }
-                    // If the series matches the id in the book, then we are done
-                    if (series.id != book.book.seriesId) {
-                        // Set the flag to mark the update
-                        book.book.flags = book.book.flags or BookEntity.SERIES
-                        // Update the book
-                        repo.addOrUpdateBook(book) { true }
-                    } else
-                        null    // Update only the flag if the series is already correct
-                }?: run {
-                    // Set the flag to mark the update. Note: We do not clear an existing series.
-                    repo.bookFlags.changeBits(true, BookEntity.SERIES, book.book.id, null)
+                    })?.let {
+                        book.series = it
+                        book.book.seriesOrder = online.book.seriesOrder
+                        // If the series matches the id in the book, then we are done
+                        if (it.id != book.book.seriesId) {
+                            // Set the flag to mark the update
+                            book.book.flags = book.book.flags or BookEntity.SERIES
+                            // Update the book
+                            repo.addOrUpdateBook(book) { true }
+                            return
+                        }
+                    }?: return  // We couldn't find the series, so leave it for later.
                 }
+                // Set the flag to mark the update. Note: We do not clear an existing series.
+                repo.bookFlags.changeBits(true, BookEntity.SERIES, book.book.id, null)
             }
         }
     }
