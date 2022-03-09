@@ -176,10 +176,10 @@ internal class UpdateSeriesFragment : Fragment() {
                         // We didn't find it, so look up the series on google books
                         viewModel.lookup.getSeries(requireActivity() as BookCredentials, series.seriesId)
                     })?.let {
-                        book.series = it
-                        book.book.seriesOrder = online.book.seriesOrder
-                        // If the series matches the id in the book, then we are done
-                        if (it.id != book.book.seriesId) {
+                        // Only update if something changes
+                        if (it.id != book.book.seriesId || online.book.seriesOrder != book.book.seriesOrder) {
+                            book.series = it
+                            book.book.seriesOrder = online.book.seriesOrder
                             // Set the flag to mark the update
                             book.book.flags = book.book.flags or BookEntity.SERIES
                             // Update the book
