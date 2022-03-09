@@ -795,9 +795,9 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
          * @param mask The mask of bits to randomly set
          * @return The random flags
          */
-        private fun Random.nextFlags(mask: Int): Int {
+        fun Random.nextFlags(mask: Int): Int {
             // Get the random patter
-            var ran = nextInt(mask.countOneBits()).toUInt()
+            var ran = nextInt(1 shl mask.countOneBits()).toUInt()
             var result = mask.toUInt()
             var bit = 1u
             // Loop through the bits in the mask
@@ -1216,14 +1216,16 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             // Clear flags for all tags in this table, that are not in the new table
             val tags = new.tagEntities.entities.map { it.id }.toSet()
             for (t in tagEntities.entities) {
+                // PRESERVE some flags
                 if (!tags.contains(t.id))
-                    t.flags = 0     // Clear flags if not in new
+                    t.flags = t.flags and TagEntity.PRESERVE     // Clear flags if not in new
             }
             // Clear flags for all books in this table, that are not in the new table
             val books = new.bookEntities.entities.map { it.book.id }.toSet()
             for (b in bookEntities.entities) {
+                // PRESERVE some flags
                 if (!books.contains(b.book.id))
-                    b.book.flags = 0    // Clear flags if not in new
+                    b.book.flags = b.book.flags and BookEntity.PRESERVE    // Clear flags if not in new
             }
         }
 
@@ -1235,12 +1237,14 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         fun swapTables(old: Tables) {
             // Create a map from id to tag in the old table
             val tags = mapOf(*old.tagEntities.entities.map { Pair(it.id, it) }.toList().toTypedArray())
+            // Don't copy the flags in PRESERVE
             for (t in tagEntities.entities)
-                tags[t.id]?.let { t.flags = it.flags }  // If a tag in this table is in the map, copy the flags
+                tags[t.id]?.let { t.flags = (t.flags and TagEntity.PRESERVE) or (it.flags and TagEntity.PRESERVE.inv()) }  // If a tag in this table is in the map, copy the flags
             // Create a map from id to book in the old table
             val books = mapOf(*old.bookEntities.entities.map { Pair(it.book.id, it) }.toList().toTypedArray())
+            // Don't copy the flags in PRESERVE
             for (b in bookEntities.entities)
-                books[b.book.id]?.let { b.book.flags = it.book.flags }  // If a book in this table is in the map, copy the flags
+                books[b.book.id]?.let { b.book.flags = (b.book.flags and BookEntity.PRESERVE) or (it.book.flags and BookEntity.PRESERVE.inv()) }  // If a book in this table is in the map, copy the flags
         }
 
         /**
@@ -1260,6 +1264,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                 t.isbnEntities.copy(isbnEntities) { it }
                 // Copy the series making copies of the SeriesEntities
                 t.seriesEntities.copy(seriesEntities) { it.copy() }
+                val series = mapOf(*t.seriesEntities.entities.map { Pair(it.id, it) }.toList().toTypedArray())
                 // Copy the books
                 t.bookEntities.copy(bookEntities) {book ->
                     // Make copies of the books
@@ -1267,7 +1272,9 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                         // And copies of the book entities
                         book = book.book.copy(),
                         // And make sure the tag list has the copied tag entities
-                        tags = book.tags.map { tags[it.id]!! }
+                        tags = book.tags.map { tags[it.id]!! },
+                        // And make sure the series list has the copied series entities
+                        series = series[book.book.seriesId]
                     )
                 }
                 // Copy the views making copies of the ViewEntities

@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.DisableOnAndroidDebug
 import com.github.cleveard.bibliotech.utils.getLive
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
+import com.github.cleveard.bibliotech.testutils.BookDbTracker.Companion.nextFlags
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertThat
@@ -574,7 +575,7 @@ class UndoRedoDaoTest {
     private suspend fun doTestUpdateBookEntity() {
         val expected = BookDbTracker.addBooks(repo,554321L, "AddBooks Update", 20)
 
-        repeat (5) {
+        repeat (15) {
             val i = expected.random.nextInt(expected.tables.bookEntities.size)
             val old = expected.tables.bookEntities[i]
             val new = expected.tables.bookEntities.new()
@@ -585,6 +586,7 @@ class UndoRedoDaoTest {
                 new.book.sourceId = old.book.sourceId
                 new.book.volumeId = old.book.volumeId
             }
+            new.book.flags = new.book.flags xor expected.random.nextFlags(BookEntity.SERIES or BookEntity.SELECTED or BookEntity.EXPANDED)
             expected.addOneBook("Update ${new.book.title}", new, true)
         }
         expected.testRandomUndo("AddBooks Update", 10)

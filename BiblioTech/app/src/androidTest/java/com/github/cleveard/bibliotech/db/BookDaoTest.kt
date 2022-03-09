@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.DisableOnAndroidDebug
 import com.github.cleveard.bibliotech.testutils.BookDbTracker
+import com.github.cleveard.bibliotech.testutils.BookDbTracker.Companion.nextFlags
 import com.github.cleveard.bibliotech.testutils.UndoTracker
 import com.github.cleveard.bibliotech.testutils.compareBooks
 import com.github.cleveard.bibliotech.utils.getLive
@@ -231,7 +232,7 @@ class BookDaoTest {
         // Get some books
         val expected = BookDbTracker.addBooks(db,554321L, "AddBooks Update", 20)
 
-        repeat (5) {
+        repeat (15) {
             // Randomly select books to update
             val i = expected.random.nextInt(expected.tables.bookEntities.size)
             val old = expected.tables.bookEntities[i]
@@ -244,6 +245,7 @@ class BookDaoTest {
                 new.book.sourceId = old.book.sourceId
                 new.book.volumeId = old.book.volumeId
             }
+            new.book.flags = new.book.flags xor expected.random.nextFlags(BookEntity.SERIES or BookEntity.SELECTED or BookEntity.EXPANDED)
             // Update the book. AddOneBook does the checks
             expected.addOneBook("Update ${new.book.title}", new, true)
         }
