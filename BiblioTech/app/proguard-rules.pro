@@ -41,3 +41,8 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep class com.yanzhenjie.zbar.* { *; }
+
+# The Google books api library used a Key annotaion to create the request urls.
+# We need to keep it for the library to work correctly
+-keepattributes *Key*
+-keep class com.google.api.** { *; }

@@ -39,6 +39,7 @@
             android:id="@+id/book_series_vol_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="3dp"
             app:layout_constraintBaseline_toBaselineOf="@id/book_series_label"
             app:layout_constraintEnd_toStartOf="@id/book_series_volume"
             android:text="@string/vol_colon" />

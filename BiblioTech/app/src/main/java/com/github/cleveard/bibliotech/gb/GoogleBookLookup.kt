@@ -4,7 +4,7 @@ import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.github.cleveard.bibliotech.BookCredentials
-import com.github.cleveard.bibliotech.annotations.EnvironmentValues
+import com.github.cleveard.bibliotech.BuildConfig
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.services.books.v1.Books as BooksService
 import com.google.api.client.extensions.android.json.AndroidJsonFactory
@@ -20,13 +20,10 @@ import kotlin.collections.ArrayDeque
 import kotlin.collections.ArrayList
 import kotlin.math.roundToInt
 
-private const val apiKey = "GOOGLE_BOOKS_API_KEY"
-
 /**
  * Class used to query books on books.google.com
  * Constructor is private because all methods are in the companion object
  */
-@EnvironmentValues(apiKey)
 internal class GoogleBookLookup {
 
     /**
@@ -160,7 +157,7 @@ internal class GoogleBookLookup {
 
         /** The book service object */
         val service: BooksService = BooksService.Builder(NetHttpTransport(), AndroidJsonFactory(), null)
-            .setBooksRequestInitializer(BooksRequestInitializer(GoogleBookLookup_Environment[apiKey]))
+            .setBooksRequestInitializer(BooksRequestInitializer(BuildConfig.GOOGLE_BOOKS_API_KEY))
             .build()
 
         private val rateLimit: RateLimit = RateLimit(100, 60000L, .25)

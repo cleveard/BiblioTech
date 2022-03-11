@@ -25,9 +25,6 @@ android {
         versionCode 8
         versionName "1.0.alpha09"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        manifestPlaceholders = [
-            GOOGLE_BOOKS_REDIRECT_SCHEME: "$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME"
-        ]
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -37,11 +34,25 @@ android {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            manifestPlaceholders = [
+                    GOOGLE_BOOKS_REDIRECT_SCHEME: "$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME_RELEASE",
+            ]
+
+            buildConfigField "String", "GOOGLE_BOOKS_OAUTH_ID", "\"$System.env.GOOGLE_BOOKS_OAUTH_ID_RELEASE\""
+            buildConfigField "String", "GOOGLE_BOOKS_REDIRECT_SCHEME", "\"$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME_RELEASE\""
+            buildConfigField "String", "GOOGLE_BOOKS_API_KEY", "\"$System.env.GOOGLE_BOOKS_API_KEY\""
         }
 
         debug {
-            applicationIdSuffix ".debug"
             debuggable true
+            applicationIdSuffix ".debug"
+            manifestPlaceholders = [
+                    GOOGLE_BOOKS_REDIRECT_SCHEME: "$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME_DEBUG",
+            ]
+
+            buildConfigField "String", "GOOGLE_BOOKS_OAUTH_ID", "\"$System.env.GOOGLE_BOOKS_OAUTH_ID_DEBUG\""
+            buildConfigField "String", "GOOGLE_BOOKS_REDIRECT_SCHEME", "\"$System.env.GOOGLE_BOOKS_REDIRECT_SCHEME_DEBUG\""
+            buildConfigField "String", "GOOGLE_BOOKS_API_KEY", "\"$System.env.GOOGLE_BOOKS_API_KEY\""
         }
     }
     sourceSets {
