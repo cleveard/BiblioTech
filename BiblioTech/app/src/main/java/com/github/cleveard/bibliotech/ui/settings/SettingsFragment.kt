@@ -38,8 +38,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
     }
 
-    override fun onDisplayPreferenceDialog(preference: Preference?) {
-        when (preference?.key) {
+    override fun onDisplayPreferenceDialog(preference: Preference) {
+        when (preference.key) {
             BookDatabase.UNDO_LEVEL_KEY -> {
                 if (parentFragmentManager.findFragmentByTag(BookDatabase.UNDO_LEVEL_KEY) == null) {
                     preference as NumberPickerPreference
@@ -71,7 +71,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 }
 
-class NumberPickerPreference(context: Context?, attrs: AttributeSet?) :
+class NumberPickerPreference(context: Context, attrs: AttributeSet?) :
     DialogPreference(context, attrs) {
     
     var initialValue: Int = 0
@@ -93,11 +93,11 @@ class NumberPickerPreference(context: Context?, attrs: AttributeSet?) :
 class NumberPickerPreferenceDialog : PreferenceDialogFragmentCompat() {
     private lateinit var numberPicker: NumberPicker
 
-    override fun onCreateDialogView(context: Context?): View {
+    override fun onCreateDialogView(context: Context): View {
         return NumberPicker(context).also { numberPicker = it }
     }
 
-    override fun onBindDialogView(view: View?) {
+    override fun onBindDialogView(view: View) {
         super.onBindDialogView(view)
         numberPicker.minValue = requireArguments().getInt(NUM_MIN_VALUE)
         numberPicker.maxValue = requireArguments().getInt(NUM_MAX_VALUE)
@@ -134,7 +134,7 @@ class NumberPickerPreferenceDialog : PreferenceDialogFragmentCompat() {
     }
 }
 
-class ButtonPreference(context: Context?, attrs: AttributeSet?) :
+class ButtonPreference(context: Context, attrs: AttributeSet?) :
     DialogPreference(context, attrs) {
 
     var askOk: String = ""
@@ -147,11 +147,11 @@ class ButtonPreference(context: Context?, attrs: AttributeSet?) :
 class ButtonPreferenceDialog : PreferenceDialogFragmentCompat() {
     private lateinit var textView: TextView
 
-    override fun onCreateDialogView(context: Context?): View {
+    override fun onCreateDialogView(context: Context): View {
         return TextView(context).also { textView = it }
     }
 
-    override fun onBindDialogView(view: View?) {
+    override fun onBindDialogView(view: View) {
         super.onBindDialogView(view)
         textView.gravity = Gravity.CENTER
         textView.text = requireArguments().getString(ASK_IF_OK)

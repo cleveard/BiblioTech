@@ -4,10 +4,10 @@ buildscript {
     ext {
         kotlin_version = '1.6.10'
         coroutine_version = '1.6.0'
-        room_version = "2.4.0"
-        nav_version = "2.3.5"
-        camerax_version = "1.1.0-alpha12"
-        paging_version = "3.1.0"
+        room_version = "2.4.2"
+        nav_version = "2.4.1"
+        camerax_version = "1.1.0-beta02"
+        paging_version = "3.1.1"
         flexbox_version = "3.0.0"
     }
 
