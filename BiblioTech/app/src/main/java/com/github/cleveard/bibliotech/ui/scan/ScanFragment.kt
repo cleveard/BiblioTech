@@ -19,6 +19,7 @@ import android.view.*
 import android.widget.*
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+// import androidx.appcompat.app.AlertDialog
 import androidx.camera.core.*
 import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -44,7 +45,6 @@ import com.github.cleveard.bibliotech.utils.*
 import com.github.cleveard.bibliotech.utils.ParentAccess
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
-import com.google.common.util.concurrent.ListenableFuture
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
@@ -140,7 +140,7 @@ class ScanFragment : Fragment() {
     /**
      * GPU compute interface
      */
-    private lateinit var gpuCompute: GpuCompute
+    private lateinit var gpuCompute: GpuCompute.Compute
 
     /**
      * Display id of the camera preview view
@@ -245,7 +245,7 @@ class ScanFragment : Fragment() {
         scanner.setConfig(0, Config.X_DENSITY, 3)
         scanner.setConfig(0, Config.Y_DENSITY, 3)
 
-        gpuCompute = GpuCompute(requireContext())
+        gpuCompute = GpuCompute.create(requireContext())
     }
 
     /**
@@ -858,36 +858,42 @@ class ScanFragment : Fragment() {
         val afPoint = pointFactory.createPoint(x, y, afPointWidth)
         val aePoint = pointFactory.createPoint(x, y, aePointWidth)
 
-        fun doFocus(): ListenableFuture<FocusMeteringResult>? {
-            return camera?.cameraControl?.startFocusAndMetering(
-                FocusMeteringAction.Builder(afPoint, FocusMeteringAction.FLAG_AF)
-                    .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
-                    .build())
-        }
-        return try {
-            focusing = true
-            // Start the auto focus
-            var result = doFocus()?: return false
-
-            var attempts = 0
-            val focused = withContext(Dispatchers.IO) {
-                // Loop until we get focused, or we run out of attempts
-                @Suppress("BlockingMethodInNonBlockingContext")
-                while (result.get()?.isFocusSuccessful != true) {
-                    if (++attempts >= retries) {
-                        return@withContext false
-                    }
-                    result = doFocus()?: return@withContext false
+        return camera?.let { cam ->
+            try {
+                fun buildAction(): FocusMeteringAction {
+                    return FocusMeteringAction.Builder(afPoint, FocusMeteringAction.FLAG_AF)
+                        .addPoint(aePoint, FocusMeteringAction.FLAG_AE)
+                        .build()
                 }
-                true
+                focusing = true
+                // Make sure the camera supports focusing. Emulator doesn't
+                // support it.
+                if (cam.cameraInfo.isFocusMeteringSupported(buildAction())) {
+                    var attempts = 0
+
+                    // Run in IO thread
+                    @Suppress("BlockingMethodInNonBlockingContext")
+                    withContext(Dispatchers.IO) {
+                        // Loop until we get focused, or we run out of attempts
+                        do {
+                            // Not focused if too many attempts
+                            if (attempts >= retries)
+                                return@withContext false
+                            ++attempts
+                            // Start the auto focus
+                            val result = cam.cameraControl.startFocusAndMetering(buildAction())
+                        } while (result.get()?.isFocusSuccessful != true)
+                        true        // Focused
+                    }
+                } else
+                    true        // Assume focused if auto-focus isn't supported
+            } catch (e: CameraInfoUnavailableException) {
+                // Log.d(TAG, "cannot access camera", e)
+                false
+            } finally {
+                focusing = false
             }
-            focused
-        } catch (e: CameraInfoUnavailableException) {
-            // Log.d(TAG, "cannot access camera", e)
-            false
-        } finally {
-            focusing = false
-        }
+        }?: false
     }
 
     /**
@@ -934,12 +940,7 @@ class ScanFragment : Fragment() {
                 BitmapFactory.decodeByteArray(array, 0, array.size)
             } else {
                 // Otherwise assume yuv and convert to rgb bitmap
-                Bitmap.createBitmap(
-                    image.width, image.height,
-                    Bitmap.Config.ARGB_8888
-                ).also {
-                    gpuCompute.yuvToRgb(image, it)
-                }
+                gpuCompute.yuvToRgb(image)
             }
         }
     }
@@ -1012,8 +1013,20 @@ class ScanFragment : Fragment() {
         withContext(Dispatchers.IO) {
             // Put the image in the format Z-bar wants
             val barcode = Image(bm.width, bm.height, "GREY")
-            val array = ByteArray(bm.width * bm.height)
-            gpuCompute.rgbToLum(bm, array)
+            val array = gpuCompute.rgbToLum(bm)
+            /* val showImage = Bitmap.createBitmap(IntArray(array.size) {
+                val v = array[it].toInt() and 0xff
+                (0xff shl 24) + (v shl 16) + (v shl 8) + v
+            }, bm.width, bm.height, Bitmap.Config.ARGB_8888)
+            withContext(Dispatchers.Main) {
+                AlertDialog.Builder(requireContext())
+                    .setMessage("Scanned Image")
+                    .setView(ImageView(requireContext()).apply {
+                        setImageBitmap(showImage)
+                    })
+                    .setPositiveButton(R.string.ok) {_, _ -> }
+                    .show()
+            } */
             barcode.data = array
 
             // Scan the image for bar code. Returns 0 if nothing was found

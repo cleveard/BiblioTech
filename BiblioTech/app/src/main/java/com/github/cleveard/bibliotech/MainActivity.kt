@@ -343,20 +343,22 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
     /**
      * @inheritDoc
      */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Handle Volume up or down key and send a local intent.
         // The Scan fragment listens and starts scanning for bar codes
-        when (keyCode) {
+        val keyCode = event.keyCode
+        return when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_DOWN,
             KeyEvent.KEYCODE_VOLUME_UP -> {
-                val intent =
-                    Intent(KEY_EVENT_ACTION).apply { putExtra(KEY_EVENT_EXTRA, keyCode) }
-                LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val intent =
+                        Intent(KEY_EVENT_ACTION).apply { putExtra(KEY_EVENT_EXTRA, keyCode) }
+                    LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+                }
                 return true
             }
+            else -> super.dispatchKeyEvent(event)
         }
-
-        return super.onKeyDown(keyCode, event)
     }
 
     override suspend fun login(): Boolean {
