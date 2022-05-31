@@ -7,7 +7,6 @@ import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.idWithFilter
@@ -72,7 +71,7 @@ class DateConverters {
         ForeignKey(entity = SeriesEntity::class,
             parentColumns = [SERIES_ID_COLUMN],
             childColumns = [BOOK_SERIES_COLUMN],
-            onDelete = CASCADE
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )

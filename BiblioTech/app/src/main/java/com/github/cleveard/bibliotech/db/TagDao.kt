@@ -3,7 +3,6 @@ package com.github.cleveard.bibliotech.db
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.idWithFilter
@@ -68,11 +67,11 @@ data class TagEntity(
         ForeignKey(entity = BookEntity::class,
             parentColumns = [BOOK_ID_COLUMN],
             childColumns = [BOOK_TAGS_BOOK_ID_COLUMN],
-            onDelete = CASCADE),
+            onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = TagEntity::class,
             parentColumns = [TAGS_ID_COLUMN],
             childColumns = [BOOK_TAGS_TAG_ID_COLUMN],
-            onDelete = CASCADE)
+            onDelete = ForeignKey.CASCADE)
     ],
     indices = [
         Index(value = [BOOK_TAGS_ID_COLUMN],unique = true),

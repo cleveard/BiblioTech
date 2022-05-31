@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.db
 
 import androidx.room.*
-import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 
@@ -44,11 +43,11 @@ data class CategoryEntity(
         ForeignKey(entity = BookEntity::class,
             parentColumns = [BOOK_ID_COLUMN],
             childColumns = [BOOK_CATEGORIES_BOOK_ID_COLUMN],
-            onDelete = CASCADE),
+            onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = CategoryEntity::class,
             parentColumns = [CATEGORIES_ID_COLUMN],
             childColumns = [BOOK_CATEGORIES_CATEGORY_ID_COLUMN],
-            onDelete = CASCADE)
+            onDelete = ForeignKey.CASCADE)
     ],
     indices = [
         Index(value = [BOOK_CATEGORIES_ID_COLUMN],unique = true),

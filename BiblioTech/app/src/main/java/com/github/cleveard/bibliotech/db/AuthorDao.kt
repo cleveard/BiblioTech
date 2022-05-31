@@ -2,7 +2,6 @@ package com.github.cleveard.bibliotech.db
 
 import android.database.Cursor
 import androidx.room.*
-import androidx.room.ForeignKey.CASCADE
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 
@@ -83,11 +82,11 @@ data class AuthorEntity(
         ForeignKey(entity = BookEntity::class,
             parentColumns = [BOOK_ID_COLUMN],
             childColumns = [BOOK_AUTHORS_BOOK_ID_COLUMN],
-            onDelete = CASCADE),
+            onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = AuthorEntity::class,
             parentColumns = [AUTHORS_ID_COLUMN],
             childColumns = [BOOK_AUTHORS_AUTHOR_ID_COLUMN],
-            onDelete = CASCADE)
+            onDelete = ForeignKey.CASCADE)
     ],
     indices = [
         Index(value = [BOOK_AUTHORS_ID_COLUMN],unique = true),
