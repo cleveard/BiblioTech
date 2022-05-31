@@ -423,7 +423,8 @@ internal open class BooksAdapter(
      * or string for the separators. Return the appropriate layout id for each
      */
     override fun getItemViewType(position: Int): Int {
-        if (getItem(position) is BookAndAuthors)
+        val item = getItem(position)
+        if (item == null || item is BookAndAuthors)
             return bookLayout
         return R.layout.books_adapter_header_item
     }

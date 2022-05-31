@@ -255,7 +255,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         }
 
         // Create the pager
-        val config = PagingConfig(pageSize = 10)
+        val config = PagingConfig(pageSize = 30, prefetchDistance = 120, jumpThreshold = 120)
         val pager = Pager(
             config
         ) {
