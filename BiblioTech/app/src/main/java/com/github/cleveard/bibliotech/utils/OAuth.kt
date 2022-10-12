@@ -7,9 +7,11 @@ import android.net.Uri
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import net.openid.appauth.*
+import java.io.IOException
 import java.lang.Exception
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.reflect.jvm.internal.impl.protobuf.InvalidProtocolBufferException
 
 abstract class OAuth(
     context: Context,
@@ -19,11 +21,7 @@ abstract class OAuth(
     private val redirectUri: String,
     private val preferenceKey: String
 ) {
-    private val persist: SharedPreferences = EncryptedSharedPreferences.create(
-        "secret_shared_prefs", MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val persist: SharedPreferences = createSecretPreferences(context)
     private val authConfig = AuthorizationServiceConfiguration(
         Uri.parse(authEndpoint),
         Uri.parse(tokenEndpoint))
@@ -105,5 +103,25 @@ abstract class OAuth(
             it.commit()
         }
         return state
+    }
+
+    companion object {
+        private fun createSecretPreferences(context: Context): SharedPreferences {
+            val name = "secret_shared_prefs"
+            return try {
+                EncryptedSharedPreferences.create(
+                    name, MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            } catch (_: IOException) {
+                context.deleteSharedPreferences(name)
+                EncryptedSharedPreferences.create(
+                    name, MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            }
+        }
     }
 }
