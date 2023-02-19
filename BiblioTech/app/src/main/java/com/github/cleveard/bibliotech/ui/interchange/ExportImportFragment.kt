@@ -152,7 +152,7 @@ class ExportImportFragment : Fragment() {
 
     /** Launcher used to get the content for exporting books */
     private val exportBooksLauncher: ActivityResultLauncher<String> =
-        registerForActivityResult(object: ActivityResultContracts.CreateDocument() {
+        registerForActivityResult(object: ActivityResultContracts.CreateDocument("text/csv") {
             /**
              * @inheritDoc
              * Set the intent type to "text/csv"
@@ -170,7 +170,7 @@ class ExportImportFragment : Fragment() {
 
     /** Launcher used to get the content for exporting filters */
     private val exportFiltersLauncher: ActivityResultLauncher<String> =
-        registerForActivityResult(object: ActivityResultContracts.CreateDocument() {
+        registerForActivityResult(object: ActivityResultContracts.CreateDocument("text/csv") {
             /**
              * @inheritDoc
              * Set the intent type to "text/csv"

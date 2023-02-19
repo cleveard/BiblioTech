@@ -14,10 +14,12 @@ import androidx.appcompat.widget.Toolbar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.MenuProvider
 import androidx.core.view.children
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
@@ -273,8 +275,62 @@ class BooksFragment : Fragment() {
             }
         })
 
-        // Let the system know we have an options menu
-        setHasOptionsMenu(true)
+        // Add options menu provider
+        requireActivity().addMenuProvider(
+            object: MenuProvider {
+                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                    // Inflate the menu
+                    menuInflater.inflate(R.menu.books_options, menu)
+                    // Save the edit and filter drawer menu item
+                    drawerMenuItem = menu.findItem(R.id.action_drawer)
+                    deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
+                    selectAll = menu.findItem(R.id.action_select_all)
+                    selectNone = menu.findItem(R.id.action_select_none)
+                    logoutMenuItem = menu.findItem(R.id.action_logout)
+                    findSeriesMenuItem = menu.findItem(R.id.find_series).also {
+                        it.isVisible = booksViewModel.seriesCount.value != 0
+                    }
+                    if (BuildConfig.DEBUG) {
+                        menu.add("Clear Series").apply {
+                            setOnMenuItemClickListener {
+                                booksViewModel.viewModelScope.launch {
+                                    booksViewModel.repo.bookFlags.changeBits(false, BookEntity.SERIES, null)
+                                }
+                                true
+                            }
+                        }
+                    }
+
+                    updateMenuAndButtons()
+                }
+
+                /**
+                 * @inheritDoc
+                 */
+                override fun onPrepareMenu(menu: Menu) {
+                    fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
+                        menu.findItem(id)?.let {item ->
+                            item.isEnabled = desc != null
+                            item.title = if (desc.isNullOrEmpty())
+                                requireContext().getString(undoId)
+                            else
+                                requireContext().getString(undoNameId, desc)
+                        }
+                    }
+                    update(R.id.action_undo, booksViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
+                        R.string.undo, R.string.undoName)
+                    update(R.id.action_redo, booksViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
+                        R.string.redo, R.string.redoName)
+                }
+
+                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                    // Direct action to onActionSelected
+                    return onActionSelected(menuItem.itemId)
+                }
+            },
+            viewLifecycleOwner,
+            Lifecycle.State.RESUMED
+        )
 
         // Set onClickListeners for buttons in the edit and filter drawer
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
@@ -391,56 +447,6 @@ class BooksFragment : Fragment() {
     }
 
     /**
-     * @inheritDoc
-     */
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        // Inflate the menu
-        inflater.inflate(R.menu.books_options, menu)
-        // Save the edit and filter drawer menu item
-        drawerMenuItem = menu.findItem(R.id.action_drawer)
-        deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
-        selectAll = menu.findItem(R.id.action_select_all)
-        selectNone = menu.findItem(R.id.action_select_none)
-        logoutMenuItem = menu.findItem(R.id.action_logout)
-        findSeriesMenuItem = menu.findItem(R.id.find_series).also {
-            it.isVisible = !(booksViewModel.seriesCount.value == 0)
-        }
-        if (BuildConfig.DEBUG) {
-            menu.add("Clear Series").apply {
-                setOnMenuItemClickListener {
-                    booksViewModel.viewModelScope.launch {
-                        booksViewModel.repo.bookFlags.changeBits(false, BookEntity.SERIES, null)
-                    }
-                    true
-                }
-            }
-        }
-        super.onCreateOptionsMenu(menu, inflater)
-
-        updateMenuAndButtons()
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun onPrepareOptionsMenu(menu: Menu) {
-        super.onPrepareOptionsMenu(menu)
-        fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
-            menu.findItem(id)?.let {item ->
-                item.isEnabled = desc != null
-                item.title = if (desc.isNullOrEmpty())
-                    requireContext().getString(undoId)
-                else
-                    requireContext().getString(undoNameId, desc)
-            }
-        }
-        update(R.id.action_undo, booksViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
-            R.string.undo, R.string.undoName)
-        update(R.id.action_redo, booksViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
-            R.string.redo, R.string.redoName)
-    }
-
-    /**
      * Perform an action when a menu item or button is clicked
      * @param id The id of the menu item or button
      */
@@ -517,14 +523,6 @@ class BooksFragment : Fragment() {
             else -> return false
         }
         return true
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Direct action to onActionSelected
-        return onActionSelected(item.itemId) || super.onOptionsItemSelected(item)
     }
 
     /**

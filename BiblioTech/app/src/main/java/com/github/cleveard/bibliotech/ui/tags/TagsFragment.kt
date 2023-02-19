@@ -16,7 +16,6 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookRepository
 import com.github.cleveard.bibliotech.db.TagEntity
@@ -130,7 +129,7 @@ class TagsFragment : Fragment() {
     /**
      * @inheritDoc
      */
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+    private fun optionsItemWasSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_new_tag -> onNewTag()       // Create a new tag
             R.id.action_delete -> onDeleteTags()    // Delete selected tags
@@ -165,7 +164,7 @@ class TagsFragment : Fragment() {
                 tagViewModel.selection.invertAsync()
                 return true
             }
-            else -> super.onOptionsItemSelected(item)
+            else -> false
         }
     }
 
@@ -180,7 +179,7 @@ class TagsFragment : Fragment() {
         // Get the toolbar menu and add a menu item selected listener for the toolbar
         val menu = actionMenuView.menu
         actionMenuView.setOnMenuItemClickListener { item ->
-            onOptionsItemSelected(item)
+            optionsItemWasSelected(item)
         }
 
         // Inflate a menu xml into the action menu

@@ -26,6 +26,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
@@ -333,8 +334,29 @@ class ScanFragment : Fragment() {
         booksViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
         booksViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
 
-        // Let the system know we have an options menu
-        setHasOptionsMenu(true)
+        // Add options menu provider
+        requireActivity().addMenuProvider(
+            object: MenuProvider {
+                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                    menuInflater.inflate(R.menu.settings_option, menu)
+                }
+
+                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                    // Direct action to onActionSelected
+                    return when(menuItem.itemId) {
+                        R.id.action_to_settingsFragment -> {
+                            (activity as? ManageNavigation)?.navigate(
+                                ScanFragmentDirections.actionNavScanToSettingsFragment()
+                            )
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            },
+            viewLifecycleOwner,
+            Lifecycle.State.RESUMED
+        )
 
         return inflater.inflate(R.layout.scan_fragment, container, false)
     }
@@ -418,30 +440,6 @@ class ScanFragment : Fragment() {
         GoogleBookLoginFragment.login(this)
     }
 
-    /**
-     * @inheritDoc
-     */
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        // Inflate the menu
-        inflater.inflate(R.menu.settings_option, menu)
-        super.onCreateOptionsMenu(menu, inflater)
-    }
-
-    /**
-     * @inheritDoc
-     */
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Direct action to onActionSelected
-        return when(item.itemId) {
-            R.id.action_to_settingsFragment -> {
-                (activity as? ManageNavigation)?.navigate(
-                    ScanFragmentDirections.actionNavScanToSettingsFragment()
-                )
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
 
     private fun updateBookStats() {
         // Update book stats on selection change
@@ -1078,7 +1076,7 @@ class ScanFragment : Fragment() {
         /** Expressions for splitting ISBNs **/
         private val splitIsbn: Regex = Regex("(\\s*,\\s*)+")
         private val getXDigit: Regex = Regex("[*#]")
-        private val onlyDigitsAndX: Regex = Regex("[^0-9X]")
+        private val onlyDigitsAndX: Regex = Regex("[^\\dX]")
 
         /** Convenience method used to check if all permissions required by this app are granted */
         fun hasPermissions(context: Context) = PERMISSIONS_REQUIRED.all {

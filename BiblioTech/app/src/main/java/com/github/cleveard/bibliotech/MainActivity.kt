@@ -270,21 +270,24 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
      * @param viewNames The names of the current saved views
      */
     private fun updateViews(viewNames: List<String>) {
-        val menu = navView.menu.findItem(R.id.saved_filters).subMenu
-        // Remove the old items
-        menu.clear()
+        navView.menu.findItem(R.id.saved_filters).subMenu?.let {menu ->
+            // Remove the old items
+            menu.clear()
 
-        // Add new ones
-        for (viewName in viewNames) {
-            // Empty view name is used to hold the Books filter
-            if (viewName.isNotEmpty()) {
-                // Add items not already there
-                menu.add(Menu.NONE, R.id.saved_filters, Menu.NONE, viewName).also {
-                    // Need isCheckable for the navigation selection listener to work
-                    it.isCheckable = true
-                    it.isChecked = false
-                    it.icon = ResourcesCompat.getDrawable(applicationContext.resources,
-                        R.drawable.ic_baseline_filter_alt_24, null)
+            // Add new ones
+            for (viewName in viewNames) {
+                // Empty view name is used to hold the Books filter
+                if (viewName.isNotEmpty()) {
+                    // Add items not already there
+                    menu.add(Menu.NONE, R.id.saved_filters, Menu.NONE, viewName).also {
+                        // Need isCheckable for the navigation selection listener to work
+                        it.isCheckable = true
+                        it.isChecked = false
+                        it.icon = ResourcesCompat.getDrawable(
+                            applicationContext.resources,
+                            R.drawable.ic_baseline_filter_alt_24, null
+                        )
+                    }
                 }
             }
         }
