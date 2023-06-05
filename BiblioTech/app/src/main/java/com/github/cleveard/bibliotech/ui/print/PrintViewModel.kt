@@ -1,16 +1,14 @@
 package com.github.cleveard.bibliotech.ui.print
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.Shader
 import androidx.lifecycle.ViewModel
 import androidx.preference.PreferenceManager
 import com.github.cleveard.bibliotech.print.PDFPrinter
 
 class PrintViewModel : ViewModel() {
     /** The available print layouts */
-    lateinit var printLayouts: PrintLayouts
+    private lateinit var printLayouts: PrintLayouts
     /** The pdf printer */
     lateinit var pdfPrinter: PDFPrinter
 

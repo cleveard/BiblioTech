@@ -305,7 +305,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
             // The list is using a different filter
             R.id.filter_books -> {
                 lastNavId != R.id.nav_books ||
-                    action.arguments.getString("filterName")?: "" != lastNavFilter
+                    (action.arguments.getString("filterName") ?: "") != lastNavFilter
             }
             // This action is used to navigate to the scan destination
             // Only navigate if we aren't on the scan destination
@@ -327,7 +327,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
     override fun setTitle(title: String?, subtitle: String?) {
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
         toolbar.title = title.let {
-            if (it == null || it.isEmpty())
+            if (it.isNullOrEmpty())
                 applicationContext.resources.getString(R.string.menu_books)
             else
                 it
@@ -349,8 +349,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Handle Volume up or down key and send a local intent.
         // The Scan fragment listens and starts scanning for bar codes
-        val keyCode = event.keyCode
-        return when (keyCode) {
+        return when (val keyCode = event.keyCode) {
             KeyEvent.KEYCODE_VOLUME_DOWN,
             KeyEvent.KEYCODE_VOLUME_UP -> {
                 if (event.action == KeyEvent.ACTION_DOWN) {

@@ -19,7 +19,6 @@ private val cal2: Calendar = Calendar.getInstance()
  * Enum of columns
  * The enums not only identify the column, but also contain information about how to use it
  */
-@Suppress("unused")
 enum class Column(val desc: ColumnDataDescriptor) {
     /** Author - Last, First */
     LAST_NAME(lastFirst),
@@ -1018,7 +1017,7 @@ private val dateModified = object: ColumnDataDescriptor(
 
 /** Series */
 private val series = object: SubQueryColumnDataDescriptor(
-    arrayOf(SERIES_IITLE_COLUMN),
+    arrayOf(SERIES_TITLE_COLUMN),
     R.string.series,
     arrayOf(Predicate.GLOB, Predicate.ONE_OF, Predicate.NOT_ONE_OF, Predicate.NOT_GLOB),
     BOOK_SERIES_COLUMN,
@@ -1053,6 +1052,6 @@ private val series = object: SubQueryColumnDataDescriptor(
     /** @inheritDoc */
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
         return buildAutoCompleteCursor(repo, BookDatabase.seriesTable,
-            SERIES_IITLE_COLUMN, constraint)
+            SERIES_TITLE_COLUMN, constraint)
     }
 }

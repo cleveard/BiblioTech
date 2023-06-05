@@ -12,7 +12,7 @@ class PagingSourceList<T: Any>(private val list: List<T>): PagingSource<Int, T>(
     }
 
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, T> {
-        if (list.size == 0)
+        if (list.isEmpty())
             return LoadResult.Page(emptyList(), null, null)
 
         val key = params.key?.coerceAtLeast(0)?: 0

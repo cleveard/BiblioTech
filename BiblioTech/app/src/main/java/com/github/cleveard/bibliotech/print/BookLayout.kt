@@ -509,6 +509,7 @@ data class BookLayout(
                 set(left, position.y, right, printer.verticalPixelsToPoints(layout.height) + position.y)
             }
 
+            @Suppress("unused")
             fun move(x: Float, y: Float) {
                 bounds.offset(x - position.x, y - position.y)
                 position.set(x, y)

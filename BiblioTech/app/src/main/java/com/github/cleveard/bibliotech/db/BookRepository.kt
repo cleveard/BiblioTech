@@ -175,7 +175,6 @@ class BookRepository private constructor(context: Context) {
     private val addTag = context.resources.getString(R.string.addTagUndo)
     private val deleteTags = context.resources.getString(R.string.deleteTagsUndo)
     private val tagBooks = context.resources.getString(R.string.tagBooksUndo)
-    @Suppress("SpellCheckingInspection")
     private val untagBooks = context.resources.getString(R.string.untagBooksUndo)
     private val addView = context.resources.getString(R.string.addViewUndo)
     private val deleteView = context.resources.getString(R.string.deleteViewUndo)
@@ -383,7 +382,7 @@ class BookRepository private constructor(context: Context) {
     /**
      * Find a view by name
      * @param name The name of the view
-     * @return LiveData of a list containint the view
+     * @return LiveData of a list containing the view
      */
     fun findViewByNameLive(name: String): LiveData<List<ViewEntity>> {
         return db.getViewDao().findByNameLive(name)
@@ -427,7 +426,6 @@ class BookRepository private constructor(context: Context) {
      * @param operation The operation to run while recording undo
      * WithUndo can be nested. Recording stops when the outermost call returns.
      */
-    @Suppress("MemberVisibilityCanBePrivate")
     suspend fun <T> withUndo(desc: String, operation: suspend () -> T): T {
         return db.getUndoRedoDao().withUndo(desc, null, operation)
     }

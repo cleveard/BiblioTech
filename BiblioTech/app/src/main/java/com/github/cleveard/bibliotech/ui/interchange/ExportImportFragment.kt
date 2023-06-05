@@ -41,6 +41,7 @@ class ExportImportFragment : Fragment() {
     private data class ExportColumn<T>(val name: String, val getValue: T.(Int) -> String)
 
     companion object {
+        @Suppress("unused")
         fun newInstance() = ExportImportFragment()
 
         /** Array book of columns we export */
@@ -218,7 +219,7 @@ class ExportImportFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Create the view model
-        viewModel = ViewModelProvider(this).get(ExportImportViewModel::class.java)
+        viewModel = ViewModelProvider(this)[ExportImportViewModel::class.java]
         // Launch a coroutine to finish the initialization
 
         // Create the ViewName for the filter from the arguments
@@ -318,7 +319,6 @@ class ExportImportFragment : Fragment() {
      * This method handle opening the URI and error reporting
      */
     private suspend fun doExport(path: Uri, export: suspend CoroutineScope.(file: Writer) -> Boolean) {
-        @Suppress("BlockingMethodInNonBlockingContext")
         withContext(Dispatchers.IO) {
             try {
                 // Get the file
@@ -412,7 +412,6 @@ class ExportImportFragment : Fragment() {
      */
     private fun exportFilters(path: Uri) {
         viewModel.viewModelScope.launch {
-            @Suppress("BlockingMethodInNonBlockingContext")
             doExport(path) {stream ->
                 // Get the list of filters
                 viewModel.repo.getViewNames().getLive()?.let {viewList ->
@@ -578,7 +577,6 @@ class ExportImportFragment : Fragment() {
      * This method handle opening the stream and error reporting
      */
     private fun doImport(path: Uri, import: suspend CoroutineScope.(CSVReader) -> Boolean) {
-        @Suppress("BlockingMethodInNonBlockingContext")
         viewModel.viewModelScope.launch(Dispatchers.IO) {
             // Open the stream
             val file = requireContext().contentResolver.openInputStream(path)

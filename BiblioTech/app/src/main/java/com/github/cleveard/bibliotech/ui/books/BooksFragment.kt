@@ -164,7 +164,7 @@ class BooksFragment : Fragment() {
      */
     @Suppress("ObjectLiteralToLambda")  // Kotlin messes up if this is a lambda
     private val undoListObserver = object: Observer<List<UndoTransactionEntity>> {
-        override fun onChanged(t: List<UndoTransactionEntity>?) { }
+        override fun onChanged(value: List<UndoTransactionEntity>) { }
     }
 
     /**

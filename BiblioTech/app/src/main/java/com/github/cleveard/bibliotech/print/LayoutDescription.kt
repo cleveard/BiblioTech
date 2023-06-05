@@ -225,6 +225,7 @@ data class LayoutDescription(
                 }
             },
             /** Align to center */
+            @Suppress("unused")
             Center {
                 /** @inheritDoc */
                 override fun createAlignment(bounds: BookLayout.LayoutBounds): BookLayout.LayoutDimension {
@@ -345,6 +346,7 @@ data class LayoutDescription(
                 }
             },
             /** Align to center */
+            @Suppress("unused")
             Center {
                 /** @inheritDoc */
                 override fun createAlignment(bounds: BookLayout.LayoutBounds): BookLayout.LayoutDimension {

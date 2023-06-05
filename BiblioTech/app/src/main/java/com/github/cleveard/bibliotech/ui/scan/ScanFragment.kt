@@ -870,7 +870,6 @@ class ScanFragment : Fragment() {
                     var attempts = 0
 
                     // Run in IO thread
-                    @Suppress("BlockingMethodInNonBlockingContext")
                     withContext(Dispatchers.IO) {
                         // Loop until we get focused, or we run out of attempts
                         do {

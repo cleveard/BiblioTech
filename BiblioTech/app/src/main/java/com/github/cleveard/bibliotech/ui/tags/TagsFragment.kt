@@ -56,8 +56,8 @@ class TagsFragment : Fragment() {
     /**
      * Observers to update menu when selection changes
      */
-    private val observerHasSelection: Observer<Int?> = Observer<Int?> { updateMenu() }
-    private val observerLastSelection: Observer<Long?> = Observer<Long?> { updateMenu() }
+    private val observerHasSelection: Observer<Int?> = Observer { updateMenu() }
+    private val observerLastSelection: Observer<Long?> = Observer { updateMenu() }
 
     /**
      * @inheritDoc

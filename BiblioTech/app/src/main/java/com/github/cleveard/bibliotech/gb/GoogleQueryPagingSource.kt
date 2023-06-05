@@ -2,7 +2,6 @@ package com.github.cleveard.bibliotech.gb
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import com.github.cleveard.bibliotech.db.BookAndAuthors
 
 
 /**

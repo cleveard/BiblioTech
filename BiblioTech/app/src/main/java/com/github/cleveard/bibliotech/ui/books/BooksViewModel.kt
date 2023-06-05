@@ -103,9 +103,9 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             return true
         }
 
-        override fun onChanged(view: ViewEntity?) {
+        override fun onChanged(value: ViewEntity?) {
             // If filter is empty use null
-            val filter = view?.filter
+            val filter = value?.filter
             val filterList = filter?.filterList?: emptyArray()
             // Don't do anything unless the filter changes
             if (isSame(filterList, lastFilter))
@@ -122,7 +122,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         if (name == null)
             MutableLiveData(null)
         else
-            repo.findViewByNameLive(name).map { if (it.isNullOrEmpty()) null else it[0] }
+            repo.findViewByNameLive(name).map { if (it.isEmpty()) null else it[0] }
     }
     var filterName: String?
         get() = _filterName.value
@@ -360,7 +360,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             }
         }
 
-        return if (span.isNotEmpty()) span else null
+        return span.ifEmpty { null }
     }
 
     /**

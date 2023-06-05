@@ -200,6 +200,7 @@ internal class UpdateSeriesFragment : Fragment() {
          * this fragment using the provided parameters.
          * @return A new instance of fragment UpdateSeriesFragment.
          */
+        @Suppress("unused")
         @JvmStatic
         fun newInstance() = UpdateSeriesFragment()
     }

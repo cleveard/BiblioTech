@@ -59,10 +59,10 @@ class UndoTracker(
 
     /**
      * Record the most recent undo transaction
-     * @param message A messsage for assert failures
+     * @param message A message for assert failures
      * @param expectUndo True, if the operation is expected to create an undo
      *                   transaction. False otherwise
-     * @param desc If not null, the undo description. If null then we don't check the descrption.
+     * @param desc If not null, the undo description. If null then we don't check the description.
      */
     suspend fun record(message: String, expectUndo: Boolean = true, desc: String? = null) {
         // If we are recording, then we can't capture the transaction
@@ -136,8 +136,8 @@ class UndoTracker(
         // Clear the tracked list
         transactions.clear()
         assertWithMessage("Clear Undo %s", message).apply {
-            // Make sure there are no transacton and the max, min and undo id are correct
-            that(dao.getTransactions().isNullOrEmpty())
+            // Make sure there are no transaction and the max, min and undo id are correct
+            that(dao.getTransactions().isNullOrEmpty()).isTrue()
             that(dao.maxUndoId).isEqualTo(0)
             that(dao.undoId).isEqualTo(0)
             that(dao.minUndoId).isEqualTo(1)

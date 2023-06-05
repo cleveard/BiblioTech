@@ -1,7 +1,6 @@
 package com.github.cleveard.bibliotech.testutils
 
 import com.github.cleveard.bibliotech.db.*
-import com.github.cleveard.bibliotech.makeBookAndAuthors
 import com.github.cleveard.bibliotech.utils.getLive
 import com.google.common.truth.StandardSubjectBuilder
 import com.google.common.truth.Truth.assertWithMessage
@@ -74,7 +73,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     /**
      * Add or update a view
      * @param view The view to be added or updated
-     * @param callback Callback to decide whether to update conflicts
+     * @param onConflict Callback to decide whether to update conflicts
      * @return The id of the view added or updated. 0 if it fails
      */
     protected abstract suspend fun addOrUpdateView(view: ViewEntity, onConflict: (suspend CoroutineScope.(conflict: ViewEntity) -> Boolean)?): Long
@@ -117,9 +116,9 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
 
     /** The expected contents of the database tables */
     var tables = Tables()
-    /** The saved contents of the databse for each undo transaction */
+    /** The saved contents of the database for each undo transaction */
     private val undoneState = UndoTracker.ArrayListRemoveRange<Tables>()
-    /** The saved contents of the databse for each redo transaction */
+    /** The saved contents of the database for each redo transaction */
     private val redoneState = UndoTracker.ArrayListRemoveRange<Tables>()
 
     /**
@@ -175,7 +174,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     suspend fun addTag(tag: TagEntity, callback: (suspend CoroutineScope.(conflict: TagEntity) -> Boolean)? = null): Long {
         // Add or update the tag
         return addOrUpdateTag(tag, callback).also {
-            // If it was successful, put it in the expectd values
+            // If it was successful, put it in the expected values
             if (it != 0L) {
                 tables.tagEntities.linked(tag)
                 tables.tagEntities.unlinked(tag)
@@ -249,7 +248,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
                     if (i >= expected.size) null else expected[i]
                 )
             }
-            // Make sure the acutal tags, authors, categories and views are the expected values
+            // Make sure the actual tags, authors, categories and views are the expected values
             that(getTags()).containsExactlyElementsIn(tables.tagEntities.entities.toList())
             that(getAuthors()).containsExactlyElementsIn(tables.authorEntities.entities.toList())
             that(getCategories()).containsExactlyElementsIn(tables.categoryEntities.entities.toList())
@@ -827,7 +826,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
      * @param sameId A lambda to determine when the ids for two entities are the same
      * @param autoDelete True if entities are deleted from the table when the link count goes to 0
      *
-     * The Comparitor is used to check for conflicting entities
+     * The Comparator is used to check for conflicting entities
      */
     abstract class Table<T>(
         protected val make: (flags: Int, next: Int, unique: String) -> T,
@@ -967,7 +966,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
         fun createRelation(fromList: Boolean, random: Random, returnList: List<T>? = null) : T {
             // Add another entities
             if (fromList && size > 0) {
-                // Add an exisiting entity
+                // Add an existing entity
                 var entity: T
                 // Don't add any entities twice
                 do {
@@ -1061,7 +1060,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
     /**
      * Container for expected values of all tables in the database
      */
-    inner class Tables() {
+    inner class Tables {
         /**
          * The expected values for the tags table
          */
@@ -1173,11 +1172,8 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             {e1, e2 -> e1.book.id == e2.book.id }
             // Do delete books when unlinked is called
         ) {
-            private val comp = nullsFirst(object: Comparator<String> {
-                override fun compare(o1: String?, o2: String?): Int {
-                    return o1!!.compareTo(o2!!, true)
-                }
-            }).let {c -> compareBy<BookAndAuthors, String?>(c, { it.book.sourceId }).thenBy(c, { it.book.volumeId })}
+            private val comp = nullsFirst(Comparator<String> { o1, o2 -> o1!!.compareTo(o2!!, true) })
+                .let { c -> compareBy<BookAndAuthors, String?>(c) { it.book.sourceId }.thenBy(c) { it.book.volumeId } }
             /**
              * @inheritDoc
              * Books conflict if the ISBN or source and volume ids are not null and are the same

@@ -72,12 +72,12 @@ class PDFPrinter(
     val pageCount: Int
         get() = pages?.size?: 0
     /** Distance in points to separate the books horizontally */
-    var horizontalSeparation: Float = preferences.getFloat(PREF_HORIZONTAL_SEPERATION, 18.0f)
+    var horizontalSeparation: Float = preferences.getFloat(PREF_HORIZONTAL_SEPARATION, 18.0f)
         // If the horizontal separation changes, reprint the document
         set(v) {
             if (v != field) {
                 invalidateLayout()
-                preferenceEditor.putFloat(PREF_HORIZONTAL_SEPERATION, v)
+                preferenceEditor.putFloat(PREF_HORIZONTAL_SEPARATION, v)
                 preferenceEditor.commit()
             }
             field = v
@@ -543,7 +543,7 @@ class PDFPrinter(
         private const val PREF_MARGINS_TOP = "print_margins_top"
         private const val PREF_MARGINS_RIGHT = "print_margins_right"
         private const val PREF_MARGINS_BOTTOM = "print_margins_bottom"
-        private const val PREF_HORIZONTAL_SEPERATION = "print_horizontal_separation"
+        private const val PREF_HORIZONTAL_SEPARATION = "print_horizontal_separation"
         private const val PREF_VERTICAL_SEPARATION = "print_vertical_separation"
         private const val PREF_SEP_LINE_WIDTH = "print_separator_line_width"
         private const val PREF_NUMBER_OF_COLUMNS = "print_number_of_columns"

@@ -8,7 +8,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
-import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.BaseViewModel
@@ -61,7 +60,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * @param item The MenuItem used to start the action. Used to choose select All of None
      */
     @Suppress("UNUSED_PARAMETER")
-    fun selectInvert(item: MenuItem): Boolean {
+    private fun selectInvert(item: MenuItem): Boolean {
         viewModel.selection.invertAsync()
         return true
     }
@@ -70,7 +69,7 @@ class DeleteModalAction private constructor(private val fragment: Fragment, priv
      * {@inheritDoc}
      * Update the menu when the selection changes
      */
-    override fun onChanged(t: Int?) {
+    override fun onChanged(value: Int?) {
         updateMenu()
     }
 

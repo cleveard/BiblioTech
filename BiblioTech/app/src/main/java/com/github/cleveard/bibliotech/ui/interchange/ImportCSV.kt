@@ -12,7 +12,6 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.R
@@ -158,11 +157,11 @@ class ImportCSV {
                 columnId = BOOK_VALUE
             ),
             VOLUME_ID_COLUMN to ImportColumn(
-                {v, a ->  book.volumeId = if (v.isEmpty()) null else v; a },
+                {v, a ->  book.volumeId = v.ifEmpty { null }; a },
                 columnId = BOOK_VALUE
             ),
             SOURCE_ID_COLUMN to ImportColumn(
-                {v, a ->  book.sourceId = if (v.isEmpty()) null else v; a },
+                {v, a ->  book.sourceId = v.ifEmpty { null }; a },
                 columnId = BOOK_VALUE
             ),
             DESCRIPTION_COLUMN to ImportColumn(
@@ -194,11 +193,11 @@ class ImportCSV {
                 columnId = 0
             ),
             SMALL_THUMB_COLUMN to ImportColumn(
-                {v, a ->  book.smallThumb = if (v.isEmpty()) null else v; a },
+                {v, a ->  book.smallThumb = v.ifEmpty { null }; a },
                 columnId = BOOK_VALUE
             ),
             LARGE_THUMB_COLUMN to ImportColumn(
-                {v, a ->  book.largeThumb = if (v.isEmpty()) null else v; a },
+                {v, a ->  book.largeThumb = v.ifEmpty { null }; a },
                 columnId = BOOK_VALUE
             ),
             BOOK_FLAGS to ImportColumn(
@@ -560,6 +559,7 @@ class ImportCSV {
         var job: Job? = null
         var access: Access? = null
         /** @inheritDoc */
+        @SuppressLint("NotifyDataSetChanged")
         override fun startAdapter(content: View): RecyclerView.Adapter<*> {
             val adapter: BooksAdapter
             access = Access().also { access ->
@@ -690,6 +690,7 @@ class ImportCSV {
         }
 
         /** @inheritDoc */
+        @SuppressLint("NotifyDataSetChanged")
         override fun startAdapter(content: View): RecyclerView.Adapter<*> {
             val adapter = object: ListAdapter<ViewFlagsEntity, ViewHolder>(DIFF_CALLBACK_FILTER) {
                 @SuppressLint("InflateParams")
@@ -706,10 +707,7 @@ class ImportCSV {
 
                 override fun onBindViewHolder(holder: ViewHolder, position: Int) {
                     val item = getItem(holder.layoutPosition)
-                    val name = if (item.view.name.isEmpty())
-                        inContext.resources.getString(R.string.menu_books)
-                    else
-                        item.view.name
+                    val name = item.view.name.ifEmpty { inContext.resources.getString(R.string.menu_books) }
                     val text = if (item.view.desc.isEmpty())
                         name
                     else

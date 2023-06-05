@@ -73,6 +73,7 @@ class BookFilterTest {
         assertThat(repo.canRedo()).isFalse()
     }
 
+    @Suppress("SpellCheckingInspection")
     @Test fun testFilterField() {
         val f1 = FilterField(Column.SOURCE, Predicate.ONE_OF, arrayOf("jjll", "kkik", "kkkok"))
         assertWithMessage("Order Field").apply {
@@ -454,6 +455,7 @@ class BookFilterTest {
         }
     }
 
+    @Suppress("UNINITIALIZED_ENUM_COMPANION_WARNING")
     private enum class ColumnValue(
         val column: Column,
         val oneValue: BookAndAuthors.(Random) -> String?,
@@ -487,7 +489,7 @@ class BookFilterTest {
                 .flatten()                          // Flatten the sequence
             }
         ),
-        FIRST_NAME(Column.FIRST_NAME, { if (authors.isNullOrEmpty()) null else authors[it.nextInt(authors.size)].name },
+        FIRST_NAME(Column.FIRST_NAME, { if (authors.isEmpty()) null else authors[it.nextInt(authors.size)].name },
             {
                 var o = this.sortFirst.compareWith(it.sortFirst, true)
                 if (o == 0)
@@ -504,7 +506,7 @@ class BookFilterTest {
             },
             { sequenceOf(authors.asSequence().map { it.name }) }
         ),
-        LAST_NAME(Column.LAST_NAME, { if (authors.isNullOrEmpty()) null else authors[it.nextInt(authors.size)].lastFirst() },
+        LAST_NAME(Column.LAST_NAME, { if (authors.isEmpty()) null else authors[it.nextInt(authors.size)].lastFirst() },
             {
                 var o = this.sortLast.compareWith(it.sortLast, true)
                 if (o == 0)
@@ -521,7 +523,7 @@ class BookFilterTest {
             },
             { sequenceOf(authors.asSequence().map { it.lastFirst() }) }
         ),
-        CATEGORIES(Column.CATEGORIES, { if (categories.isNullOrEmpty()) null else categories[it.nextInt(categories.size)].category },
+        CATEGORIES(Column.CATEGORIES, { if (categories.isEmpty()) null else categories[it.nextInt(categories.size)].category },
             { this.sortCategory.compareWith(it.sortCategory, true) },
             {
                 map { book ->
@@ -532,7 +534,7 @@ class BookFilterTest {
                 }.flatten()
             }, { sequenceOf(categories.asSequence().map { it.category }) }
         ),
-        TAGS(Column.TAGS, { if (tags.isNullOrEmpty()) null else tags[it.nextInt(tags.size)].name },
+        TAGS(Column.TAGS, { if (tags.isEmpty()) null else tags[it.nextInt(tags.size)].name },
             { (this.sortTag).compareWith(it.sortTag, true) },
             {
                 map { book ->
@@ -543,7 +545,7 @@ class BookFilterTest {
                 }.flatten()
             }, { sequenceOf(tags.asSequence().map { it.name }) }
         ),
-        ISBNS(Column.ISBN, { if (isbns.isNullOrEmpty()) null else isbns[it.nextInt(isbns.size)].isbn },
+        ISBNS(Column.ISBN, { if (isbns.isEmpty()) null else isbns[it.nextInt(isbns.size)].isbn },
             { (this.sortIsbn).compareWith(it.sortIsbn, true) },
             {
                 map { book ->
@@ -630,6 +632,7 @@ class BookFilterTest {
         }
     }
 
+    @Suppress("UNINITIALIZED_ENUM_COMPANION_WARNING")
     private enum class PredicateTests(
         val string: String.(Array<String>) -> Boolean,
         val int: Int.(Array<String>) -> Boolean,
@@ -679,7 +682,7 @@ class BookFilterTest {
                     try {
                         if (this.test(v.cvt()))
                             return true
-                    } catch (e: Exception) {}
+                    } catch (_: Exception) {}
                 }
                 return false
             }
@@ -725,6 +728,7 @@ class BookFilterTest {
         }
     }
 
+    @Suppress("UNINITIALIZED_ENUM_COMPANION_WARNING")
     private enum class PredicateValue(
         val predicate: Predicate,
         val modifyString: String?.(Random) -> String?,

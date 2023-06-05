@@ -1,13 +1,13 @@
 package com.github.cleveard.bibliotech.db
 
 import androidx.room.*
-import androidx.sqlite.db.SimpleSQLiteQuery
 import java.lang.StringBuilder
 
 const val SERIES_TABLE = "series"
 const val SERIES_ID_COLUMN = "series_id"
 const val SERIES_SERIES_ID_COLUMN = "series_series_id"
-const val SERIES_IITLE_COLUMN = "series_title"
+const val SERIES_TITLE_COLUMN = "series_title"
+
 const val SERIES_FLAG_COLUMN = "series_flag"
 
 @Entity(tableName = SERIES_TABLE,
@@ -19,7 +19,7 @@ const val SERIES_FLAG_COLUMN = "series_flag"
 data class SeriesEntity (
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = SERIES_ID_COLUMN) var id: Long,
     @ColumnInfo(name = SERIES_SERIES_ID_COLUMN) var seriesId: String,
-    @ColumnInfo(name = SERIES_IITLE_COLUMN) var title: String,
+    @ColumnInfo(name = SERIES_TITLE_COLUMN) var title: String,
     @ColumnInfo(name = SERIES_FLAG_COLUMN, defaultValue = "0") var flags: Int
 ) {
     companion object {
@@ -35,7 +35,7 @@ abstract class SeriesDao(private val db: BookDatabase) {
 
     /**
      * Add a new series to the database
-     * @param the series
+     * @param seriesEntity The series
      * @return The id for the added series
      */
     @Insert
@@ -88,7 +88,7 @@ abstract class SeriesDao(private val db: BookDatabase) {
      */
     @Transaction
     open suspend fun deleteWithUndo(deleteSeries: Boolean): Int {
-        var count: Int = 0
+        var count = 0
         // Should we delete series
         if (deleteSeries) {
             // Yes get the id of the series affected

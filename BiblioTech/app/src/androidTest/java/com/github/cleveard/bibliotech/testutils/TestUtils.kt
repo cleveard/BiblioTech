@@ -1,4 +1,4 @@
-package com.github.cleveard.bibliotech
+package com.github.cleveard.bibliotech.testutils
 
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookEntity

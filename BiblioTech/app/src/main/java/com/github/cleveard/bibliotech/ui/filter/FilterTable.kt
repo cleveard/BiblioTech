@@ -11,7 +11,6 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel

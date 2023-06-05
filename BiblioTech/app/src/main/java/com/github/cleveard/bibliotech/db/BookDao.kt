@@ -183,7 +183,7 @@ data class BookAndAuthors(
     @ColumnInfo(name= TAGS_NAME_COLUMN) var sortTag: String? = null,
     @ColumnInfo(name= CATEGORY_COLUMN) var sortCategory: String? = null,
     @ColumnInfo(name= ISBN_COLUMN) var sortIsbn: String? = null,
-    @ColumnInfo(name= SERIES_IITLE_COLUMN) var sortSeries: String? = null,
+    @ColumnInfo(name= SERIES_TITLE_COLUMN) var sortSeries: String? = null,
 ) : Parcelable {
     /**
      * @inheritDoc
@@ -707,7 +707,6 @@ abstract class BookDao(private val db: BookDatabase) {
     /**
      * Get books modified before a specific time.
      * This is used to find books that may need the series updated
-     * @param time The time in milliseconds
      */
     @Transaction
     @Query("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ( ${BookEntity.HIDDEN} | ${BookEntity.SERIES} ) ) = 0 )")

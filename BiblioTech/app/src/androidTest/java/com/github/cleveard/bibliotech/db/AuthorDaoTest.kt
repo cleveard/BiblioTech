@@ -5,7 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.DisableOnAndroidDebug
-import com.github.cleveard.bibliotech.makeBookAndAuthors
+import com.github.cleveard.bibliotech.testutils.makeBookAndAuthors
 import com.github.cleveard.bibliotech.testutils.UndoTracker
 import com.google.common.truth.Truth.assertWithMessage
 import kotlinx.coroutines.runBlocking
@@ -52,7 +52,7 @@ class AuthorDaoTest {
         }
     }
 
-    suspend fun doTestAddUpdateDelete() {
+    private suspend fun doTestAddUpdateDelete() {
         val authorDao = db.getAuthorDao()
         val authors = listOf(
             AuthorEntity(id = 0L, lastName = "last1", remainingName = "first1"),

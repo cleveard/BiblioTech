@@ -2,7 +2,6 @@ package com.github.cleveard.bibliotech.db
 
 import androidx.lifecycle.LiveData
 import androidx.room.*
-import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.*
 import java.lang.Exception
 
@@ -69,7 +68,7 @@ abstract class ViewDao(private val db: BookDatabase) {
      * Get list of views
      */
     @Query(value = "SELECT * FROM $VIEWS_TABLE WHERE ( ( $VIEWS_FLAGS & ${ViewEntity.HIDDEN} ) = 0 )")
-    suspend abstract fun getViews(): List<ViewEntity>
+    abstract suspend fun getViews(): List<ViewEntity>
 
     /**
      * Add a view

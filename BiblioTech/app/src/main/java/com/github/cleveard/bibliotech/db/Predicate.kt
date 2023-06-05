@@ -386,7 +386,6 @@ private val le = object: PredicateDataDescription(R.string.le, "<=", false) {
 /**
  * The predicate available
  */
-@Suppress("unused")
 enum class Predicate(val desc: PredicateDataDescription) {
     /** Match one of several values */
     ONE_OF(oneOf),

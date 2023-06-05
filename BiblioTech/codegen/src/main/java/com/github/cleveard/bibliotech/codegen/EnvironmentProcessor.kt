@@ -21,9 +21,7 @@ class EnvironmentProcessor: AbstractProcessor() {
 
     override fun getSupportedAnnotationTypes(): MutableSet<String> {
         // processingEnv.messager.printMessage(Diagnostic.Kind.NOTE, "getSupportedAnnotationTypes")
-        val result = mutableSetOf(EnvironmentValues::class.java.name)
-        // processingEnv.messager.printMessage(Diagnostic.Kind.NOTE, "getSupportedAnnotationTypes return")
-        return result
+        return mutableSetOf(EnvironmentValues::class.java.name)
     }
 
     override fun process(types: MutableSet<out TypeElement>?, roundEnvironment: RoundEnvironment?): Boolean {
@@ -83,12 +81,12 @@ class EnvironmentProcessor: AbstractProcessor() {
     private fun createContent(packageName: String, name: String, variables: Array<out String>): String {
         // Create a list of the variables and their values. The list
         // contains strings formatted as arguments of mapOf()
-        val vals = variables.map {variable ->
+        val values = variables.mapNotNull { variable ->
             // Create the string for a variable. Generate an error message
             // when the variable doesn't exist
             System.getenv(variable)?.let { "\"$variable\" to \"$it\"" }
                 ?: processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "$variable: Missing environment variable").let { null }
-        }.filterNotNull().toList()
+        }.toList()
 
         // Return the content of the map
         return """
@@ -97,7 +95,7 @@ class EnvironmentProcessor: AbstractProcessor() {
             |class $name {
             |    companion object {
             |        private val envMap = mapOf(
-            |            ${vals.joinToString(",\n            ")}
+            |            ${values.joinToString(",\n            ")}
             |        )
             |        operator fun get(key: String): String? = envMap[key]
             |    }

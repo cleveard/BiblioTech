@@ -8,7 +8,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
-import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.ui.tags.TagViewModel
@@ -46,7 +45,7 @@ class TagModalAction private constructor(
      * @param item The MenuItem that initiated this action
      */
     @Suppress("UNUSED_PARAMETER")
-    fun addTags(item: MenuItem): Boolean {
+    private fun addTags(item: MenuItem): Boolean {
         addTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
@@ -56,7 +55,7 @@ class TagModalAction private constructor(
      * @param item The MenuItem that initiated this action
      */
     @Suppress("UNUSED_PARAMETER")
-    fun removeTags(item: MenuItem): Boolean {
+    private fun removeTags(item: MenuItem): Boolean {
         removeTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
@@ -66,7 +65,7 @@ class TagModalAction private constructor(
      * @param item The MenuItem that initiated this action
      */
     @Suppress("UNUSED_PARAMETER")
-    fun replaceTags(item: MenuItem): Boolean {
+    private fun replaceTags(item: MenuItem): Boolean {
         replaceTags(fragment.requireContext(), booksViewModel, tagViewModel)
         return true
     }
@@ -86,7 +85,7 @@ class TagModalAction private constructor(
      * @param item The MenuItem used to start the action. Used to choose select All of None
      */
     @Suppress("UNUSED_PARAMETER")
-    fun selectInvert(item: MenuItem): Boolean {
+    private fun selectInvert(item: MenuItem): Boolean {
         booksViewModel.selection.invertAsync()
         return true
     }
@@ -95,7 +94,7 @@ class TagModalAction private constructor(
      * {@inheritDoc}
      * Update the menu when the selection changes
      */
-    override fun onChanged(t: Int?) {
+    override fun onChanged(value: Int?) {
         updateMenu()
     }
 

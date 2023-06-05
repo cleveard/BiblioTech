@@ -115,7 +115,6 @@ internal class GoogleBookLookup {
                         }
                         result = auth.execute {
                             val request = callback(it)
-                            @Suppress("BlockingMethodInNonBlockingContext")
                             request.execute()
                         }
                         break
@@ -133,7 +132,6 @@ internal class GoogleBookLookup {
     }
 
     companion object {
-        @Suppress("SpellCheckingInspection")
         const val kSourceId = "books.google.com"
         private const val kISBNParameter = "isbn:%s"
         private const val kTitleParameter = "title:\"%s\""

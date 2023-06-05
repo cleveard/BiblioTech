@@ -24,7 +24,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.*
 import androidx.recyclerview.widget.ListAdapter
-import com.github.cleveard.bibliotech.MainActivity
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.Column
@@ -39,6 +38,7 @@ import kotlin.math.roundToInt
 class PrintFragment : Fragment() {
 
     companion object {
+        @Suppress("unused")
         fun newInstance() = PrintFragment()
 
         /**
@@ -497,7 +497,7 @@ class PrintFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Get the view model
-        viewModel = ViewModelProvider(this).get(PrintViewModel::class.java).apply {
+        viewModel = ViewModelProvider(this)[PrintViewModel::class.java].apply {
             // Create the print layouts and the PDF printer
             initialize(requireContext()) {id, large ->
                 booksViewModel.getThumbnail(id, large)
@@ -792,8 +792,8 @@ class PrintFragment : Fragment() {
                     try {
                         if (viewModel.pdfPrinter.bookList != null)
                             return@withContext viewModel.pdfPrinter.layoutPages()
-                    } catch (e: PDFPrinter.NoPagesException) {
-                    } catch (e: PDFPrinter.NoBooksException) {
+                    } catch (_: PDFPrinter.NoPagesException) {
+                    } catch (_: PDFPrinter.NoBooksException) {
                     }
                     null
                 }

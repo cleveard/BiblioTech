@@ -11,7 +11,6 @@ import java.io.IOException
 import java.lang.Exception
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import kotlin.reflect.jvm.internal.impl.protobuf.InvalidProtocolBufferException
 
 abstract class OAuth(
     context: Context,
@@ -59,7 +58,7 @@ abstract class OAuth(
                 authState.update(resp, ex)
                 save()
                 if (resp != null) {
-                    suspendCoroutine<Unit> {resume ->
+                    suspendCoroutine { resume ->
                         authService.performTokenRequest(
                             resp.createTokenExchangeRequest()
                         ) { response, ex ->
@@ -86,7 +85,7 @@ abstract class OAuth(
 
     @Throws(AuthException::class)
     suspend fun <T> execute(action: suspend (token:String?) -> T): T {
-        val result = suspendCoroutine<Triple<String?, String?, AuthorizationException?>> {
+        val result = suspendCoroutine {
             authState.performActionWithFreshTokens(authService) {token, id, ex ->
                 save()
                 it.resume(Triple(token, id, ex))

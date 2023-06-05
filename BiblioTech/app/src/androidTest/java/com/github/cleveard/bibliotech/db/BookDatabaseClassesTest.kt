@@ -2,7 +2,7 @@ package com.github.cleveard.bibliotech.db
 
 import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.cleveard.bibliotech.makeBook
+import com.github.cleveard.bibliotech.testutils.makeBook
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -365,7 +365,7 @@ class BookDatabaseClassesTest {
 
        val bundle = Bundle()
        bundle.putParcelable("book", book1)
-       val book3 = bundle.getParcelable<BookAndAuthors>("book")
+       val book3 = bundle.getParcelable("book", BookAndAuthors::class.java)
        assertThat(book3 == book1).isTrue()
        assertThat(book3.hashCode()).isEqualTo(book1.hashCode())
    }

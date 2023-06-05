@@ -82,7 +82,6 @@ open class BookPrintAdapter(
                     val pdf = pdfPrinter.writePDF(context, pages, writtenRanges)
 
                     // Save the written pdf
-                    @Suppress("BlockingMethodInNonBlockingContext")
                     pdf.writeTo(FileOutputStream(destination.fileDescriptor))
                 }
             } catch (e: Exception) {

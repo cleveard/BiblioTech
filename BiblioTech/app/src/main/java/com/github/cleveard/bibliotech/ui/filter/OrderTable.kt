@@ -118,10 +118,9 @@ class OrderTable(private val fragment: Fragment) {
     private fun connectListeners(row: Int, clear: Boolean = false) {
         // Get the rows
         val rowView = rows[row]
-        var view: View
 
         // Add remove row listener
-        view = rowView.findViewById(R.id.action_remove_order_row)
+        var view: View = rowView.findViewById(R.id.action_remove_order_row)
         view.setOnClickListener(if (clear) null else removeRowListener)
         view.tag = row
 

@@ -720,7 +720,7 @@ abstract class BookDatabase : RoomDatabase() {
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_series_id` ON `$BOOK_TABLE` (`$BOOK_SERIES_COLUMN`)")
 
                     // Add series table and indices
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$SERIES_TABLE` (`$SERIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$SERIES_SERIES_ID_COLUMN` TEXT NOT NULL, `$SERIES_IITLE_COLUMN` TEXT NOT NULL, `$SERIES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0)")
+                    database.execSQL("CREATE TABLE IF NOT EXISTS `$SERIES_TABLE` (`$SERIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$SERIES_SERIES_ID_COLUMN` TEXT NOT NULL, `$SERIES_TITLE_COLUMN` TEXT NOT NULL, `$SERIES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0)")
                     database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_series_series_id` ON `$SERIES_TABLE` (`$SERIES_ID_COLUMN`)")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_series_series_series_id` ON `$SERIES_TABLE` (`$SERIES_SERIES_ID_COLUMN`)")
                 }

@@ -69,7 +69,7 @@ class Thumbnails(dir: String = "db") {
     suspend fun deleteThumbFile(bookId: Long, large: Boolean) {
         try {
             withContext(Dispatchers.IO) { getThumbFile(bookId, large)?.delete() }
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
 
     /**
@@ -87,7 +87,7 @@ class Thumbnails(dir: String = "db") {
                     for (file in list) {
                         try {
                             recurse(file)
-                        } catch (e: IOException) {
+                        } catch (_: IOException) {
                         }
                     }
                 }
@@ -96,7 +96,7 @@ class Thumbnails(dir: String = "db") {
                     // Delete the file, if it isn't the top level cache directory
                     if (dir != MainActivity.cache)
                         dir.delete()
-                } catch (e: IOException) {
+                } catch (_: IOException) {
                 }
             }
 
@@ -179,7 +179,6 @@ class Thumbnails(dir: String = "db") {
     private suspend fun getThumbUrl(urlString: String?, file: File): URL? {
         // Return null if there isn't a thumbnail url
         urlString?: return null
-        @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO)  {
             var url: URL? = null
             try {
@@ -189,7 +188,7 @@ class Thumbnails(dir: String = "db") {
                 // Then, the data base was updated and we try to get the bitmap again
                 file.createNewFile()
                 url = tmpUrl
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
             url
         }
     }
@@ -207,21 +206,19 @@ class Thumbnails(dir: String = "db") {
 
         try {
             // Move the tmp file to the real file
-            @Suppress("BlockingMethodInNonBlockingContext")
             (withContext(Dispatchers.IO) {
         Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING)
     })
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
         return true
     }
 
     /**
      * Download the bitmap for a URL and cache
-     * @param url The url to download
+     * @param inUrl The url to download
      * @param file The cache file
      */
     private suspend fun downloadBitmap(inUrl: URL, file: File): File? {
-        @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO) {
             var result = false
             var connection: HttpURLConnection? = null
@@ -260,13 +257,13 @@ class Thumbnails(dir: String = "db") {
             if (buffered != null) {
                 try {
                     buffered.close()
-                } catch (e: IOException) {
+                } catch (_: IOException) {
                 }
             }
             if (stream != null) {
                 try {
                     stream.close()
-                } catch (e: IOException) {
+                } catch (_: IOException) {
                 }
             }
             connection?.disconnect()

@@ -1181,8 +1181,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     @Transaction
     protected open suspend fun copyForSeriesUndo(seriesId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $SERIES_TABLE ( $SERIES_ID_COLUMN, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN )
-                | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_IITLE_COLUMN, $SERIES_FLAG_COLUMN | ${SeriesEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
+            """INSERT INTO $SERIES_TABLE ( $SERIES_ID_COLUMN, $SERIES_SERIES_ID_COLUMN, $SERIES_TITLE_COLUMN, $SERIES_FLAG_COLUMN )
+                | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_TITLE_COLUMN, $SERIES_FLAG_COLUMN | ${SeriesEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(seriesId)
         ))
