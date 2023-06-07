@@ -7,8 +7,9 @@ apply plugin: 'kotlin'
 apply plugin: 'kotlin-kapt'
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 sourceSets {
@@ -33,6 +34,3 @@ dependencies {
     kapt "com.google.auto.service:auto-service:1.0.1"
 
 }
-
-sourceCompatibility = "8"
-targetCompatibility = "8"
