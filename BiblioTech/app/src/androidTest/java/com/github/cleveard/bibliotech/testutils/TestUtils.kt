@@ -4,8 +4,8 @@ import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookEntity
 import java.util.*
 
-val bookTestNow = Calendar.getInstance().timeInMillis
 fun makeBook(unique: Int = 0, flags: Int = 0, uniqueString: String = unique.toString()): BookEntity {
+    val bookTestNow = Calendar.getInstance().timeInMillis
     return BookEntity(
         id = 0L,
         volumeId = "volumeId$uniqueString",
@@ -19,8 +19,8 @@ fun makeBook(unique: Int = 0, flags: Int = 0, uniqueString: String = unique.toSt
         rating = 3.14 + unique.toFloat() / 10.0f,
         seriesId = null,
         seriesOrder = unique + 4,
-        added = Date(bookTestNow + unique.toLong() * (60 * 60* 24)),
-        modified = Date(bookTestNow + (unique.toLong() + 22) * (60 * 60* 24)),
+        added = Date(bookTestNow),
+        modified = Date(bookTestNow),
         smallThumb = "smallThumb$unique",
         largeThumb = "largeThumb$unique",
         flags = flags,

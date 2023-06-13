@@ -56,7 +56,7 @@ const val kAsc = "ASC"
         BookAndIsbnEntity::class,
         SeriesEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -76,6 +76,8 @@ abstract class BookDatabase : RoomDatabase() {
      * @param idColumn The name of the row id column for the table
      * @param flagColumn The name of the flags column for the table
      * @param flagValue The value of the HIDDEN flag for the table
+     * @param flagPreserved Flag values to preserve for the table
+     * @param modTimeColumn The name of the time modified column
      * @param bookIdColumn The name of the book id column in a link table
      * @param linkIdColumn The name of the link id column in a link table
      */
@@ -85,6 +87,7 @@ abstract class BookDatabase : RoomDatabase() {
         val flagColumn: String?,
         val flagValue: Int,
         val flagPreserved: Int,
+        val modTimeColumn: String?,
         val bookIdColumn: String?,
         val linkIdColumn: String?
     ) {
@@ -199,27 +202,27 @@ abstract class BookDatabase : RoomDatabase() {
 
     companion object {
         /** The book table descriptor */
-        val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, BookEntity.PRESERVE, null, null)
+        val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, BookEntity.PRESERVE, DATE_MODIFIED_COLUMN, null, null)
         /** The authors table descriptor */
-        val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, AuthorEntity.PRESERVE, null, null)
+        val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, AuthorEntity.PRESERVE, null, null, null)
         /** The categories table descriptor */
-        val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, CategoryEntity.PRESERVE, null, null)
+        val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, CategoryEntity.PRESERVE, null, null, null)
         /** The tags table descriptor */
-        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, TagEntity.PRESERVE, null, null)
+        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, TagEntity.PRESERVE, null, null, null)
         /** The series table descriptor */
-        val seriesTable = TableDescription(SERIES_TABLE, SERIES_ID_COLUMN, SERIES_FLAG_COLUMN, SeriesEntity.HIDDEN, SeriesEntity.PRESERVE, null, null)
+        val seriesTable = TableDescription(SERIES_TABLE, SERIES_ID_COLUMN, SERIES_FLAG_COLUMN, SeriesEntity.HIDDEN, SeriesEntity.PRESERVE, null, null, null)
         /** The views table descriptor */
-        val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, ViewEntity.PRESERVE, null, null)
+        val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, ViewEntity.PRESERVE, null, null, null)
         /** The book_authors link table descriptor */
-        val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, 0, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+        val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, 0, null, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
         /** The book_categories link table descriptor */
-        val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, 0, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
+        val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, 0, null, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
         /** The book_tags link table descriptor */
-        val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, 0, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
+        val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, 0, null, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
         /** The isbns table descriptor */
-        val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, IsbnEntity.PRESERVE, null, null)
+        val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, IsbnEntity.PRESERVE, null, null, null)
         /** The book_isbns link table descriptor */
-        val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
+        val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, null, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
 
         /** Undo levels preference key */
         const val UNDO_LEVEL_KEY = "undo_levels"
@@ -723,6 +726,12 @@ abstract class BookDatabase : RoomDatabase() {
                     database.execSQL("CREATE TABLE IF NOT EXISTS `$SERIES_TABLE` (`$SERIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$SERIES_SERIES_ID_COLUMN` TEXT NOT NULL, `$SERIES_TITLE_COLUMN` TEXT NOT NULL, `$SERIES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0)")
                     database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_series_series_id` ON `$SERIES_TABLE` (`$SERIES_ID_COLUMN`)")
                     database.execSQL("CREATE INDEX IF NOT EXISTS `index_series_series_series_id` ON `$SERIES_TABLE` (`$SERIES_SERIES_ID_COLUMN`)")
+                }
+            },
+            object: Migration(7,8) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    database.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
+
                 }
             }
         )

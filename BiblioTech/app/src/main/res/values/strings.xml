@@ -180,6 +180,7 @@
     <string name="deleteBooksUndo">Delete Books</string>
     <string name="addTagUndo">Add/Update Tag %1$s</string>
     <string name="deleteTagsUndo">Delete Tags</string>
+    <string name="replaceTagsUndo">Replace Tags</string>
     <string name="tagBooksUndo">Tag Books</string>
     <string name="untagBooksUndo">Untag Books</string>
     <string name="addViewUndo">Add/Update View %1$s</string>

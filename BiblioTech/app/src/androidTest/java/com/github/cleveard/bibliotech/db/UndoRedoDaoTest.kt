@@ -20,6 +20,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.Timeout
 import org.junit.runner.RunWith
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
@@ -836,29 +837,39 @@ class UndoRedoDaoTest {
             }
         }
         fun updateAddBooks(books: List<BookAndAuthors>, tags: List<TagEntity>) {
+            val mod = Calendar.getInstance().time
             for (b in books) {
                 if (bookFilter?.filterList?.get(0)?.values?.contains(b.book.title) != false) {
                     val newTags = ArrayList<TagEntity>(b.tags)
+                    var changed = false
                     for (t in tags) {
                         if (!newTags.contains(t)) {
+                            changed = true
                             newTags.add(t)
                             tables.tagEntities.linked(t)
                         }
                     }
+                    if (changed)
+                        b.book.modified = mod
                     b.tags = newTags
                 }
             }
         }
         fun updateRemoveBooks(books: List<BookAndAuthors>, tags: List<TagEntity>, invert: Boolean) {
+            val mod = Calendar.getInstance().time
             for (b in books) {
                 if (bookFilter?.filterList?.get(0)?.values?.contains(b.book.title) != false) {
                     val newTags = ArrayList<TagEntity>(b.tags)
+                    var changed = false
                     for (t in tables.tagEntities.entities) {
                         if (tags.contains(t) != invert && newTags.contains(t)) {
+                            changed = true
                             newTags.remove(t)
                             tables.tagEntities.unlinked(t)
                         }
                     }
+                    if (changed)
+                        b.book.modified = mod
                     b.tags = newTags
                 }
             }

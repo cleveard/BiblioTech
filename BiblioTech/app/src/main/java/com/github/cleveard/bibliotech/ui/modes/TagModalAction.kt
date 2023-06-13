@@ -250,8 +250,10 @@ class TagModalAction private constructor(
         ): Boolean {
             execute(context, booksViewModel, tagViewModel,
                 R.plurals.ask_replace_tag_books, true) {
-                booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter, true)
-                booksViewModel.repo.addTagsToBooks(null, null, booksViewModel.idFilter)
+                booksViewModel.repo.withUndo(context.resources.getString(R.string.replaceTagsUndo)) {
+                    booksViewModel.repo.removeTagsFromBooks(null, null, booksViewModel.idFilter, true)
+                    booksViewModel.repo.addTagsToBooks(null, null, booksViewModel.idFilter)
+                }
                 // Finish the acton
                 onFinished?.run()
             }

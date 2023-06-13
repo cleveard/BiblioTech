@@ -166,8 +166,9 @@ abstract class TagDao(private val db: BookDatabase) {
         db.getBookTagDao().deleteTagsForBooksWithUndo(arrayOf(bookId), null, list, true)
 
         // Add the tags that we want
-        val tagList = db.getTagDao().queryTagIds(list)
-        db.getBookTagDao().addTagsToBookWithUndo(bookId, tagList)
+        db.getTagDao().queryTagIds(list)?.let {
+            db.getBookTagDao().addTagsToBookWithUndo(bookId, it)
+        }
     }
 
     @Transaction
@@ -540,7 +541,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
             UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
                 db.execUpdateDelete(
                     SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
-                )
+                ).also {
+                    if (it > 0)
+                        db.getUndoRedoDao().setBooksModified(bookIds, filter)
+                }
             }
         }?: 0
     }
@@ -640,10 +644,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @return The number of links added
      */
     @Transaction
-    open suspend fun addTagsToBookWithUndo(bookId: Long, tagIds: List<Long>?): Int {
-        return tagIds?.asFlow()?.map { tag ->
+    open suspend fun addTagsToBookWithUndo(bookId: Long, tagIds: List<Long>): Int {
+        return tagIds.asFlow().map { tag ->
             if (addTagToBookWithUndo(bookId, tag) != 0L) 1 else 0
-        }?.fold(0) { a, v -> a + v }?: 0
+        }.fold(0) { a, v -> a + v }
     }
 
     /**
@@ -653,10 +657,10 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @return The number of links added
      */
     @Transaction
-    open suspend fun addTagsToBooksWithUndo(bookIds: List<Long>?, tagIds: List<Long>?): Int {
-        return bookIds?.asFlow()?.map {book ->
+    open suspend fun addTagsToBooksWithUndo(bookIds: List<Long>, tagIds: List<Long>): Int {
+        return bookIds.asFlow().map {book ->
             addTagsToBookWithUndo(book, tagIds)
-        }?.fold(0) { a, v -> a + v }?: 0
+        }.fold(0) { a, v -> a + v }
     }
 
     /**
@@ -668,9 +672,12 @@ abstract class BookTagDao(private val db:BookDatabase) {
      */
     @Transaction
     open suspend fun addTagsToBooksWithUndo(bookIds: Array<Any>?, tagIds: Array<Any>?, filter: BookFilter.BuiltFilter?): Int {
-        val bookList = db.getBookDao().queryBookIds(bookIds, filter)
-        val tagList = db.getTagDao().queryTagIds(tagIds)
-        return addTagsToBooksWithUndo(bookList, tagList)
+        val bookList = db.getBookDao().queryBookIds(bookIds, filter)?: return 0
+        val tagList = db.getTagDao().queryTagIds(tagIds)?: return 0
+        return addTagsToBooksWithUndo(bookList, tagList).also {
+            if (it > 0)
+                db.getUndoRedoDao().setBooksModified(bookList)
+        }
     }
 
     /**

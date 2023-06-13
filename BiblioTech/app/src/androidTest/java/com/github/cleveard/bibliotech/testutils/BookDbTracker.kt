@@ -22,6 +22,12 @@ fun StandardSubjectBuilder.compareBooks(actual: BookAndAuthors?, expected: BookA
     else {
         // The book entities need to be the same, and so do the lists, but not
         // necessarily in the same order
+        // If the modified date is reasonable, set the expected date to the modified date
+        if (actual.book.modified.time > expected.book.modified.time &&
+            actual.book.modified.time <= Calendar.getInstance().timeInMillis) {
+            // Seems OK, make the expected the actual
+            expected.book.modified = actual.book.modified
+        }
         that(actual.book).isEqualTo(expected.book)
         that(actual.authors).containsExactlyElementsIn(expected.authors)
         that(actual.categories).containsExactlyElementsIn(expected.categories)

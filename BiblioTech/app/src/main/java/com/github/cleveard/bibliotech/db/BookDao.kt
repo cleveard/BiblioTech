@@ -645,6 +645,43 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     /**
+     * Update the modified time for modifiied books
+     * @param e Expression to select the modified books
+     * @param time The current time
+     * @return The number of books updated
+     */
+    @Transaction
+    protected open suspend fun updateModifiedTime(e: WhereExpression, time: Long): Int {
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE OR IGNORE $BOOK_TABLE SET $DATE_MODIFIED_COLUMN = $time ${e.expression}", e.args))
+    }
+
+    /**
+     * Update the modified time for modifiied books
+     * @param bookIds The set of modified book ids
+     */
+    @Transaction
+    open suspend fun updateModifiedTimeWithUndo(bookIds: MutableSet<Long>): Int {
+        return if (bookIds.isNotEmpty()) {
+            (BookDatabase.buildWhereExpressionForIds(
+                BOOK_FLAGS, BookEntity.HIDDEN, null,
+                BOOK_ID_COLUMN,
+                {
+                    "SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 "
+                },
+                bookIds.toTypedArray<Any>(),
+                false
+            )?.let {e ->
+                UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK.recordModTimeUpdate(db.getUndoRedoDao(), e, Calendar.getInstance().timeInMillis) { exp, time ->
+                    updateModifiedTime(exp, time)
+                }
+            }?: 0).also {
+                bookIds.clear()
+            }
+        } else
+            0
+    }
+
+    /**
      * Get a book by id
      * @param bookId The id of the book
      * BookAndAuthors contains optional fields that are not in all queries,

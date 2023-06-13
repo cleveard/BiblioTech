@@ -22,6 +22,7 @@ const val OPERATION_OPERATION_ID_COLUMN = "operation_operation_id"
 const val OPERATION_TYPE_COLUMN = "operation_type"
 const val OPERATION_CUR_ID_COLUMN = "operation_cur_id"
 const val OPERATION_OLD_ID_COLUMN = "operation_old_id"
+const val OPERATION_MOD_TIME_COLUMN = "operation_mod_time"
 
 /**
  * Holder for a WHERE clause with arguments
@@ -73,6 +74,7 @@ data class UndoRedoOperationEntity(
     @ColumnInfo(name = OPERATION_TYPE_COLUMN) var type: UndoRedoDao.OperationType,
     @ColumnInfo(name = OPERATION_CUR_ID_COLUMN) var curId: Long,
     @ColumnInfo(name = OPERATION_OLD_ID_COLUMN, defaultValue = "0") var oldId: Long = 0,
+    @ColumnInfo(name = OPERATION_MOD_TIME_COLUMN, defaultValue = "NULL") var modTime: Long? = null,
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = OPERATION_ID_COLUMN) var id: Long = 0L
 )
 
@@ -138,7 +140,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 super.redo(dao, op)
             }
         }) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
@@ -206,7 +208,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
              * @inheritDoc
              * Delete multiple tag entities
              */
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
@@ -228,7 +230,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete ViewEntities operation */
         DELETE_VIEW(DeleteDataDescriptor(BookDatabase.viewsTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
@@ -250,7 +252,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete BookAuthorEntities operation */
         DELETE_BOOK_AUTHOR_LINK(DeleteLinkDescriptor(BookDatabase.bookAuthorsTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
@@ -262,7 +264,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete BookCategoryEntities operation */
         DELETE_BOOK_CATEGORY_LINK(DeleteLinkDescriptor(BookDatabase.bookCategoriesTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
@@ -274,7 +276,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete BookTagEntities operation */
         DELETE_BOOK_TAG_LINK(DeleteLinkDescriptor(BookDatabase.bookTagsTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
@@ -298,7 +300,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete BookCategoryEntities operation */
         DELETE_BOOK_ISBN_LINK(DeleteLinkDescriptor(BookDatabase.bookIsbnsTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDeleteLinks(this, expression, delete)
             }
         },
@@ -310,7 +312,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         },
         /** Delete a SeriesEntity operation */
         DELETE_SERIES(DeleteDataDescriptor(BookDatabase.seriesTable)) {
-            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
         },
@@ -322,6 +324,11 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 if (dao.started > 0)
                     return dao.recordUpdate(this, id, dao.copyForSeriesUndo(id), update)
                 return update()
+            }
+        },
+        UPDATE_MOD_TIME_BOOK(UpdateModTimeDescriptor(BookDatabase.bookTable)) {
+            override suspend fun recordModTimeUpdate(dao: UndoRedoDao, e: WhereExpression, t: Long, update: suspend (expression: WhereExpression, time: Long) -> Int): Int {
+                return dao.recordModTimeUpdate(this, e, t, update)
             }
         };
 
@@ -361,7 +368,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
          * @param expression A WHERE clause used to select the entities deleted
          * @param delete A lambda used to delete the entity. It should return the number of entities deleted.
          */
-        open suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+        open suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
             throw IllegalRecordingException("RecordDelete not implemented for ${desc.table.name}")
         }
 
@@ -373,6 +380,18 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
          */
         open suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
             throw IllegalRecordingException("RecordUpdate not implemented for ${desc.table.name}")
+        }
+
+        /**
+         * Record a modified time update
+         * @param dao The UndoRedoDao
+         * @param e A WHERE clause used to select the entities modified
+         * @param t The current time
+         * @param update A lambda used to update the entity. It should return -1 for failure,
+         *               or the number of modified entities updated
+         */
+        open suspend fun recordModTimeUpdate(dao: UndoRedoDao, e: WhereExpression, t: Long, update: suspend (expression: WhereExpression, time: Long) -> Int): Int {
+            throw IllegalRecordingException("RecordModTimeUpdate not implemented for ${desc.table.name}")
         }
     }
 
@@ -409,6 +428,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         private set
     /** The operation count in the current undo transaction */
     private var operationCount = 0
+    /** Set of modified book ids */
+    private val modifiedIds: MutableSet<Long> = mutableSetOf()
 
     /** Initialize the undo from the database */
     private suspend fun initUndo() {
@@ -530,7 +551,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param delete Lambda to perform the delete operation. It returns the number of entities deleted
      * @return The number of entities deleted
      */
-    private fun recordDelete(type: OperationType, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+    private suspend fun recordDelete(type: OperationType, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
         if (started <= 0) {
             // If we are not recording, use the WHERE clause to directly delete the entities
             return db.execUpdateDelete(SimpleSQLiteQuery(
@@ -582,13 +603,46 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
+     * Record an update operation
+     * @param undoType The undo operation type
+     * @param e The expression to selected the modified entities
+     * @param t The current time
+     * @param update A Lambda used to perform the update
+     * @return The number of entities updated or -1 on error
+     */
+    private suspend fun recordModTimeUpdate(undoType: OperationType, e: WhereExpression, t: Long, update: suspend (expression: WhereExpression, time: Long) -> Int): Int {
+        val column = undoType.desc.table.modTimeColumn?: return 0
+        if (started <= 0) {
+            // If we are not recording, use the WHERE clause to directly update the entities
+            return update(e, t)
+        }
+
+        // Use an INSERT command to add operation entities for each entity deleted
+        // Since this command uses the same WHERE clause as the delete, we won't insert anything
+        // if nothing is deleted.
+        db.execUpdateDelete(SimpleSQLiteQuery(
+            """INSERT OR ABORT INTO $OPERATION_TABLE ( $OPERATION_ID_COLUMN, $OPERATION_UNDO_ID_COLUMN, $OPERATION_OPERATION_ID_COLUMN, $OPERATION_TYPE_COLUMN, $OPERATION_CUR_ID_COLUMN, $OPERATION_OLD_ID_COLUMN, $OPERATION_MOD_TIME_COLUMN )
+            | SELECT null, $undoId, $operationCount, ${undoType.ordinal}, ${undoType.desc.table.idColumn}, $column, $t FROM ${undoType.desc.table.name}${e.expression}
+        """.trimMargin(),
+            e.args
+        )).also {
+            // Only bump the operation count if something was inserted
+            if (it != 0)
+                ++operationCount
+        }
+
+        // Actually update the entities
+        return update(e, t)
+    }
+
+    /**
      * Record a delete link operation
      * @param type The operation type
      * @param expression A WHERE clause to select the links to delete
      * @param delete Lambda to perform the delete operation. It returns the number of entities deleted
      * @return The number of entities deleted
      */
-    private fun recordDeleteLinks(type: OperationType, expression: WhereExpression, delete: (WhereExpression) -> Int): Int {
+    private suspend fun recordDeleteLinks(type: OperationType, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
         if (started > 0) {
             // We recording, so insert operations to record all of the links deleted
             // Since this command uses the same WHERE clause as the delete, we won't insert anything
@@ -618,6 +672,14 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         return undoId in 0 until maxUndoId
     }
 
+    fun setBooksModified(bookIds: List<Long>) {
+        modifiedIds.addAll(bookIds)
+    }
+
+    suspend fun setBooksModified(bookIds: Array<Any>?, filter: BookFilter.BuiltFilter?) {
+        db.getBookDao().queryBookIds(bookIds, filter)?.let { modifiedIds.addAll(it) }
+    }
+
     /**
      * Run a transaction with undo
      * @param desc Description of the transaction
@@ -627,7 +689,11 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     suspend fun <T> withUndo(desc: String, isRecording: Array<Boolean>? = null, operation: suspend () -> T): T {
         // If undo is disable, just run the operation
         if (maxUndoLevels == 0)
-            return operation()
+            return operation().also {
+                // Update the modified books modified time
+                if (modifiedIds.isNotEmpty() && started <= 1)
+                    db.getBookDao().updateModifiedTimeWithUndo(modifiedIds)
+            }
 
         var finished = false    // Did we finish the operation
         try {
@@ -651,6 +717,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                     if (undoId <= maxUndoId)
                         discard(true, undoId, maxUndoId)
                     maxUndoId = undoId
+                    // Clear the modified book ids
+                    modifiedIds.clear()
                 }
             }
 
@@ -669,6 +737,9 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                     // If we didn't finish, then there was an error
                     if (!finished)
                         errorInUndo = true
+                    // Update the modified books, but don't decrement started yet
+                    if (modifiedIds.isNotEmpty() && !errorInUndo)
+                        db.getBookDao().updateModifiedTimeWithUndo(modifiedIds)
                     // Are we at the outermost undo
                     if (--started <= 0) {
                         // Yes, make sure started is 0
@@ -1410,6 +1481,30 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
+        }
+    }
+
+    /**
+     * Descriptor for modified time updates
+     * @param table The table the operation applies to
+     */
+    private open class UpdateModTimeDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            dao.db.execUpdateDelete(SimpleSQLiteQuery(
+                "UPDATE OR IGNORE $BOOK_TABLE SET $DATE_MODIFIED_COLUMN = ${op.oldId} WHERE $BOOK_ID_COLUMN = ${op.curId}"
+            ))
+        }
+
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+        }
+
+        override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            dao.db.execUpdateDelete(SimpleSQLiteQuery(
+                "UPDATE OR IGNORE $BOOK_TABLE SET $DATE_MODIFIED_COLUMN = ${op.modTime} WHERE $BOOK_ID_COLUMN = ${op.curId}"
+            ))
+        }
+
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
         }
     }
 }
