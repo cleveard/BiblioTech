@@ -30,8 +30,8 @@ android {
         applicationId "com.github.cleveard.BiblioTech"
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 11
-        versionName "1.0.alpha12"
+        versionCode 12
+        versionName "1.0.alpha13"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
