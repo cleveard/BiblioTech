@@ -320,4 +320,5 @@
         BiblioTech can search to find series that your books belong to.
         \n\nPress the Start button to start the process. You can Stop it an any time and restart from where you left off.
     </string>
+    <string name="selected_books_only">Selected Books Only</string>
 </resources>

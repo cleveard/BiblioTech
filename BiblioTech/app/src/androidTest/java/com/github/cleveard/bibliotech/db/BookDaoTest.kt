@@ -370,7 +370,7 @@ class BookDaoTest {
         val expected = BookDbTracker.addBooks(db,56542358L, "GetBookList", 20)
         assertWithMessage("GetBookList").apply {
             // Get the list of books
-            val source = db.getBookDao().getBookList().getLive()
+            val source = db.getBookDao().getBookList(false).getLive()
             // Make sure they are correct
             that(source).isNotNull()
             source!!
@@ -400,7 +400,7 @@ class BookDaoTest {
         assertWithMessage("GetBookListFiltered").apply {
             // Get the list of books
             val filter = expected.makeFilter()
-            val source = db.getBookDao().getBookList(filter, context).getLive()
+            val source = db.getBookDao().getBookList(filter, false, context).getLive()
             // Make sure it is correct
             that(source).isNotNull()
             source!!

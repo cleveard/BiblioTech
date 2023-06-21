@@ -150,6 +150,10 @@ class ExportImportFragment : Fragment() {
 
     /** The filter used for the export */
     private var filter: ViewName = ViewName(null, "")
+        set(v) {
+            field = v
+            viewModel.exportCount.setFilter(v.name, requireContext())
+        }
 
     /** Launcher used to get the content for exporting books */
     private val exportBooksLauncher: ActivityResultLauncher<String> =
@@ -266,8 +270,21 @@ class ExportImportFragment : Fragment() {
         }
 
         // Start export when export button clicked
-        view.findViewById<Button>(R.id.action_export_books).setOnClickListener {
-            exportBooksLauncher.launch("books.csv", null)
+        view.findViewById<Button>(R.id.action_export_books).apply {
+            setOnClickListener {
+                exportBooksLauncher.launch("books.csv", null)
+            }
+            isEnabled = (viewModel.exportCount.value?: 0) > 0
+            viewModel.exportCount.observe(viewLifecycleOwner) {
+                isEnabled = (viewModel.exportCount.value?: 0) > 0
+            }
+        }
+
+        view.findViewById<CheckBox>(R.id.export_import_selected_only).apply {
+            setOnClickListener {
+                if (isEnabled)
+                    viewModel.exportCount.setSelectedOnly(isChecked, requireContext())
+            }
         }
 
         // Start export when export button clicked
@@ -365,7 +382,7 @@ class ExportImportFragment : Fragment() {
             // Get the book filter for the export
             val bookFilter = filter.name?.let { viewModel.repo.findViewByName(it) }?.filter
             // Get the PageSource for the books
-            val source = bookFilter?.let { viewModel.repo.getBookList(it, requireContext()) }?: viewModel.repo.getBookList()
+            val source = bookFilter?.let { viewModel.repo.getBookList(it, viewModel.exportCount.selectedOnly, requireContext()) }?: viewModel.repo.getBookList(viewModel.exportCount.selectedOnly)
             @Suppress("BlockingMethodInNonBlockingContext")
             // Start the export
             doExport(path) {stream ->

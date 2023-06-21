@@ -135,6 +135,7 @@ abstract class SQLiteQueryBuilder(context: Context): BuildQuery(context) {
     /**
      * Collect the filter expressions from iterator of FilterFields
      * @param list The list FilterFields to process
+     * @param selectedOnly True to build a filter that only returns selected items
      */
     fun buildFilter(list: Iterator<FilterField>) {
         for (f in list) {

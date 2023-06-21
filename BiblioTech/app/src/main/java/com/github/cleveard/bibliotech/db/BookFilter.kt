@@ -88,21 +88,29 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
  * @param context The context to use for Date interpretation
  * @param select The columns to select for the filter
  * @param excludeOrder True to exclude the order terms
+ * @param selectedOnly True to build a filter to return only selected items
  */
-fun BookFilter?.buildFilter(context: Context, select: Array<String>, excludeOrder: Boolean = false): BookFilter.BuiltFilter? {
+fun BookFilter?.buildFilter(context: Context, select: Array<String>, excludeOrder: Boolean = false, selectedOnly: Boolean = false): BookFilter.BuiltFilter? {
     // If we aren't selecting anything or this is null, then return null
-    if (select.isEmpty() || this == null || filterList.isEmpty())
+    if (this == null) {
+        if (!selectedOnly)
+            return null
+    } else if (this.filterList.isEmpty() && (excludeOrder || this.orderList.isEmpty()))
         return null
     // Build the  SQLite command to get the book ids for the filter
-    val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(context, BookDatabase.bookTable)
+    val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(selectedOnly, context, BookDatabase.bookTable)
     // We only need the book id column
     for (s in select)
         idFilterBuilder.addSelect(s)
-    // Include the order terms
-    if (!excludeOrder)
-        idFilterBuilder.buildOrder(orderList.iterator())
-    // Build the filter
-    idFilterBuilder.buildFilter(filterList.iterator())
+
+    if (this != null) {
+        // Include the order terms
+        if (!excludeOrder)
+            idFilterBuilder.buildOrder(orderList.iterator())
+        // Build the filter
+        idFilterBuilder.buildFilter(filterList.iterator())
+    }
+
     return BookFilter.BuiltFilter(
         idFilterBuilder.createCommand(),
         idFilterBuilder.argList.toArray()
@@ -116,11 +124,13 @@ open class BookFilterCompanion {
     /**
      * Build an SQLite query from a filter description
      * @param filter The filter description
+     * @param selectedOnly True to build a filter to return selected items
      * @param context The context used to get the locale for parsing dates
+     * @param table The database table the query applies to
      */
-    fun buildFilterQuery(filter: BookFilter, context: Context, table: BookDatabase.TableDescription): SupportSQLiteQuery {
+    fun buildFilterQuery(filter: BookFilter, selectedOnly: Boolean, context: Context, table: BookDatabase.TableDescription): SupportSQLiteQuery {
         // The object used to build the query
-        val builder = SQLiteQueryBuilderImpl(context, table)
+        val builder = SQLiteQueryBuilderImpl(selectedOnly, context, table)
 
         // Add all book columns first
         for (column in ALL_BOOK_COLUMNS)
@@ -136,10 +146,11 @@ open class BookFilterCompanion {
 
     /**
      * Create a new SQLiteQueryBuilder
+     * @param selectedOnly True to create a builder for selected items only
      * @param context The context used to get the locale for parsing dates
      */
-    fun newSQLiteQueryBuilder(context: Context, table: BookDatabase.TableDescription): SQLiteQueryBuilder {
-        return SQLiteQueryBuilderImpl(context, table)
+    fun newSQLiteQueryBuilder(selectedOnly: Boolean, context: Context, table: BookDatabase.TableDescription): SQLiteQueryBuilder {
+        return SQLiteQueryBuilderImpl(selectedOnly, context, table)
     }
 
     /**
@@ -236,9 +247,10 @@ open class BookFilterCompanion {
 
 /**
  * Implementation of class to build SQLite queries
+ * @param selectedOnly Creates a build that only return selected items
  * @param context The context for the locale. Used for interpreting dates
  */
-private class SQLiteQueryBuilderImpl(context: Context, table: BookDatabase.TableDescription): SQLiteQueryBuilder(context) {
+private class SQLiteQueryBuilderImpl(selectedOnly: Boolean, context: Context, table: BookDatabase.TableDescription): SQLiteQueryBuilder(context) {
     // The select columns
     private val selectSpec: StringBuilder = StringBuilder()
     // Joins
@@ -246,7 +258,7 @@ private class SQLiteQueryBuilderImpl(context: Context, table: BookDatabase.Table
     // Order columns
     private val orderSpec: StringBuilder = StringBuilder()
     // Where expression
-    private val filterSpec: StringBuilder = StringBuilder(table.getVisibleExpression())
+    private val filterSpec: StringBuilder = StringBuilder(table.getVisibleExpression(false, selectedOnly))
     // Holds expressions for a single field
     private val filterFieldExpression: StringBuilder = StringBuilder()
     // Holds rollback of argList if filterFieldExpression is abandoned
@@ -336,7 +348,7 @@ private class SQLiteQueryBuilderImpl(context: Context, table: BookDatabase.Table
 
     /** @inheritDoc */
     override fun newSQLiteBuilder(table: BookDatabase.TableDescription): SQLiteQueryBuilder {
-        return SQLiteQueryBuilderImpl(context, table)
+        return SQLiteQueryBuilderImpl(false, context, table)
     }
 }
 

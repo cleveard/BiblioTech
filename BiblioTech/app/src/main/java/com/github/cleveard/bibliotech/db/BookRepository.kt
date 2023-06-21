@@ -4,10 +4,13 @@ import android.content.Context
 import android.database.Cursor
 import android.graphics.Bitmap
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MediatorLiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.paging.PagingSource
 import com.github.cleveard.bibliotech.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import java.util.*
 
 /**
@@ -47,6 +50,42 @@ class BookRepository private constructor(context: Context) {
          * @return The number of rows changed in a LiveData
          */
         fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
+    }
+
+    inner class FilteredBookCount(val scope: CoroutineScope): MediatorLiveData<Int>(0) {
+        private var counter: LiveData<Int> = bookFlags.countBitsLive(0, 0, true, null, null)
+        private val _builtFilter: MutableLiveData<BookFilter.BuiltFilter?> = MutableLiveData<BookFilter.BuiltFilter?>().also { live ->
+            fun addSource() {
+                counter = bookFlags.countBitsLive(0, 0, true, null, live.value)
+                addSource(counter) {
+                    if (value != it)
+                        value = it
+                }
+            }
+            addSource()
+            addSource(live) {
+                removeSource(counter)
+                addSource()
+            }
+        }
+        private var viewName: String? = null
+            private set
+        fun setFilter(name: String?, context: Context) {
+            viewName = name
+            buildFilter(context)
+        }
+        var selectedOnly: Boolean = false
+            private set
+        fun setSelectedOnly(value: Boolean, context: Context) {
+            selectedOnly = value
+            buildFilter(context)
+        }
+        private fun buildFilter(context: Context) {
+            scope.launch {
+                _builtFilter.value = viewName?.let { findViewByName(it) }
+                    ?.filter.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true, selectedOnly)
+            }
+        }
     }
 
     companion object {
@@ -203,19 +242,22 @@ class BookRepository private constructor(context: Context) {
 
     /**
      * Get books from the data base
+     * @param selectedOnly True to return only the list of selected books
      * @return A PagingSource containing the books
      */
-    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
-        return db.getBookDao().getBookList()
+    suspend fun getBookList(selectedOnly: Boolean): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList(selectedOnly)
     }
 
     /**
      * Get books from the data base
      * @param filter Description of a filter that filters and orders the books
+     * @param context A context used to interpret dates in the filter
+     * @param selectedOnly True to return only the list of filter and selected books
      * @return A PagingSource containing the books
      */
-    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
-        return db.getBookDao().getBookList(filter, context)
+    suspend fun getBookList(filter: BookFilter, selectedOnly: Boolean, context: Context): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList(filter, selectedOnly, context)
     }
 
     /**

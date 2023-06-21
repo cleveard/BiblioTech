@@ -717,27 +717,34 @@ abstract class BookDao(private val db: BookDatabase) {
     fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
         if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
             return getBooks()
-        return getBooks(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
+        return getBooks(BookFilter.buildFilterQuery(filter, false, context, BookDatabase.bookTable))
     }
 
     /**
      * Get books
+     * @param selectedOnly True to only return the selected books
      */
-    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
+    suspend fun getBookList(selectedOnly: Boolean): LiveData<List<BookAndAuthors>> {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            getBookList(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) ORDER BY $BOOK_ID_COLUMN"))
+            val selected = if (selectedOnly)
+                " AND ( $BOOK_FLAGS & ${BookEntity.SELECTED} ) != 0"
+            else
+                ""
+            getBookList(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0$selected ) ORDER BY $BOOK_ID_COLUMN"))
         }
     }
 
     /**
      * Get books
      * @param filter The filter description used to filter and order the books
+     * @param context A context whose locale is used to interpret dates in the filter
+     * @param selectedOnly True to only return the filtered books that are selected
      */
-    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
+    suspend fun getBookList(filter: BookFilter, selectedOnly: Boolean, context: Context): LiveData<List<BookAndAuthors>> {
         if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
-            return getBookList()
+            return getBookList(selectedOnly)
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            getBookList(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
+            getBookList(BookFilter.buildFilterQuery(filter, selectedOnly, context, BookDatabase.bookTable))
         }
     }
 

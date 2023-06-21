@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
 import android.print.PrintAttributes
 import android.print.PrintManager
@@ -20,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.*
@@ -155,31 +155,12 @@ class PrintFragment : Fragment() {
      set(v) {
          if (v != field) {
              field = v
-             filterJob?.cancel()
-             viewModel.viewModelScope.launch {
-                 filterJob?.join()
-                 filterJob = coroutineContext[Job]
-                 try {
-                     // Get the book filter for the export
-                     val bookFilter = v.obj?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
-                     ensureActive()
-                     // Get the PageSource for the books
-                     val source = if (bookFilter != null)
-                         booksViewModel.repo.getBookList(bookFilter, requireContext())
-                     else
-                         booksViewModel.repo.getBookList()
-                     ensureActive()
-                     viewModel.pdfPrinter.bookList = source.getLive()
-                     calculatePages()
-                 } finally {
-                     filterJob = null
-                 }
-             }
+             getBookList(v, viewModel.printCount.selectedOnly)
          }
      }
 
     /** View model for the print fragment */
-    private lateinit var viewModel: PrintViewModel
+    private val viewModel: PrintViewModel by viewModels()
 
     /**
      * View model for the books fragment
@@ -243,6 +224,29 @@ class PrintFragment : Fragment() {
             ++generation
             // And clear the pool
             handlers.clear()
+        }
+    }
+
+    private fun getBookList(v: ViewName, selectedOnly: Boolean) {
+        filterJob?.cancel()
+        viewModel.viewModelScope.launch {
+            filterJob?.join()
+            filterJob = coroutineContext[Job]
+            try {
+                // Get the book filter for the export
+                val bookFilter = v.obj?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
+                ensureActive()
+                // Get the PageSource for the books
+                val source = if (bookFilter != null)
+                    booksViewModel.repo.getBookList(bookFilter, selectedOnly, requireContext())
+                else
+                    booksViewModel.repo.getBookList(selectedOnly)
+                ensureActive()
+                viewModel.pdfPrinter.bookList = source.getLive()
+                calculatePages()
+            } finally {
+                filterJob = null
+            }
         }
     }
 
@@ -497,11 +501,8 @@ class PrintFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Get the view model
-        viewModel = ViewModelProvider(this)[PrintViewModel::class.java].apply {
-            // Create the print layouts and the PDF printer
-            initialize(requireContext()) {id, large ->
-                booksViewModel.getThumbnail(id, large)
-            }
+        viewModel.initialize(booksViewModel.repo, requireContext()) {id, large ->
+            booksViewModel.getThumbnail(id, large)
         }
 
         // Create the ViewName for the filter from the arguments
@@ -739,8 +740,23 @@ class PrintFragment : Fragment() {
         calculatePages()
 
         // setup the print button
-        view.findViewById<Button>(R.id.action_print).setOnClickListener {
-            print()
+        view.findViewById<Button>(R.id.action_print).apply {
+            setOnClickListener {
+                print()
+            }
+            isEnabled = (viewModel.printCount.value?: 0) > 0
+            viewModel.printCount.observe(viewLifecycleOwner) {
+                isEnabled = (viewModel.printCount.value?: 0) > 0
+            }
+        }
+
+        view.findViewById<CheckBox>(R.id.print_selected_only).apply {
+            setOnClickListener {
+                if (isEnabled) {
+                    viewModel.printCount.setSelectedOnly(isChecked, requireContext())
+                    getBookList(filter, isChecked)
+                }
+            }
         }
     }
 
