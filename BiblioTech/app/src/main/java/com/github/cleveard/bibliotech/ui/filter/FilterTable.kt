@@ -99,6 +99,10 @@ class FilterTable(private val fragment: Fragment) {
                 predicates[it].name
             }
 
+            if (newColumn.desc.singleValue != null)
+                tagBox.setChips(booksViewModel.viewModelScope, sequenceOf(newColumn.desc.localizeValue(newColumn.desc.singleValue, valueRow.context)))
+            valueRow.isEnabled = newColumn.desc.singleValue == null
+
             // If the new and existing maps are the same
             // We don't need to update the array in the spinner
             if (BookFilter.equalArray(newMap, predicateMap))
@@ -216,12 +220,14 @@ class FilterTable(private val fragment: Fragment) {
         var values: Array<String>
             get() {
                 val vSeq = tagBox.values.value!!.iterator()
-                return Array(tagBox.valueCount) { vSeq.next() }
+                val c = column
+                return Array(tagBox.valueCount) { c.desc.globalizeValue(vSeq.next(), valueRow.context) }
             }
             set(value) {
                 // Form the value text by joining the values
+                val c = column
                 tagBox.chipInput.value = ""
-                tagBox.setChips(booksViewModel.viewModelScope, value.asSequence())
+                tagBox.setChips(booksViewModel.viewModelScope, value.asSequence().map { c.desc.localizeValue(it, valueRow.context) })
             }
 
         override val scope: CoroutineScope
@@ -246,6 +252,14 @@ class FilterTable(private val fragment: Fragment) {
             event: KeyEvent?
         ): Boolean {
             return actionListener?.onEditorAction(edit, actionId, event) == true
+        }
+
+        override suspend fun onChipCloseClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            return super.onChipCloseClicked(chipBox, chip, scope)
+        }
+
+        override suspend fun onChipClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            return super.onChipClicked(chipBox, chip, scope)
         }
     }
 
@@ -451,7 +465,8 @@ class FilterTable(private val fragment: Fragment) {
         // Set the predicate
         rowItem.predicate = field.predicate
         // Set the value
-        rowItem.values = field.values
+        if (field.column.desc.singleValue == null)
+            rowItem.values = field.values
     }
 
     fun setFilter(filter: Array<FilterField>?) {

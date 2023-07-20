@@ -10,7 +10,7 @@ import androidx.lifecycle.*
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookFilter
-import com.github.cleveard.bibliotech.db.BookRepository.FlagsInterface
+import com.github.cleveard.bibliotech.db.BookRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -192,33 +192,25 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
 
     /**
      * Class to manage selection bits in a database
-     * @param flags The flags interface to the table
-     * @param mask The mask for the selected bit
-     * @param scope A coroutine scope for coroutine operations
+     * @param counter The FiltersAndCounters object used for this selection set
      */
-    class DataBaseSelectionSet(
-        private val flags: FlagsInterface,
-        private val mask: Int,
-        private val scope: CoroutineScope
-    ): LastSelection() {
+    class DataBaseSelectionSet(val counter: BookRepository.FilteredBookCount): LastSelection() {
         private var _filter = MutableLiveData<BookFilter.BuiltFilter?>(null)
         var filter: BookFilter.BuiltFilter?
             get() = _filter.value
             set(f) { _filter.value = f }
 
         /** @inheritDoc **/
-        override val selectedCount: LiveData<Int> = _filter.switchMap {
-            flags.countBitsLive(mask, mask, true, null, it).distinctUntilChanged()
-        }
+        override val selectedCount: LiveData<Int>
+            get() = counter.selectedCount
 
         /** @inheritDoc **/
-        override val itemCount: LiveData<Int> = _filter.switchMap {
-            flags.countBitsLive(0, 0, true, null, it).distinctUntilChanged()
-        }
+        override val itemCount: LiveData<Int>
+            get() = counter.itemCount
 
         /** @inheritDoc **/
         override fun selectAllAsync(select: Boolean) {
-            scope.launch {
+            counter.scope.launch {
                 selectAll(select)
             }
         }
@@ -226,7 +218,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /** @inheritDoc **/
         override suspend fun selectAll(select: Boolean) {
             clearLastSelection()
-            flags.changeBits(select, mask, null, filter)
+            counter.flags.changeBits(select, counter.mask, null, filter)
         }
 
         /** @inheritDoc **/
@@ -235,26 +227,26 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
                 _lastSelection.value = id
             else
                 clearLastSelection()
-            flags.changeBits(select, mask, id, filter)
+            counter.flags.changeBits(select, counter.mask, id, filter)
         }
 
         /** @inheritDoc **/
         override fun selectAsync(id: Long, select: Boolean) {
-            scope.launch {
+            counter.scope.launch {
                 select(id, select)
             }
         }
 
         /** @inheritDoc **/
         override fun toggleAsync(id: Long) {
-            scope.launch {
+            counter.scope.launch {
                 toggle(id)
             }
         }
 
         /** @inheritDoc **/
         override suspend fun toggle(id: Long) {
-            flags.changeBits(null, mask, id, filter)
+            counter.flags.changeBits(null, counter.mask, id, filter)
             if (isSelected(id))
                 _lastSelection.value = id
             else
@@ -263,7 +255,7 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
 
         /** @inheritDoc **/
         override fun invertAsync() {
-            scope.launch {
+            counter.scope.launch {
                 invert()
             }
         }
@@ -271,12 +263,12 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /** @inheritDoc **/
         override suspend fun invert() {
             clearLastSelection()
-            flags.changeBits(null, mask, null, filter)
+            counter.flags.changeBits(null,counter. mask, null, filter)
         }
 
         /** @inheritDoc **/
         override suspend fun isSelected(id: Long): Boolean {
-            return (flags.countBits(mask, mask, true, id, filter)) > 0
+            return (counter.flags.countBits(counter.mask, counter.mask, true, id, filter)) > 0
         }
     }
 

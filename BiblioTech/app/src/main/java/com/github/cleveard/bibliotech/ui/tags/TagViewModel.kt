@@ -19,9 +19,7 @@ class TagViewModel(app: Application): GenericViewModel<TagEntity>(app) {
     /**
      * Selection set for tags
      */
-    override val selection: DataBaseSelectionSet = DataBaseSelectionSet(repo.tagFlags, TagEntity.SELECTED, viewModelScope).also {
-        it.filter = null
-    }
+    override val selection: DataBaseSelectionSet = DataBaseSelectionSet(repo.FilteredBookCount(repo.tagFlags, TagEntity.SELECTED, viewModelScope))
 
     /**
      * Tag recycler adapter

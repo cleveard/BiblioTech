@@ -5,7 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.Menu
+import android.view.View
+import android.widget.TextView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.navigation.findNavController
@@ -20,11 +23,13 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.coroutineScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
 import androidx.navigation.fragment.NavHostFragment
+import com.github.cleveard.bibliotech.databinding.MainActivityBinding
 import java.io.File
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.gb.GoogleBooksOAuth
@@ -92,12 +97,18 @@ interface BookCredentials {
     val isAuthorized: Boolean
 }
 
+interface BookStats {
+    var filtersAndCounters: BookRepository.FiltersAndCounters?
+
+    var observeFilterChanges: Boolean
+}
+
 private var googleBooksAuth: OAuth? = null
 
 /**
  * The main activity for the app
  */
-class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
+class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, BookStats {
     companion object {
         /** Url to the  BiblioTech help web page */
         private const val HELP_URL: String = "https://cleveard.github.io/BiblioTech/help/"
@@ -122,11 +133,6 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
      * Save view name
      */
     private lateinit var viewNames: LiveData<List<String>>
-
-    /**
-     * The navigation view
-     */
-    private lateinit var navView: NavigationView
 
     /**
      * The navigation controller
@@ -161,6 +167,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
             }
         }
 
+    private lateinit var binding: MainActivityBinding
+
     /**
      * @inheritDoc
      */
@@ -176,15 +184,25 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
         BookRepository.initialize(applicationContext)
 
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.main_activity)
+        binding = MainActivityBinding.inflate(LayoutInflater.from(this))
+        setContentView(binding.root)
 
+        binding.includeAppBar.selectedOnly.setOnClickListener {
+            if (binding.includeAppBar.selectedOnly.isEnabled) {
+                filtersAndCounters?.setSelectedType(
+                    if (binding.includeAppBar.selectedOnly.isChecked)
+                        BookFilter.SelectionType.SELECTED
+                    else
+                        BookFilter.SelectionType.EITHER,
+                    this
+                )
+            }
+        }
         // Setup the action toolbar
-        val toolbar: Toolbar = findViewById(R.id.toolbar)
-        setSupportActionBar(toolbar)
+        setSupportActionBar(binding.includeAppBar.toolbar)
 
         // Setup the navigation drawer
-        val drawerLayout: DrawerLayout = findViewById(R.id.drawer_layout)
-        navView = findViewById(R.id.nav_view)
+        val drawerLayout: DrawerLayout = binding.drawerLayout
         val navHostFragment =
             supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         navController = navHostFragment.navController
@@ -192,9 +210,9 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
         navController.addOnDestinationChangedListener { _, destination, arguments ->
             lastNavId = destination.id
             lastNavFilter = arguments?.getString("filterName")?: ""
-            navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
+            binding.navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
                 lastNavId == R.id.nav_books
-            navView.menu.findItem(R.id.action_to_settingsFragment).isEnabled =
+            binding.navView.menu.findItem(R.id.action_to_settingsFragment).isEnabled =
                 lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan
         }
 
@@ -206,9 +224,9 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
             ), drawerLayout
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
-        navView.setupWithNavController(navController)
+        binding.navView.setupWithNavController(navController)
         // Handle selection of an item in the navigation drawer
-        navView.setNavigationItemSelectedListener {item ->
+        binding.navView.setNavigationItemSelectedListener {item ->
             val action = when (item.itemId) {
                 // This is the id for all saved filters. Setup navigating
                 // to the books list with the filter name as argument
@@ -270,7 +288,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
      * @param viewNames The names of the current saved views
      */
     private fun updateViews(viewNames: List<String>) {
-        navView.menu.findItem(R.id.saved_filters).subMenu?.let {menu ->
+        binding.navView.menu.findItem(R.id.saved_filters).subMenu?.let {menu ->
             // Remove the old items
             menu.clear()
 
@@ -325,7 +343,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
      * @param subtitle The subtitle. Default is ""
      */
     override fun setTitle(title: String?, subtitle: String?) {
-        val toolbar = findViewById<Toolbar>(R.id.toolbar)
+        val toolbar = binding.includeAppBar.toolbar
         toolbar.title = title.let {
             if (it.isNullOrEmpty())
                 applicationContext.resources.getString(R.string.menu_books)
@@ -395,4 +413,64 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials {
 
     override val isAuthorized: Boolean
         get() = googleBooksAuth?.isAuthorized == true
+
+    private val reportStats = Observer<Int> {
+        // Get the has selected state for books
+        val booksSelected = filtersAndCounters?.selectedCount?.value?: 0
+        val booksCount = filtersAndCounters?.itemCount?.value?: 0
+
+        binding.includeAppBar.bookStats.visibility = if (filtersAndCounters == null) View.GONE else View.VISIBLE
+        binding.includeAppBar.bookStats.text =
+            getString(R.string.book_stats, booksCount, booksSelected)
+    }
+
+    var lastFilter: BookFilter? = null
+    val viewEntityObserver: Observer<ViewEntity?> = object: Observer<ViewEntity?> {
+        override fun onChanged(value: ViewEntity?) {
+            val type = if (lastFilter?.isSameQuery(value?.filter) == true) {
+                if (binding.includeAppBar.selectedOnly.isChecked)
+                    BookFilter.SelectionType.SELECTED
+                else
+                    BookFilter.SelectionType.EITHER
+            } else
+                value?.filter?.selectionType ?: BookFilter.SelectionType.EITHER
+            if (binding.includeAppBar.selectedOnly.isChecked != (type == BookFilter.SelectionType.SELECTED))
+                binding.includeAppBar.selectedOnly.isChecked = type == BookFilter.SelectionType.SELECTED
+            if (type != filtersAndCounters?.selectedType)
+                filtersAndCounters?.setSelectedType(type, this@MainActivity)
+            lastFilter = value?.filter
+        }
+    }
+
+    override var filtersAndCounters: BookRepository.FiltersAndCounters? = null
+        set(v) {
+            if (field != v) {
+                field?.let {
+                    it.selectedCount.removeObserver(reportStats)
+                    it.itemCount.removeObserver(reportStats)
+                    if (observeFilterChanges)
+                        it.viewEntity.removeObserver(viewEntityObserver)
+                }
+                field = v
+                v?.let {
+                    it.selectedCount.observeForever(reportStats)
+                    it.itemCount.observeForever(reportStats)
+                    if (observeFilterChanges)
+                        it.viewEntity.observeForever(viewEntityObserver)
+                }
+            }
+        }
+
+    override var observeFilterChanges: Boolean = false
+        set(value) {
+            if (value != field) {
+                filtersAndCounters?.let {
+                    if (value)
+                        it.viewEntity.observeForever(viewEntityObserver)
+                    else
+                        it.viewEntity.removeObserver(viewEntityObserver)
+                }
+                field = value
+            }
+        }
 }

@@ -334,7 +334,7 @@ class UndoRedoDaoTest {
     private suspend fun doTestGetBookList() {
         val expected = BookDbTracker.addBooks(repo,56542358L, "GetBookList", 20)
         assertWithMessage("GetBookList").apply {
-            val source = repo.getBookList(false).getLive()
+            val source = repo.getBookList().getLive()
             that(source).isNotNull()
             source!!
             that(source.size).isEqualTo(expected.tables.bookEntities.size)
@@ -362,7 +362,7 @@ class UndoRedoDaoTest {
         val expected = BookDbTracker.addBooks(repo,565199823L, "GetBookList Filtered", 20)
         assertWithMessage("GetBookList").apply {
             val filter = expected.makeFilter()
-            val source = repo.getBookList(filter, false, context).getLive()
+            val source = repo.getBookList(filter, context).getLive()
             that(source).isNotNull()
             source!!
             val books = ArrayList<BookAndAuthors>()

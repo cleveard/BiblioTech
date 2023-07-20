@@ -645,7 +645,7 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     /**
-     * Update the modified time for modifiied books
+     * Update the modified time for modified books
      * @param e Expression to select the modified books
      * @param time The current time
      * @return The number of books updated
@@ -656,7 +656,7 @@ abstract class BookDao(private val db: BookDatabase) {
     }
 
     /**
-     * Update the modified time for modifiied books
+     * Update the modified time for modified books
      * @param bookIds The set of modified book ids
      */
     @Transaction
@@ -717,20 +717,15 @@ abstract class BookDao(private val db: BookDatabase) {
     fun getBooks(filter: BookFilter, context: Context): PagingSource<Int, BookAndAuthors> {
         if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
             return getBooks()
-        return getBooks(BookFilter.buildFilterQuery(filter, false, context, BookDatabase.bookTable))
+        return getBooks(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
     }
 
     /**
      * Get books
-     * @param selectedOnly True to only return the selected books
      */
-    suspend fun getBookList(selectedOnly: Boolean): LiveData<List<BookAndAuthors>> {
+    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            val selected = if (selectedOnly)
-                " AND ( $BOOK_FLAGS & ${BookEntity.SELECTED} ) != 0"
-            else
-                ""
-            getBookList(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0$selected ) ORDER BY $BOOK_ID_COLUMN"))
+            getBookList(SimpleSQLiteQuery("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) ORDER BY $BOOK_ID_COLUMN"))
         }
     }
 
@@ -738,13 +733,12 @@ abstract class BookDao(private val db: BookDatabase) {
      * Get books
      * @param filter The filter description used to filter and order the books
      * @param context A context whose locale is used to interpret dates in the filter
-     * @param selectedOnly True to only return the filtered books that are selected
      */
-    suspend fun getBookList(filter: BookFilter, selectedOnly: Boolean, context: Context): LiveData<List<BookAndAuthors>> {
+    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
         if (filter.orderList.isEmpty() && filter.filterList.isEmpty())
-            return getBookList(selectedOnly)
+            return getBookList()
         return withContext(db.queryExecutor.asCoroutineDispatcher()) {
-            getBookList(BookFilter.buildFilterQuery(filter, selectedOnly, context, BookDatabase.bookTable))
+            getBookList(BookFilter.buildFilterQuery(filter, context, BookDatabase.bookTable))
         }
     }
 

@@ -541,8 +541,8 @@ abstract class BookTagDao(private val db:BookDatabase) {
             UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
                 db.execUpdateDelete(
                     SimpleSQLiteQuery("DELETE FROM $BOOK_TAGS_TABLE${it.expression}", it.args)
-                ).also {
-                    if (it > 0)
+                ).also {deleted ->
+                    if (deleted > 0)
                         db.getUndoRedoDao().setBooksModified(bookIds, filter)
                 }
             }

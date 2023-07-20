@@ -5,6 +5,8 @@ import android.database.Cursor
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.R
+import java.lang.Exception
+import java.lang.NumberFormatException
 import java.lang.StringBuilder
 import java.text.DateFormat
 import java.util.*
@@ -53,7 +55,9 @@ enum class Column(val desc: ColumnDataDescriptor) {
     /** Date book was last modified in the database */
     DATE_MODIFIED(dateModified),
     /** The series title */
-    SERIES(series);
+    SERIES(series),
+    /** Whether book is selected or not */
+    SELECTED(selection);
 }
 
 /** An interface used to add components to a query */
@@ -135,7 +139,6 @@ abstract class SQLiteQueryBuilder(context: Context): BuildQuery(context) {
     /**
      * Collect the filter expressions from iterator of FilterFields
      * @param list The list FilterFields to process
-     * @param selectedOnly True to build a filter that only returns selected items
      */
     fun buildFilter(list: Iterator<FilterField>) {
         for (f in list) {
@@ -167,11 +170,16 @@ abstract class SQLiteQueryBuilder(context: Context): BuildQuery(context) {
  * @param columnNames The database column names used by the filter columns
  * @param nameResourceId The resource id for the localized name of the filter column
  * @param predicates The predicates allowed with the column
+ * @param singleValue When a column only has a single value, this is the value.
+ *                    Otherwise, null
+ * @param allowHeader Allow the column to be used as a header
  */
 abstract class ColumnDataDescriptor(
     val columnNames: Array<String>,
     val nameResourceId: Int,
-    val predicates: Array<Predicate>
+    val predicates: Array<Predicate>,
+    val singleValue: String? = null,
+    val allowHeader: Boolean = true
 ) {
     /** Add a join if needed to extract the column */
     open fun addJoin(buildQuery: BuildQuery) {
@@ -242,12 +250,20 @@ abstract class ColumnDataDescriptor(
         values: Array<String>
     ): Boolean {
         var hasValues = false
-        // Loop through the values and add the expression for each one
-        for (v in values) {
+        if (singleValue != null) {
             // If we can convert the value add the expression
-            if (convert(buildQuery, predicate, v)) {
+            if (convert(buildQuery, predicate, singleValue)) {
                 hasValues = true
                 predicate.desc.buildExpression(buildQuery, columnNames)
+            }
+        } else {
+            // Loop through the values and add the expression for each one
+            for (v in values) {
+                // If we can convert the value add the expression
+                if (convert(buildQuery, predicate, v)) {
+                    hasValues = true
+                    predicate.desc.buildExpression(buildQuery, columnNames)
+                }
             }
         }
         return hasValues
@@ -309,6 +325,14 @@ abstract class ColumnDataDescriptor(
 
     open fun getDisplayValue(book: BookAndAuthors): String {
         return getValue(book)
+    }
+
+    open fun localizeValue(value: String, context: Context): String {
+        return value
+    }
+
+    open fun globalizeValue(value: String, context: Context): String {
+        return value
     }
 
     companion object {
@@ -527,7 +551,9 @@ private val firstLast = object: SubQueryColumnDataDescriptor(
 private val anyColumn = object: ColumnDataDescriptor(
     arrayOf(),
     R.string.any,
-    arrayOf(Predicate.GLOB, Predicate.NOT_GLOB)
+    arrayOf(Predicate.GLOB, Predicate.NOT_GLOB),
+    null,
+    false
 ) {
     // Set of columns to exclude from the Any column
     private val excludeFilterColumn = arrayOf<String>(
@@ -1054,5 +1080,57 @@ private val series = object: SubQueryColumnDataDescriptor(
     override fun getAutoCompleteCursor(repo: BookRepository, constraint: String?): Cursor {
         return buildAutoCompleteCursor(repo, BookDatabase.seriesTable,
             SERIES_TITLE_COLUMN, constraint)
+    }
+}
+
+
+/** Rating */
+private val selection = object: ColumnDataDescriptor(
+    arrayOf("( ~ $BOOK_FLAGS & ${BookEntity.SELECTED} )"),
+    R.string.selected,
+    arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF),
+    "1",
+    false
+) {
+    /** @inheritDoc */
+    override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
+        // No headers for selected
+        return false
+    }
+
+    /** @inheritDoc */
+    override fun getValue(book: BookAndAuthors): String {
+        // Make selected 0 so ascending order will sort to the top
+        return if ((book.book.flags and BookEntity.SELECTED) != 0) "1" else "0"
+    }
+
+    /** @inheritDoc */
+    override fun convert(
+        buildQuery: BuildQuery,
+        predicate: Predicate,
+        value: String
+    ): Boolean {
+        // Selected is only one value
+        val v = if (value == "0") "1" else "0"
+        return predicate.desc.convertInt(buildQuery, v)
+    }
+
+    override fun localizeValue(value: String, context: Context): String {
+        val id = try {
+            if (value.toInt() == 0)
+                R.string.localFalse
+            else
+                R.string.localTrue
+        } catch (_: NumberFormatException) {
+            R.string.localFalse
+        }
+        return context.resources.getString(id)
+    }
+
+    override fun globalizeValue(value: String, context: Context): String {
+        return if (value == context.resources.getString(R.string.localFalse))
+            "0"
+        else
+            "1"
     }
 }

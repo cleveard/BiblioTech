@@ -24,18 +24,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/print_parameters"
         app:layout_constraintStart_toEndOf="@+id/filter_label"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <CheckBox
-        android:id="@+id/print_selected_only"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:text="@string/selected_books_only"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/select_filter" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/action_print"
@@ -43,16 +34,16 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:text="@string/print"
-        app:layout_constraintBottom_toBottomOf="@+id/print_selected_only"
+        app:layout_constraintBottom_toTopOf="@+id/print_parameters"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/select_filter" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:barrierDirection="bottom"
-        app:constraint_referenced_ids="filter_label,select_filter,action_print,print_selected_only" />
+        app:constraint_referenced_ids="filter_label,select_filter,action_print" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"

@@ -95,17 +95,12 @@ abstract class BookDatabase : RoomDatabase() {
         /**
          * Return the SQLite expression that filters by the hidden flag
          * @param hidden True to filter hidden rows. False to filter visible rows
-         * @param selectedOnly True to return a filter of selected rows. Ignored if hidden is true
          * @return The expression as a string
          */
-        fun getVisibleExpression(hidden: Boolean = false, selectedOnly: Boolean = false): String {
+        fun getVisibleExpression(hidden: Boolean = false): String {
             if (flagColumn.isNullOrEmpty())
                 return ""
-            val selected = if (selectedOnly && selectedValue != 0)
-                " AND ( ( $flagColumn & $selectedValue ) != 0 )"
-            else
-                ""
-            return "( ( $flagColumn & $flagValue ) ${if (hidden) "!=" else "="} 0$selected )"
+            return "( ( $flagColumn & $flagValue ) ${if (hidden) "!=" else "="} 0 )"
         }
     }
 

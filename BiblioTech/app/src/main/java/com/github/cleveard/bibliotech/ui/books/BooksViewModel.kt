@@ -19,6 +19,7 @@ import com.github.cleveard.bibliotech.utils.GenericViewModel
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -41,7 +42,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Selection set for books
      */
-    override val selection: DataBaseSelectionSet = DataBaseSelectionSet(repo.bookFlags, BookEntity.SELECTED, viewModelScope)
+    override val selection: DataBaseSelectionSet = DataBaseSelectionSet(repo.FilteredBookCount(repo.bookFlags, BookEntity.SELECTED, viewModelScope))
 
     /**
      * The adapter for the book recycler view
@@ -59,7 +60,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                         if (order.isEmpty())
                             null
                         else
-                            order[0].column.desc.getValue(book)
+                            order.firstOrNull { it.column.desc.allowHeader && it.headers }?.column?.desc?.getValue(book)
                     }?: position.toString()
                 }
             }
@@ -70,7 +71,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
     /**
      * Selection set used to mark open books
      */
-    private val openBooks: SelectionInterface = DataBaseSelectionSet(repo.bookFlags, BookEntity.EXPANDED, viewModelScope)
+    private val openBooks: SelectionInterface = DataBaseSelectionSet(repo.FilteredBookCount(repo.bookFlags, BookEntity.EXPANDED, viewModelScope))
 
     /**
      * The layout manager for the book recycler view
@@ -87,53 +88,19 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     private var flowFilter: BookFilter? = null
 
-    /**
-     * Current filter view for the fragment
-     */
-    private val viewObserver = object: Observer<ViewEntity?> {
-        var lastFilter: Array<FilterField>? = null
-        private fun isSame(filter: Array<FilterField>, last: Array<FilterField>?): Boolean {
-            if (filter === last) return true
-            if (last == null) return false
-
-            if (filter.size != last.size) return false
-            for (i in filter.indices) {
-                if (!filter[i].isSameQuery(last[i])) return false
-            }
-            return true
-        }
-
-        override fun onChanged(value: ViewEntity?) {
-            // If filter is empty use null
-            val filter = value?.filter
-            val filterList = filter?.filterList?: emptyArray()
-            // Don't do anything unless the filter changes
-            if (isSame(filterList, lastFilter))
-                return
-            lastFilter = filterList     // Remember last filter
-
-            idFilter = filter.buildFilter(app.applicationContext, arrayOf(BOOK_ID_COLUMN), true)
-            selection.filter = idFilter
-        }
-    }
-
-    private val _filterName = MutableLiveData<String?>(null)
-    val filterView: LiveData<ViewEntity?> = _filterName.switchMap {name ->
-        if (name == null)
-            MutableLiveData(null)
-        else
-            repo.findViewByNameLive(name).map { if (it.isEmpty()) null else it[0] }
-    }
+    val filterView: LiveData<ViewEntity?>
+        get() = selection.counter.viewEntity
     var filterName: String?
-        get() = _filterName.value
-        set(v) { _filterName.value = v }
-
+        get() = selection.counter.viewName
+        set(v) { selection.counter.setViewName(v, app.applicationContext) }
+    val typedFilterFlow: StateFlow<Pair<Long, BookFilter?>>
+        get() = selection.counter.generationFlow
 
     /**
      * The built filter to get the ids for the current filter
      */
-    var idFilter: BookFilter.BuiltFilter? = null
-        private set
+    val idFilter: BookFilter.BuiltFilter?
+        get() = selection.counter.builtFilter.value
 
     /**
      * The styles to used for the names and items in headers and separators
@@ -167,7 +134,6 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }
-        filterView.observeForever(viewObserver)
     }
 
     /**
@@ -185,16 +151,16 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     override fun onCleared() {
         selection.onSelectionChanged.remove(selectChange)
-        filterView.removeObserver(viewObserver)
         super.onCleared()
     }
 
     /**
      * Apply the filter description to the view model
+     * @param context A context for the localle
      * @param orderFields The description of the filter sort order
      * @param filterFields The description of the filter
      */
-    suspend fun saveFilter(orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): Boolean {
+    suspend fun saveFilter(context: Context, orderFields: Array<OrderField>?, filterFields: Array<FilterField>?): Boolean {
         // Convert the description to a filter
         val view = filterView.value?: return false
         view.filter = if (orderFields == null && filterFields == null)
@@ -211,6 +177,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             return false
         }
 
+        selection.counter.setViewName(view.name, context)
         return true
     }
 
@@ -241,12 +208,12 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     fun buildFlow() {
         // Get the view for the flow. Return if it is null
-        val view = filterView.value?: return
+        val filter = typedFilterFlow.value.second
 
         // Only rebuild the flow when the query is different
-        if (flowJob != null && (view.filter?.isSameQuery(flowFilter)?: (flowFilter == null)))
+        if (flowJob != null && (filter?.isSameQuery(flowFilter)?: (flowFilter == null)))
             return
-        flowFilter = view.filter
+        flowFilter = filter
 
         // Cancel previous job if there was one
         flowJob?.let {
@@ -259,7 +226,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         val pager = Pager(
             config
         ) {
-            view.filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
+            filter?.let { repo.getBooks(it, context) }?: repo.getBooks()
         }
         // Add headers and cache
         val flow = addHeaders(pager.flow)
@@ -382,7 +349,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
         // Create the separator if they are
         if (after != null) {
             for (field in filter.orderList) {
-                if (field.column.desc.shouldAddSeparator(before, after))
+                if (field.column.desc.allowHeader && field.column.desc.shouldAddSeparator(before, after))
                     return buildHeader(filter, after, true)
             }
         }

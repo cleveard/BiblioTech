@@ -17,6 +17,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.room.withTransaction
+import com.github.cleveard.bibliotech.BookStats
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.utils.coroutineAlert
@@ -152,7 +153,7 @@ class ExportImportFragment : Fragment() {
     private var filter: ViewName = ViewName(null, "")
         set(v) {
             field = v
-            viewModel.exportCount.setFilter(v.name, requireContext())
+            viewModel.exportCount.setViewName(v.name, requireContext())
         }
 
     /** Launcher used to get the content for exporting books */
@@ -274,16 +275,9 @@ class ExportImportFragment : Fragment() {
             setOnClickListener {
                 exportBooksLauncher.launch("books.csv", null)
             }
-            isEnabled = (viewModel.exportCount.value?: 0) > 0
-            viewModel.exportCount.observe(viewLifecycleOwner) {
-                isEnabled = (viewModel.exportCount.value?: 0) > 0
-            }
-        }
-
-        view.findViewById<CheckBox>(R.id.export_import_selected_only).apply {
-            setOnClickListener {
-                if (isEnabled)
-                    viewModel.exportCount.setSelectedOnly(isChecked, requireContext())
+            isEnabled = (viewModel.exportCount.itemCount.value?: 0) > 0
+            viewModel.exportCount.itemCount.observe(viewLifecycleOwner) {
+                isEnabled = (viewModel.exportCount.itemCount.value?: 0) > 0
             }
         }
 
@@ -299,6 +293,19 @@ class ExportImportFragment : Fragment() {
 
         // Default to reject all conflicts
         view.findViewById<RadioButton>(R.id.reject_all).isChecked = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (activity as? BookStats)?.let {
+            it.observeFilterChanges = true
+            it.filtersAndCounters = viewModel.exportCount
+        }
+    }
+
+    override fun onPause() {
+        (activity as? BookStats)?.filtersAndCounters = null
+        super.onPause()
     }
 
     /**
@@ -380,9 +387,11 @@ class ExportImportFragment : Fragment() {
     private fun exportBooks(path: Uri) {
         viewModel.viewModelScope.launch {
             // Get the book filter for the export
-            val bookFilter = filter.name?.let { viewModel.repo.findViewByName(it) }?.filter
+            val bookFilter = viewModel.exportCount.awaitForResult(viewModel.exportCount.generationFlow)
             // Get the PageSource for the books
-            val source = bookFilter?.let { viewModel.repo.getBookList(it, viewModel.exportCount.selectedOnly, requireContext()) }?: viewModel.repo.getBookList(viewModel.exportCount.selectedOnly)
+            val source = bookFilter?.let {
+                viewModel.repo.getBookList(it, requireContext())
+            }?: viewModel.repo.getBookList()
             @Suppress("BlockingMethodInNonBlockingContext")
             // Start the export
             doExport(path) {stream ->

@@ -20,12 +20,15 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.*
 import androidx.recyclerview.widget.ListAdapter
+import com.github.cleveard.bibliotech.BookStats
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
+import com.github.cleveard.bibliotech.db.BookFilter
 import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.print.PDFPrinter
 import com.github.cleveard.bibliotech.print.PageLayoutHandler
@@ -33,6 +36,9 @@ import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.utils.getLive
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onEach
 import kotlin.math.roundToInt
 
 class PrintFragment : Fragment() {
@@ -142,20 +148,20 @@ class PrintFragment : Fragment() {
         }
     }
 
+    private lateinit var bookListFlow: Flow<Pair<Long, List<BookAndAuthors>?>>
+
     /**
      * Class used to display paper size names in the UI
      * @param obj The paper size
      */
     private inner class PaperSizeName(obj: PrintAttributes.MediaSize): ObjectName<PrintAttributes.MediaSize>(obj, obj.getLabel(requireContext().packageManager))
 
-    /** Job used to get the list of books */
-    private var filterJob: Job? = null
     /** The filter used for the export */
     private var filter: ViewName = ViewName(null, "")
      set(v) {
          if (v != field) {
              field = v
-             getBookList(v, viewModel.printCount.selectedOnly)
+             viewModel.printCount.setViewName(filter.obj, requireContext())
          }
      }
 
@@ -224,29 +230,6 @@ class PrintFragment : Fragment() {
             ++generation
             // And clear the pool
             handlers.clear()
-        }
-    }
-
-    private fun getBookList(v: ViewName, selectedOnly: Boolean) {
-        filterJob?.cancel()
-        viewModel.viewModelScope.launch {
-            filterJob?.join()
-            filterJob = coroutineContext[Job]
-            try {
-                // Get the book filter for the export
-                val bookFilter = v.obj?.let { name -> booksViewModel.repo.findViewByName(name) }?.filter
-                ensureActive()
-                // Get the PageSource for the books
-                val source = if (bookFilter != null)
-                    booksViewModel.repo.getBookList(bookFilter, selectedOnly, requireContext())
-                else
-                    booksViewModel.repo.getBookList(selectedOnly)
-                ensureActive()
-                viewModel.pdfPrinter.bookList = source.getLive()
-                calculatePages()
-            } finally {
-                filterJob = null
-            }
         }
     }
 
@@ -505,6 +488,26 @@ class PrintFragment : Fragment() {
             booksViewModel.getThumbnail(id, large)
         }
 
+        bookListFlow = viewModel.printCount.transform(viewModel.printCount.generationFlow) {bookFilter ->
+            ensureActive()
+            // Get the PageSource for the books
+            val source = if (bookFilter != null)
+                booksViewModel.repo.getBookList(bookFilter, requireContext())
+            else
+                booksViewModel.repo.getBookList()
+            ensureActive()
+            source.getLive()
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            bookListFlow
+                .onEach {
+                    viewModel.pdfPrinter.bookList = it.second
+                    calculatePages()
+                }
+                .collect()
+        }
+
         // Create the ViewName for the filter from the arguments
         filter = ViewName.makeDisplay(args.filterName, requireContext().resources)
         // Get the Spinner for the filters
@@ -744,20 +747,24 @@ class PrintFragment : Fragment() {
             setOnClickListener {
                 print()
             }
-            isEnabled = (viewModel.printCount.value?: 0) > 0
-            viewModel.printCount.observe(viewLifecycleOwner) {
-                isEnabled = (viewModel.printCount.value?: 0) > 0
+            isEnabled = (viewModel.printCount.itemCount.value?: 0) > 0
+            viewModel.printCount.itemCount.observe(viewLifecycleOwner) {
+                isEnabled = (viewModel.printCount.itemCount.value?: 0) > 0
             }
         }
+    }
 
-        view.findViewById<CheckBox>(R.id.print_selected_only).apply {
-            setOnClickListener {
-                if (isEnabled) {
-                    viewModel.printCount.setSelectedOnly(isChecked, requireContext())
-                    getBookList(filter, isChecked)
-                }
-            }
+    override fun onResume() {
+        super.onResume()
+        (activity as? BookStats)?.let {
+            it.observeFilterChanges = true
+            it.filtersAndCounters = viewModel.printCount
         }
+    }
+
+    override fun onPause() {
+        (activity as? BookStats)?.filtersAndCounters = null
+        super.onPause()
     }
 
     /**
@@ -836,6 +843,7 @@ class PrintFragment : Fragment() {
      */
     private fun print() {
         viewModel.viewModelScope.launch {
+            viewModel.printCount.awaitForResult(bookListFlow)
             // Don't print if there aren't any books
             if (!viewModel.pdfPrinter.bookList.isNullOrEmpty()) {
                 val context = requireContext()

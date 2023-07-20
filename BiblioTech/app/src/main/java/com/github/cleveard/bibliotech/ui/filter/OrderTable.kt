@@ -3,6 +3,7 @@ package com.github.cleveard.bibliotech.ui.filter
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import android.widget.AdapterView.OnItemSelectedListener
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -53,14 +54,37 @@ class OrderTable(private val fragment: Fragment) {
     /**
      * OnClickListener for column in table rows
      */
-    private val columnListener = object: AdapterView.OnItemSelectedListener {
+    private fun columnListener(row: Int): OnItemSelectedListener = object: OnItemSelectedListener {
+        fun setHeaders(position: Int) {
+            val allowHeaders = if (position < 0)
+                true
+            else
+                Column.valueOf(columnMap[position]).desc.allowHeader
+            val headers = rowView.findViewById<SwitchMaterial>(R.id.action_use_header)
+            if (!allowHeaders)
+                headers.isChecked = false
+            headers.isEnabled = allowHeaders
+        }
+
+        val rowView = rows[row]
+
+        init {
+            setHeaders(rowView.findViewById<Spinner>(R.id.action_order_by).selectedItemPosition)
+        }
+
         override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+            setHeaders(position)
+
             // Build filter when something is selected
             buildOrder()
         }
 
         override fun onNothingSelected(parent: AdapterView<*>?) {
             // Do nothing when nothing is selected
+            setHeaders(-1)
+
+            // Build filter when something is selected
+            buildOrder()
         }
     }
 
@@ -90,18 +114,19 @@ class OrderTable(private val fragment: Fragment) {
         val order = Array(rows.size) { index ->
             // Get the table row
             val row = rows[index]
+            val column = Column.valueOf(
+                columnMap[row.findViewById<Spinner>(R.id.action_order_by).selectedItemPosition])
             // Create the OrderField from the table row
             OrderField(
                 // Get the column
-                Column.valueOf(
-                    columnMap[row.findViewById<Spinner>(R.id.action_order_by).selectedItemPosition]),
+                column,
                 // Get the sort direction
                 if (row.findViewById<MaterialButton>(R.id.action_sort_dir).isChecked)
                     Order.Descending
                 else
                     Order.Ascending,
                 // Get the use header flag
-                row.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked
+                column.desc.allowHeader && row.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked
             )
         }
 
@@ -131,7 +156,7 @@ class OrderTable(private val fragment: Fragment) {
 
         // Add column select listener
         val spinner = rowView.findViewById<Spinner>(R.id.action_order_by)
-        spinner.onItemSelectedListener = if (clear) null else columnListener
+        spinner.onItemSelectedListener = if (clear) null else columnListener(row)
         spinner.tag = row
 
         // Add use header listener
@@ -208,7 +233,10 @@ class OrderTable(private val fragment: Fragment) {
         // Set the column
         rowView.findViewById<Spinner>(R.id.action_order_by).setSelection(columnMap.indexOf(field.column.name))
         // Set use headers
-        rowView.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked = field.headers
+        rowView.findViewById<SwitchMaterial>(R.id.action_use_header).apply {
+            isChecked = field.column.desc.allowHeader && field.headers
+            isEnabled = field.column.desc.allowHeader
+        }
     }
 
     fun setOrder(order: Array<OrderField>?) {

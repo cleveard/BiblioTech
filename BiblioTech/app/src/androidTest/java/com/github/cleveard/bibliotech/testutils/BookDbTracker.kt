@@ -637,7 +637,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
 
                 /** @inheritDoc */
                 override suspend fun getBooks(): List<BookAndAuthors> {
-                    return db.getBookDao().getBookList(false).getLive()?: emptyList()
+                    return db.getBookDao().getBookList().getLive()?: emptyList()
                 }
 
                 /** @inheritDoc */
@@ -729,7 +729,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
 
                 /** @inheritDoc */
                 override suspend fun getBooks(): List<BookAndAuthors> {
-                    return repo.getBookList(false).getLive()?: emptyList()
+                    return repo.getBookList().getLive()?: emptyList()
                 }
 
                 /** @inheritDoc */

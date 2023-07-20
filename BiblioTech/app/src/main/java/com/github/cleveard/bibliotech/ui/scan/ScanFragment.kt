@@ -189,14 +189,6 @@ class ScanFragment : Fragment() {
         chipBox?.setChips(scanViewModel.viewModelScope, selectedNames(list))
     }
 
-    /**
-     * Observer for selection changes
-     */
-    private val selectionObserver = Observer<Int?> {
-        // Update book stats on selection change
-        updateBookStats()
-    }
-
     private var chipBox: ChipBox? = null
 
     private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
@@ -306,15 +298,16 @@ class ScanFragment : Fragment() {
      */
     override fun onDestroyView() {
         super.onDestroyView()
+        (activity as? BookStats)?.let {
+            it.filtersAndCounters = null
+        }
+
         tags?.removeObserver(tagObserver)
         tags = null
         chipBox = null
 
         // Shut down our background executor
         cameraExecutor.shutdown()
-
-        booksViewModel.selection.selectedCount.removeObserver(selectionObserver)
-        booksViewModel.selection.itemCount.removeObserver(selectionObserver)
 
         // Unregister the broadcast receivers and listeners
         broadcastManager.unregisterReceiver(volumeDownReceiver)
@@ -331,9 +324,6 @@ class ScanFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View? {
         // Initialize view model observers
-        booksViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
-        booksViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
-
         // Add options menu provider
         requireActivity().addMenuProvider(
             object: MenuProvider {
@@ -414,8 +404,9 @@ class ScanFragment : Fragment() {
 
         // Clear filter from books view model
         booksViewModel.filterName = null
-        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
-        updateBookStats()
+        (activity as? BookStats)?.let {
+            it.filtersAndCounters = booksViewModel.selection.counter
+        }
 
         container.findViewById<MaterialButton>(R.id.scan_ask_permission).setOnClickListener {
             // Request camera-related permissions
@@ -440,14 +431,6 @@ class ScanFragment : Fragment() {
         GoogleBookLoginFragment.login(this)
     }
 
-
-    private fun updateBookStats() {
-        // Update book stats on selection change
-        val booksSelected = booksViewModel.selection.selectedCount.value?: 0
-        val booksCount = booksViewModel.selection.itemCount.value?: 0
-        activity?.findViewById<TextView>(R.id.book_stats)?.text =
-            getString(R.string.book_stats, booksCount, booksSelected)
-    }
 
     /**
      * Return sequence of selected names

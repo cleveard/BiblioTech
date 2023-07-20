@@ -21,6 +21,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -34,6 +36,8 @@ import com.github.cleveard.bibliotech.ui.tags.TagViewModel
 import com.github.cleveard.bibliotech.utils.BaseViewModel
 import com.github.cleveard.bibliotech.utils.coroutineAlert
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -143,7 +147,6 @@ class BooksFragment : Fragment() {
      * Observer for BooksViewModel filterView changes
      */
     private val filterViewObserver = Observer<ViewEntity?> {filterView ->
-        booksViewModel.buildFlow()
         activity?.findViewById<Toolbar>(R.id.toolbar)?.let {
             // The view changed, set the title and subtitle
             it.title = filterView?.name.let { name ->
@@ -201,6 +204,13 @@ class BooksFragment : Fragment() {
         tagViewModel.selection.selectedCount.observe(viewLifecycleOwner, selectionObserver)
         tagViewModel.selection.itemCount.observe(viewLifecycleOwner, selectionObserver)
 
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                booksViewModel.typedFilterFlow
+                    .onEach { booksViewModel.buildFlow() }
+                    .collect()
+            }
+        }
         // Get the edit and filter drawer menu icons
         context?.let {context ->
             closeDrawer = ResourcesCompat.getDrawable(context.resources,
@@ -341,7 +351,6 @@ class BooksFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        activity?.findViewById<TextView>(R.id.book_stats)?.visibility = View.VISIBLE
         // Setup the filter in the view model
         booksViewModel.applyView(args.filterName)
         ColumnDataDescriptor.setDateLocale(requireContext().resources.configuration.locales[0])
@@ -359,7 +368,7 @@ class BooksFragment : Fragment() {
             // close the drawer
             actionDrawer.closeDrawer(GravityCompat.END)
             // apply the filter
-            booksViewModel.saveFilter(orderTable.order.value, filterTable.filter.value)
+            booksViewModel.saveFilter(requireContext(), orderTable.order.value, filterTable.filter.value)
         }
     }
 
@@ -427,6 +436,19 @@ class BooksFragment : Fragment() {
                 headerView.requestLayout()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (activity as? BookStats)?.let {
+            it.observeFilterChanges = true
+            it.filtersAndCounters = booksViewModel.selection.counter
+        }
+    }
+
+    override fun onPause() {
+        (activity as? BookStats)?.filtersAndCounters = null
+        super.onPause()
     }
 
     /**
@@ -532,9 +554,6 @@ class BooksFragment : Fragment() {
         // Get the has selected state for books
         val booksSelected = booksViewModel.selection.selectedCount.value?: 0
         val booksCount = booksViewModel.selection.itemCount.value?: 0
-
-        activity?.findViewById<TextView>(R.id.book_stats)?.text =
-            getString(R.string.book_stats, booksCount, booksSelected)
 
         // Enable delete if this is not the global list
         actionButtons[R.id.action_remove_filter].isEnabled = args.filterName?.isNotEmpty() ?: false

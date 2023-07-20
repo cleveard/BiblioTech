@@ -4,13 +4,23 @@ import android.content.Context
 import android.database.Cursor
 import android.graphics.Bitmap
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.switchMap
 import androidx.paging.PagingSource
 import com.github.cleveard.bibliotech.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import java.util.*
 
 /**
@@ -52,38 +62,164 @@ class BookRepository private constructor(context: Context) {
         fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
     }
 
-    inner class FilteredBookCount(val scope: CoroutineScope): MediatorLiveData<Int>(0) {
-        private var counter: LiveData<Int> = bookFlags.countBitsLive(0, 0, true, null, null)
-        private val _builtFilter: MutableLiveData<BookFilter.BuiltFilter?> = MutableLiveData<BookFilter.BuiltFilter?>().also { live ->
-            fun addSource() {
-                counter = bookFlags.countBitsLive(0, 0, true, null, live.value)
-                addSource(counter) {
-                    if (value != it)
-                        value = it
+    interface FiltersAndCounters {
+        /** The flags interface used for the counters */
+        //val flags: FlagsInterface
+        /** The mask used to count selected items */
+        //val mask: Int
+        /** A coroutine scope used for counting and filtering */
+        //val scope: CoroutineScope
+        /** Count of item selected and filtered */
+        val selectedCount: LiveData<Int>
+        /** Count of items filtered */
+        val itemCount: LiveData<Int>
+        /** The built filter to get filtered book ids */
+        //val builtFilter: LiveData<BookFilter.BuiltFilter?>
+        /** The name of the current view */
+        val viewName: String?
+        /** The current view entity */
+        val viewEntity: LiveData<ViewEntity?>
+        /**
+         * Set the view name and build the new filters
+         * @param name The new view name
+         * @param context A context used to build the built filter
+         */
+        fun setViewName(name: String?, context: Context)
+        /** Treatment of selection by the type ids and built filters */
+        val selectedType: BookFilter.SelectionType
+        /**
+         * Set the filtering of selected items
+         * @param value The filtering to use
+         * @param context A context used to build the built filter
+         */
+        fun setSelectedType(value: BookFilter.SelectionType, context: Context)
+        /** The filter with the selected type included */
+        //val typedFilter: LiveData<BookFilter?>
+
+        //suspend fun awaitForFilter(): BookFilter?
+    }
+
+    inner class FilteredBookCount(
+        val flags: FlagsInterface,
+        val mask: Int,
+        val scope: CoroutineScope
+    ): FiltersAndCounters {
+        private var lastGeneration: Long = 0
+        private val _generationFlow: MutableStateFlow<Pair<Long, BookFilter?>> = MutableStateFlow(Pair(0, null))
+        val generationFlow: StateFlow<Pair<Long, BookFilter?>> = _generationFlow
+        private val _builtFilter: MutableLiveData<BookFilter.BuiltFilter?> = MutableLiveData<BookFilter.BuiltFilter?>()
+
+        override val selectedCount: LiveData<Int> = _builtFilter.switchMap {
+            flags.countBitsLive(mask, mask, true, null, it)
+        }
+
+        override val itemCount: LiveData<Int> = _builtFilter.switchMap {
+            flags.countBitsLive(0, 0, true, null, it)
+        }
+
+        val builtFilter: LiveData<BookFilter.BuiltFilter?> = _builtFilter
+        override var viewName: String? = null
+            private set
+        private val _viewEntity: MutableLiveData<ViewEntity?> = MutableLiveData()
+        override val viewEntity: LiveData<ViewEntity?> = _viewEntity
+        override fun setViewName(name: String?, context: Context) {
+            viewName = name
+            buildFilter(context, ++lastGeneration)
+        }
+        override var selectedType: BookFilter.SelectionType = BookFilter.SelectionType.EITHER
+            private set
+        override fun setSelectedType(value: BookFilter.SelectionType, context: Context) {
+            selectedType = value
+            buildFilter(context, ++lastGeneration)
+        }
+
+        fun <T, R> transform(input: Flow<Pair<Long, T>>, trans: suspend CoroutineScope.(T) -> R): Flow<Pair<Long, R>> {
+            // Job for the transform
+            var deferred: Deferred<Pair<Long, R>>? = null
+            // Cache for most recent value
+            var cache: Pair<T, Pair<Long, R>>? = null
+            return input.transform inner@ {result ->
+                // Only emit a value when the generations match
+                if (result.first == lastGeneration) {
+                    // If the cached value is the most recent value use it
+                    cache?.let {c ->
+                        if (c.second.first >= result.first) {
+                            emit(c.second)
+                            return@inner
+                        }
+                        // If the value to be transformed is the same use the cache
+                        if (c.first == result.second) {
+                            Pair(c.first, Pair(result.first, c.second.second)).also {
+                                cache = it
+                                emit(it.second)
+                                return@inner
+                            }
+                        }
+                    }
+
+                    // need to recreate the cache
+                    deferred?.cancel()
+                    val scope = CoroutineScope(currentCoroutineContext())
+                    deferred = scope.async {
+                            // Otherwise create a new value
+                        Pair(result.second, Pair(result.first, scope.trans(result.second))).let {
+                            // If this value isn't the most recent value, skip the emit
+                            if (it.second.first < (cache?.second?.first ?: Long.MIN_VALUE))
+                                return@let cache!!.second
+                            // Cache the new value
+                            cache = it
+                            // Emit the new value
+                            it.second
+                        }
+                    }
+
+                    try {
+                        deferred?.await()
+                    } catch (_: CancellationException) {
+                        null
+                    } finally {
+                        deferred = null
+                    }?.let {
+                        emit(it)
+                    }
                 }
             }
-            addSource()
-            addSource(live) {
-                removeSource(counter)
-                addSource()
-            }
         }
-        private var viewName: String? = null
-            private set
-        fun setFilter(name: String?, context: Context) {
-            viewName = name
-            buildFilter(context)
+
+        suspend fun <T> awaitForResult(input: Flow<Pair<Long, T>>): T? {
+            // Place to put the result
+            var result: T? = null
+            // Take while the result is out of date
+            input.takeWhile {
+                if (it.first == lastGeneration) {
+                    // Good result. Set it and stop the collection
+                    result = it.second
+                    false
+                } else
+                    true    // Continue collecting
+            }.collect()
+            return result
         }
-        var selectedOnly: Boolean = false
-            private set
-        fun setSelectedOnly(value: Boolean, context: Context) {
-            selectedOnly = value
-            buildFilter(context)
-        }
-        private fun buildFilter(context: Context) {
+
+        private fun buildFilter(context: Context, generation: Long) {
             scope.launch {
-                _builtFilter.value = viewName?.let { findViewByName(it) }
-                    ?.filter.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true, selectedOnly)
+                val filter = viewName?.let {name ->
+                    findViewByName(name).also { _viewEntity.value = it}
+                }
+                    ?.filter
+                    .filterForSelectionType(selectedType)
+                    ?.let { filter ->
+                        if (filter.isSameQuery(generationFlow.value.second))
+                            generationFlow.value.second
+                        else
+                            filter
+                    }
+                if (generation == lastGeneration) {
+                    if (generationFlow.value.second != filter) {
+                        _builtFilter.value = filter.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
+                    }
+                    _generationFlow.tryEmit(Pair(generation, filter))
+                }
             }
         }
     }
@@ -242,22 +378,20 @@ class BookRepository private constructor(context: Context) {
 
     /**
      * Get books from the data base
-     * @param selectedOnly True to return only the list of selected books
      * @return A PagingSource containing the books
      */
-    suspend fun getBookList(selectedOnly: Boolean): LiveData<List<BookAndAuthors>> {
-        return db.getBookDao().getBookList(selectedOnly)
+    suspend fun getBookList(): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList()
     }
 
     /**
      * Get books from the data base
      * @param filter Description of a filter that filters and orders the books
      * @param context A context used to interpret dates in the filter
-     * @param selectedOnly True to return only the list of filter and selected books
      * @return A PagingSource containing the books
      */
-    suspend fun getBookList(filter: BookFilter, selectedOnly: Boolean, context: Context): LiveData<List<BookAndAuthors>> {
-        return db.getBookDao().getBookList(filter, selectedOnly, context)
+    suspend fun getBookList(filter: BookFilter, context: Context): LiveData<List<BookAndAuthors>> {
+        return db.getBookDao().getBookList(filter, context)
     }
 
     /**
