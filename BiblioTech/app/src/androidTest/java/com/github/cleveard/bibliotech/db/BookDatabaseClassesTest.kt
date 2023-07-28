@@ -1,5 +1,6 @@
 package com.github.cleveard.bibliotech.db
 
+import android.os.Build.VERSION_CODES
 import android.os.Bundle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.cleveard.bibliotech.testutils.makeBook
@@ -371,7 +372,11 @@ class BookDatabaseClassesTest {
 
        val bundle = Bundle()
        bundle.putParcelable("book", book1)
-       val book3 = bundle.getParcelable("book", BookAndAuthors::class.java)
+       @Suppress("DEPRECATION")
+       val book3 = if (android.os.Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU)
+           bundle.getParcelable("book", BookAndAuthors::class.java)
+       else
+           bundle.getParcelable("book")
        assertThat(book3 == book1).isTrue()
        assertThat(book3.hashCode()).isEqualTo(book1.hashCode())
    }
