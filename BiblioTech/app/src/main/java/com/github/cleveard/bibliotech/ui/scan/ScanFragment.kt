@@ -298,10 +298,6 @@ class ScanFragment : Fragment() {
      */
     override fun onDestroyView() {
         super.onDestroyView()
-        (activity as? BookStats)?.let {
-            it.filtersAndCounters = null
-        }
-
         tags?.removeObserver(tagObserver)
         tags = null
         chipBox = null
@@ -404,9 +400,6 @@ class ScanFragment : Fragment() {
 
         // Clear filter from books view model
         booksViewModel.filterName = null
-        (activity as? BookStats)?.let {
-            it.filtersAndCounters = booksViewModel.selection.counter
-        }
 
         container.findViewById<MaterialButton>(R.id.scan_ask_permission).setOnClickListener {
             // Request camera-related permissions
@@ -431,6 +424,22 @@ class ScanFragment : Fragment() {
         GoogleBookLoginFragment.login(this)
     }
 
+    /** @inheritDoc */
+    override fun onResume() {
+        super.onResume()
+        (activity as? BookStats)?.let {
+            // Setup the app bar counters api
+            it.observeFilterChanges = false
+            it.filtersAndCounters = booksViewModel.selection.counter
+        }
+    }
+
+    /** @inheritDoc */
+    override fun onPause() {
+        super.onPause()
+        // Clear the app bar UI
+        (activity as? BookStats)?.filtersAndCounters = null
+    }
 
     /**
      * Return sequence of selected names

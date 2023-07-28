@@ -10,7 +10,6 @@ import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
@@ -95,6 +94,7 @@ open class ChipBox: FlexboxLayout {
          * The default behavior returns true.
          */
         suspend fun onChipCloseClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            // Only respond to close if the ChipBox is enabled
             return chipBox.isEnabled
         }
 
@@ -107,6 +107,7 @@ open class ChipBox: FlexboxLayout {
          * The default behavior returns true.
          */
         suspend fun onChipClicked(chipBox: ChipBox, chip: View, scope: CoroutineScope): Boolean {
+            // Only respond to clicked if the ChipBox is enable
             return chipBox.isEnabled
         }
 
@@ -563,8 +564,11 @@ open class ChipBox: FlexboxLayout {
             }
     }
 
+    /** @inheritDoc */
     override fun setEnabled(enabled: Boolean) {
         super.setEnabled(enabled)
+        // Enable/Disable non chip children based on whether
+        // the ChipBox is enabled or disabled.
         for (f in children) {
             if (f !is Chip)
                 f.isEnabled = enabled

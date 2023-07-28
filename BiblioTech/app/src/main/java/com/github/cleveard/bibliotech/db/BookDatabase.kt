@@ -76,6 +76,7 @@ abstract class BookDatabase : RoomDatabase() {
      * @param idColumn The name of the row id column for the table
      * @param flagColumn The name of the flags column for the table
      * @param flagValue The value of the HIDDEN flag for the table
+     * @param selectedValue The value of the SELECTED flag for the table
      * @param flagPreserved Flag values to preserve for the table
      * @param modTimeColumn The name of the time modified column
      * @param bookIdColumn The name of the book id column in a link table

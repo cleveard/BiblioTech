@@ -57,11 +57,13 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
                 val book = peek(pos) as? BookAndAuthors
                 if (book != null) {
                     return filterView.value?.filter?.orderList?.let {order ->
+                        // Get the string to use for fast scroll. Skip and order
+                        // columns that don't allow headers
                         if (order.isEmpty())
                             null
                         else
-                            order.firstOrNull { it.column.desc.allowHeader && it.headers }?.column?.desc?.getValue(book)
-                    }?: position.toString()
+                            order.firstOrNull { it.column.desc.allowHeader }?.column?.desc?.getValue(book)
+                    }?: position.toString()     // Use the list position if nothing else works
                 }
             }
             return ""
@@ -88,11 +90,14 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      */
     private var flowFilter: BookFilter? = null
 
+    /** Shortcut value to get the live data for the current view entity */
     val filterView: LiveData<ViewEntity?>
         get() = selection.counter.viewEntity
+    /** The current view name*/
     var filterName: String?
         get() = selection.counter.viewName
         set(v) { selection.counter.setViewName(v, app.applicationContext) }
+    /** Flow for the current filter */
     val typedFilterFlow: StateFlow<Pair<Long, BookFilter?>>
         get() = selection.counter.generationFlow
 
@@ -156,7 +161,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
 
     /**
      * Apply the filter description to the view model
-     * @param context A context for the localle
+     * @param context A context for the locale
      * @param orderFields The description of the filter sort order
      * @param filterFields The description of the filter
      */
@@ -177,6 +182,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             return false
         }
 
+        // Set the view name to trigger a new filter cycle
         selection.counter.setViewName(view.name, context)
         return true
     }
@@ -207,7 +213,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * This is called when the filter is changed to update the display
      */
     fun buildFlow() {
-        // Get the view for the flow. Return if it is null
+        // Get the most recent filter
         val filter = typedFilterFlow.value.second
 
         // Only rebuild the flow when the query is different

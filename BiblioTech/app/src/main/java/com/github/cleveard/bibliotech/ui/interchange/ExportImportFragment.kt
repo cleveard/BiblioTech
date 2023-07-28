@@ -153,6 +153,7 @@ class ExportImportFragment : Fragment() {
     private var filter: ViewName = ViewName(null, "")
         set(v) {
             field = v
+            // When the filter name changes generate the new filter
             viewModel.exportCount.setViewName(v.name, requireContext())
         }
 
@@ -275,6 +276,7 @@ class ExportImportFragment : Fragment() {
             setOnClickListener {
                 exportBooksLauncher.launch("books.csv", null)
             }
+            // Only enable the export button if there are any books to export
             isEnabled = (viewModel.exportCount.itemCount.value?: 0) > 0
             viewModel.exportCount.itemCount.observe(viewLifecycleOwner) {
                 isEnabled = (viewModel.exportCount.itemCount.value?: 0) > 0
@@ -295,15 +297,19 @@ class ExportImportFragment : Fragment() {
         view.findViewById<RadioButton>(R.id.reject_all).isChecked = true
     }
 
+    /** @inheritDoc */
     override fun onResume() {
         super.onResume()
         (activity as? BookStats)?.let {
+            // Set the exportCount for the app bar ui
             it.observeFilterChanges = true
             it.filtersAndCounters = viewModel.exportCount
         }
     }
 
+    /** @inheritDoc */
     override fun onPause() {
+        // Clear the exportCount for the app bar ui
         (activity as? BookStats)?.filtersAndCounters = null
         super.onPause()
     }

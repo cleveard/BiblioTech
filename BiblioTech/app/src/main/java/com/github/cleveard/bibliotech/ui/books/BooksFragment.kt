@@ -206,6 +206,7 @@ class BooksFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Collect the current filter when it changes and rebuild the database flow
                 booksViewModel.typedFilterFlow
                     .onEach { booksViewModel.buildFlow() }
                     .collect()
@@ -438,15 +439,23 @@ class BooksFragment : Fragment() {
         }
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onResume() {
         super.onResume()
         (activity as? BookStats)?.let {
+            // Set the selection counter for the app bar UI
             it.observeFilterChanges = true
             it.filtersAndCounters = booksViewModel.selection.counter
         }
     }
 
+    /**
+     * @inheritDoc
+     */
     override fun onPause() {
+        // Clear the selection counter for the app bar UI
         (activity as? BookStats)?.filtersAndCounters = null
         super.onPause()
     }

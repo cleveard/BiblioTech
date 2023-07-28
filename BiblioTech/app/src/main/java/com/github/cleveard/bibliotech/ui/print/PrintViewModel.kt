@@ -14,6 +14,7 @@ class PrintViewModel : ViewModel() {
     private lateinit var printLayouts: PrintLayouts
     /** The pdf printer */
     lateinit var pdfPrinter: PDFPrinter
+    /** Filters and counters for the selected filter */
     lateinit var printCount: BookRepository.FilteredBookCount
 
     /**

@@ -16,18 +16,38 @@ import kotlinx.serialization.json.*
  */
 @Serializable
 data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<FilterField>) {
+    /** How selection is filtered */
     enum class SelectionType {
+        /** Accept both selected and unselected books */
         EITHER,
+        /** Accept only selected books */
         SELECTED,
-        UNSELECTED
+        /** Accept only unselected books */
+        UNSELECTED,
+        /** Accept no books */
+        NONE
     }
+
+    /** How this filter filters selected books */
     val selectionType: SelectionType
-        get() = filterList.firstOrNull { it.column == Column.SELECTED }?. let{
-            if (it.predicate == Predicate.ONE_OF)
-                SelectionType.SELECTED
-            else
-                SelectionType.UNSELECTED
-        } ?: SelectionType.EITHER
+        get() {
+            // Look at all SELECTED fields in the filter list
+            var selected = 0
+            filterList.forEach {
+                if (it.column == Column.SELECTED) {
+                    // Set selected based on the predicate
+                    selected = selected or (if (it.predicate == Predicate.ONE_OF) 1 else 2)
+                }
+            }
+
+            // Return the SelectedType
+            return when (selected) {
+                0 -> SelectionType.EITHER
+                1 -> SelectionType.SELECTED
+                2 -> SelectionType.UNSELECTED
+                else -> SelectionType.NONE
+            }
+        }
 
     /** @inheritDoc */
     override fun hashCode(): Int {
@@ -96,17 +116,24 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
     }
 }
 
-
+/**
+ * Build a filter that filters for selection based on selection type
+ * @param type How selection is to be filter
+ */
 fun BookFilter?.filterForSelectionType(type: BookFilter.SelectionType): BookFilter? {
+    // If the filter is already correct return it
     if (type == (this?.selectionType ?: BookFilter.SelectionType.EITHER))
         return this
 
+    // Remove and selection fields from the filter list
     val baseList = this?.filterList?.filter { it.column != Column.SELECTED }?.toMutableList()?: mutableListOf()
+    // Add the field for the requested selection type
     when (type) {
         BookFilter.SelectionType.SELECTED -> baseList.add(FilterField(Column.SELECTED, Predicate.ONE_OF, arrayOf("0")))
         BookFilter.SelectionType.UNSELECTED -> baseList.add(FilterField(Column.SELECTED, Predicate.NOT_ONE_OF, arrayOf("0")))
         else -> {}
     }
+    // Return the new filter
     return BookFilter(this?.orderList?: emptyArray(), baseList.toTypedArray())
 }
 
@@ -117,16 +144,23 @@ fun BookFilter?.filterForSelectionType(type: BookFilter.SelectionType): BookFilt
  * @param excludeOrder True to exclude the order terms
  */
 fun BookFilter?.buildFilter(context: Context, select: Array<String>, excludeOrder: Boolean = false): BookFilter.BuiltFilter? {
-    // If we aren't selecting anything or this is null, then return null
+    // If we aren't selecting all columns
     if ((select.isEmpty() || (select.size == 1 && select[0] == "*"))
-        && (this == null || (this.filterList.isEmpty() && (excludeOrder || this.orderList.isEmpty())))) {
+        // and this is null or we are selecting all books with no order, then return null
+        && (this == null || (this.filterList.isEmpty() && (excludeOrder || this.orderList.isEmpty())))
+    ) {
         return null
     }
     // Build the  SQLite command to get the book ids for the filter
     val idFilterBuilder = BookFilter.newSQLiteQueryBuilder(context, BookDatabase.bookTable)
-    // We only need the book id column
-    for (s in select)
-        idFilterBuilder.addSelect(s)
+    if (select.isEmpty()) {
+        // Add select all columns
+        idFilterBuilder.addSelect("*")
+    } else {
+        // Only select the columns in select
+        for (s in select)
+            idFilterBuilder.addSelect(s)
+    }
 
     if (this != null) {
         // Include the order terms
@@ -136,6 +170,7 @@ fun BookFilter?.buildFilter(context: Context, select: Array<String>, excludeOrde
         idFilterBuilder.buildFilter(filterList.iterator())
     }
 
+    // Return the built filter
     return BookFilter.BuiltFilter(
         idFilterBuilder.createCommand(),
         idFilterBuilder.argList.toArray()
@@ -280,7 +315,7 @@ private class SQLiteQueryBuilderImpl(context: Context, table: BookDatabase.Table
     // Order columns
     private val orderSpec: StringBuilder = StringBuilder()
     // Where expression
-    private val filterSpec: StringBuilder = StringBuilder(table.getVisibleExpression(false))
+    private val filterSpec: StringBuilder = StringBuilder(table.getVisibleExpression())
     // Holds expressions for a single field
     private val filterFieldExpression: StringBuilder = StringBuilder()
     // Holds rollback of argList if filterFieldExpression is abandoned

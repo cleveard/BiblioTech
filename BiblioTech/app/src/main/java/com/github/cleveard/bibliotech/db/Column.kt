@@ -5,7 +5,6 @@ import android.database.Cursor
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.github.cleveard.bibliotech.R
-import java.lang.Exception
 import java.lang.NumberFormatException
 import java.lang.StringBuilder
 import java.text.DateFormat
@@ -250,6 +249,7 @@ abstract class ColumnDataDescriptor(
         values: Array<String>
     ): Boolean {
         var hasValues = false
+        // If the column only has one value, then ignore the values array
         if (singleValue != null) {
             // If we can convert the value add the expression
             if (convert(buildQuery, predicate, singleValue)) {
@@ -323,14 +323,31 @@ abstract class ColumnDataDescriptor(
         throw UnsupportedOperationException("Column does not support auto-complete")
     }
 
+    /**
+     * Get the value to display for this column and book
+     * @param book The book
+     * @return The value as a string
+     */
     open fun getDisplayValue(book: BookAndAuthors): String {
         return getValue(book)
     }
 
+    /**
+     * Convert the unlocalized value to a localized string
+     * @param value The value to convert
+     * @param context The context to use for localization
+     * @return The converted value
+     */
     open fun localizeValue(value: String, context: Context): String {
         return value
     }
 
+    /**
+     * Convert the localized value to a value for all locales
+     * @param value The value to convert
+     * @param context The context to use for localization
+     * @return The converted value
+     */
     open fun globalizeValue(value: String, context: Context): String {
         return value
     }
@@ -1084,13 +1101,15 @@ private val series = object: SubQueryColumnDataDescriptor(
 }
 
 
-/** Rating */
+/** Selected */
 private val selection = object: ColumnDataDescriptor(
+    // The name used to order and test the selected flag
+    // Use ~ so selected books are ordered at the start
     arrayOf("( ~ $BOOK_FLAGS & ${BookEntity.SELECTED} )"),
     R.string.selected,
     arrayOf(Predicate.ONE_OF, Predicate.NOT_ONE_OF),
-    "1",
-    false
+    "1",        // Only value allowed is selected
+    false       // Don't make a header for selected
 ) {
     /** @inheritDoc */
     override fun shouldAddSeparator(book: BookAndAuthors, other: BookAndAuthors): Boolean {
@@ -1100,7 +1119,7 @@ private val selection = object: ColumnDataDescriptor(
 
     /** @inheritDoc */
     override fun getValue(book: BookAndAuthors): String {
-        // Make selected 0 so ascending order will sort to the top
+        // Return whether the book is selected or not ("1" or "0")
         return if ((book.book.flags and BookEntity.SELECTED) != 0) "1" else "0"
     }
 
@@ -1115,7 +1134,9 @@ private val selection = object: ColumnDataDescriptor(
         return predicate.desc.convertInt(buildQuery, v)
     }
 
+    /** @inheritDoc */
     override fun localizeValue(value: String, context: Context): String {
+        // Convert value to true or false. False is a value of 0, true is anything else.
         val id = try {
             if (value.toInt() == 0)
                 R.string.localFalse
@@ -1127,7 +1148,10 @@ private val selection = object: ColumnDataDescriptor(
         return context.resources.getString(id)
     }
 
+    /** @inheritDoc */
     override fun globalizeValue(value: String, context: Context): String {
+        // Convert value to "0" or "1". The local string for false is "0"
+        // Anything else is "1"
         return if (value == context.resources.getString(R.string.localFalse))
             "0"
         else

@@ -62,19 +62,12 @@ class BookRepository private constructor(context: Context) {
         fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?, filter: BookFilter.BuiltFilter?): LiveData<Int>
     }
 
+    /** Holder for filters and counters for a fragment */
     interface FiltersAndCounters {
-        /** The flags interface used for the counters */
-        //val flags: FlagsInterface
-        /** The mask used to count selected items */
-        //val mask: Int
-        /** A coroutine scope used for counting and filtering */
-        //val scope: CoroutineScope
         /** Count of item selected and filtered */
         val selectedCount: LiveData<Int>
         /** Count of items filtered */
         val itemCount: LiveData<Int>
-        /** The built filter to get filtered book ids */
-        //val builtFilter: LiveData<BookFilter.BuiltFilter?>
         /** The name of the current view */
         val viewName: String?
         /** The current view entity */
@@ -93,56 +86,78 @@ class BookRepository private constructor(context: Context) {
          * @param context A context used to build the built filter
          */
         fun setSelectedType(value: BookFilter.SelectionType, context: Context)
-        /** The filter with the selected type included */
-        //val typedFilter: LiveData<BookFilter?>
-
-        //suspend fun awaitForFilter(): BookFilter?
     }
 
+    /**
+     * Holder for filters and counters for a fragment
+     */
     inner class FilteredBookCount(
+        /** The flags for the table */
         val flags: FlagsInterface,
+        /** The selected mask for the table */
         val mask: Int,
+        /** A scope to launch child jobs */
         val scope: CoroutineScope
     ): FiltersAndCounters {
+        /** Generation of most recent filter */
         private var lastGeneration: Long = 0
+        /** MutableStateFlow that contains the generation and book filter */
         private val _generationFlow: MutableStateFlow<Pair<Long, BookFilter?>> = MutableStateFlow(Pair(0, null))
+        /** StateFlow that contains the generation and book filter */
         val generationFlow: StateFlow<Pair<Long, BookFilter?>> = _generationFlow
+        /** The built filter for the current filter and selection type */
         private val _builtFilter: MutableLiveData<BookFilter.BuiltFilter?> = MutableLiveData<BookFilter.BuiltFilter?>()
 
+        /** @inheritDoc */
         override val selectedCount: LiveData<Int> = _builtFilter.switchMap {
+            // Count rows with selection mask set
             flags.countBitsLive(mask, mask, true, null, it)
         }
 
+        /** @inheritDoc */
         override val itemCount: LiveData<Int> = _builtFilter.switchMap {
+            // Count all rows
             flags.countBitsLive(0, 0, true, null, it)
         }
 
+        /** The  built filter for the current filter and selection type */
         val builtFilter: LiveData<BookFilter.BuiltFilter?> = _builtFilter
+        /** @inheritDoc */
         override var viewName: String? = null
             private set
+        /** The current viewEntity */
         private val _viewEntity: MutableLiveData<ViewEntity?> = MutableLiveData()
+        /** @inheritDoc */
         override val viewEntity: LiveData<ViewEntity?> = _viewEntity
+        /** @inheritDoc */
         override fun setViewName(name: String?, context: Context) {
             viewName = name
             buildFilter(context, ++lastGeneration)
         }
+        /** @inheritDoc */
         override var selectedType: BookFilter.SelectionType = BookFilter.SelectionType.EITHER
             private set
+        /** @inheritDoc */
         override fun setSelectedType(value: BookFilter.SelectionType, context: Context) {
             selectedType = value
             buildFilter(context, ++lastGeneration)
         }
 
+        /**
+         * Transform a generation flow
+         */
         fun <T, R> transform(input: Flow<Pair<Long, T>>, trans: suspend CoroutineScope.(T) -> R): Flow<Pair<Long, R>> {
             // Job for the transform
             var deferred: Deferred<Pair<Long, R>>? = null
             // Cache for most recent value
             var cache: Pair<T, Pair<Long, R>>? = null
+            // Transform the flow
             return input.transform inner@ {result ->
                 // Only emit a value when the generations match
                 if (result.first == lastGeneration) {
                     // If the cached value is the most recent value use it
                     cache?.let {c ->
+                        // Cache is more recent than this result, use the cash
                         if (c.second.first >= result.first) {
                             emit(c.second)
                             return@inner
@@ -150,6 +165,7 @@ class BookRepository private constructor(context: Context) {
                         // If the value to be transformed is the same use the cache
                         if (c.first == result.second) {
                             Pair(c.first, Pair(result.first, c.second.second)).also {
+                                // Cache it
                                 cache = it
                                 emit(it.second)
                                 return@inner
@@ -157,13 +173,14 @@ class BookRepository private constructor(context: Context) {
                         }
                     }
 
-                    // need to recreate the cache
+                    // need to recreate the cache, cancel any running job
                     deferred?.cancel()
                     val scope = CoroutineScope(currentCoroutineContext())
+                    // Start a new job
                     deferred = scope.async {
-                            // Otherwise create a new value
+                        // Create a new cache with a transformed value
                         Pair(result.second, Pair(result.first, scope.trans(result.second))).let {
-                            // If this value isn't the most recent value, skip the emit
+                            // If this value isn't the most recent value, emit the cache
                             if (it.second.first < (cache?.second?.first ?: Long.MIN_VALUE))
                                 return@let cache!!.second
                             // Cache the new value
@@ -174,23 +191,32 @@ class BookRepository private constructor(context: Context) {
                     }
 
                     try {
+                        // Wait for the value
                         deferred?.await()
                     } catch (_: CancellationException) {
+                        // Canceled - Don't emit anything
                         null
                     } finally {
+                        // Cleared the deferred
                         deferred = null
                     }?.let {
+                        // Emit the value
                         emit(it)
                     }
                 }
             }
         }
 
+        /**
+         * Wait for a generation flow to be done
+         * @param input The generation flow
+         */
         suspend fun <T> awaitForResult(input: Flow<Pair<Long, T>>): T? {
             // Place to put the result
             var result: T? = null
             // Take while the result is out of date
             input.takeWhile {
+                // Are we at the latest generation
                 if (it.first == lastGeneration) {
                     // Good result. Set it and stop the collection
                     result = it.second
@@ -198,26 +224,39 @@ class BookRepository private constructor(context: Context) {
                 } else
                     true    // Continue collecting
             }.collect()
+            // Return the result
             return result
         }
 
+        /**
+         * Build the filters from the current viewEntity and selection type
+         * @param context Context with locale used to parse dates
+         * @param generation The generation of the filter we are building
+         */
         private fun buildFilter(context: Context, generation: Long) {
             scope.launch {
+                // Get the viewEntity and set it to the LiveData
                 val filter = viewName?.let {name ->
                     findViewByName(name).also { _viewEntity.value = it}
                 }
+                    // Get the view entity filter
                     ?.filter
+                    // Modify it based on the selectedType
                     .filterForSelectionType(selectedType)
                     ?.let { filter ->
+                        // If the new filter is the same as the last one use the last one
                         if (filter.isSameQuery(generationFlow.value.second))
                             generationFlow.value.second
                         else
                             filter
                     }
+                // Emit if this is the latest filter
                 if (generation == lastGeneration) {
+                    // If the filter changed, make a new built filter
                     if (generationFlow.value.second != filter) {
                         _builtFilter.value = filter.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
                     }
+                    // Emit the filter
                     _generationFlow.tryEmit(Pair(generation, filter))
                 }
             }

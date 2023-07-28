@@ -56,14 +56,16 @@ class OrderTable(private val fragment: Fragment) {
      */
     private fun columnListener(row: Int): OnItemSelectedListener = object: OnItemSelectedListener {
         fun setHeaders(position: Int) {
+            // When the column changes, make sure the headers switch is only checked
+            // when the column allows headers.
             val allowHeaders = if (position < 0)
                 true
             else
                 Column.valueOf(columnMap[position]).desc.allowHeader
             val headers = rowView.findViewById<SwitchMaterial>(R.id.action_use_header)
             if (!allowHeaders)
-                headers.isChecked = false
-            headers.isEnabled = allowHeaders
+                headers.isChecked = false       // Clear switch if headers not allowed
+            headers.isEnabled = allowHeaders    // Disable switch if headers not allowed
         }
 
         val rowView = rows[row]
@@ -80,7 +82,6 @@ class OrderTable(private val fragment: Fragment) {
         }
 
         override fun onNothingSelected(parent: AdapterView<*>?) {
-            // Do nothing when nothing is selected
             setHeaders(-1)
 
             // Build filter when something is selected
@@ -125,7 +126,7 @@ class OrderTable(private val fragment: Fragment) {
                     Order.Descending
                 else
                     Order.Ascending,
-                // Get the use header flag
+                // Get the use header flag. Only allow headers if the columns lets it.
                 column.desc.allowHeader && row.findViewById<SwitchMaterial>(R.id.action_use_header).isChecked
             )
         }
@@ -234,6 +235,7 @@ class OrderTable(private val fragment: Fragment) {
         rowView.findViewById<Spinner>(R.id.action_order_by).setSelection(columnMap.indexOf(field.column.name))
         // Set use headers
         rowView.findViewById<SwitchMaterial>(R.id.action_use_header).apply {
+            // Don't allow the allow header switch to be check if headers aren't allowed
             isChecked = field.column.desc.allowHeader && field.headers
             isEnabled = field.column.desc.allowHeader
         }

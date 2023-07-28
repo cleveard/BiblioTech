@@ -8,7 +8,6 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.View
-import android.widget.TextView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.navigation.findNavController
@@ -17,9 +16,7 @@ import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import androidx.drawerlayout.widget.DrawerLayout
-import com.google.android.material.navigation.NavigationView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.Toolbar
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.LiveData
@@ -97,9 +94,12 @@ interface BookCredentials {
     val isAuthorized: Boolean
 }
 
+/** Interface for book statistics */
 interface BookStats {
+    /** Object with statistics counter and book filter*/
     var filtersAndCounters: BookRepository.FiltersAndCounters?
 
+    /** Boolean used to observer view entity changes and update the selected only switch*/
     var observeFilterChanges: Boolean
 }
 
@@ -187,8 +187,11 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
         binding = MainActivityBinding.inflate(LayoutInflater.from(this))
         setContentView(binding.root)
 
+        // Set the listener for the selected only switch
         binding.includeAppBar.selectedOnly.setOnClickListener {
+            // Only make changes if the switch is enabled
             if (binding.includeAppBar.selectedOnly.isEnabled) {
+                // Set tje selected type based on the switch
                 filtersAndCounters?.setSelectedType(
                     if (binding.includeAppBar.selectedOnly.isChecked)
                         BookFilter.SelectionType.SELECTED
@@ -414,37 +417,46 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
     override val isAuthorized: Boolean
         get() = googleBooksAuth?.isAuthorized == true
 
+    /** Observer to book and selected count LiveData. Used to update app bar stats */
     private val reportStats = Observer<Int> {
-        // Get the has selected state for books
+        // Get the book counters
         val booksSelected = filtersAndCounters?.selectedCount?.value?: 0
         val booksCount = filtersAndCounters?.itemCount?.value?: 0
 
-        binding.includeAppBar.bookStats.visibility = if (filtersAndCounters == null) View.GONE else View.VISIBLE
+        // Show the stats
         binding.includeAppBar.bookStats.text =
             getString(R.string.book_stats, booksCount, booksSelected)
     }
 
-    var lastFilter: BookFilter? = null
-    val viewEntityObserver: Observer<ViewEntity?> = object: Observer<ViewEntity?> {
-        override fun onChanged(value: ViewEntity?) {
-            val type = if (lastFilter?.isSameQuery(value?.filter) == true) {
-                if (binding.includeAppBar.selectedOnly.isChecked)
-                    BookFilter.SelectionType.SELECTED
-                else
-                    BookFilter.SelectionType.EITHER
-            } else
-                value?.filter?.selectionType ?: BookFilter.SelectionType.EITHER
-            if (binding.includeAppBar.selectedOnly.isChecked != (type == BookFilter.SelectionType.SELECTED))
-                binding.includeAppBar.selectedOnly.isChecked = type == BookFilter.SelectionType.SELECTED
-            if (type != filtersAndCounters?.selectedType)
-                filtersAndCounters?.setSelectedType(type, this@MainActivity)
-            lastFilter = value?.filter
-        }
+    /** Last book filter we observed */
+    private var lastFilter: BookFilter? = null
+
+    /** Observer of filtersAndCounters viewEntity LiveData */
+    private val viewEntityObserver: Observer<ViewEntity?> = Observer { value ->
+        // Get the selection type from the new ViewEntity, but only if view entity filter changed
+        val type = if (lastFilter?.isSameQuery(value?.filter) == true) {
+            // Filter didn't change, use the type from the switch in the UI
+            if (binding.includeAppBar.selectedOnly.isChecked)
+                BookFilter.SelectionType.SELECTED
+            else
+                BookFilter.SelectionType.EITHER
+        } else
+            value?.filter?.selectionType ?: BookFilter.SelectionType.EITHER // Use the view entity filter
+        // Set the switch from the type
+        if (binding.includeAppBar.selectedOnly.isChecked != (type == BookFilter.SelectionType.SELECTED))
+            binding.includeAppBar.selectedOnly.isChecked = type == BookFilter.SelectionType.SELECTED
+        // Set the filtering from the type
+        if (type != filtersAndCounters?.selectedType)
+            filtersAndCounters?.setSelectedType(type, this@MainActivity)
+        // Save last observed view entity
+        lastFilter = value?.filter
     }
 
+    // Interface set by fragments as the source of the book stats
     override var filtersAndCounters: BookRepository.FiltersAndCounters? = null
         set(v) {
             if (field != v) {
+                // If the old value isn't null remove the observers
                 field?.let {
                     it.selectedCount.removeObserver(reportStats)
                     it.itemCount.removeObserver(reportStats)
@@ -452,7 +464,11 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                         it.viewEntity.removeObserver(viewEntityObserver)
                 }
                 field = v
+                // Set the stats visibility
+                binding.includeAppBar.bookStatsFilter.visibility = if (v == null) View.GONE else View.VISIBLE
+                // If the new value isn't null add the observers
                 v?.let {
+                    // Don't show stats if we don't have a source
                     it.selectedCount.observeForever(reportStats)
                     it.itemCount.observeForever(reportStats)
                     if (observeFilterChanges)
@@ -461,9 +477,11 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
             }
         }
 
+    /** Should we observe filter changes and set the switch */
     override var observeFilterChanges: Boolean = false
         set(value) {
             if (value != field) {
+                // Add or remove the view entity observer based on the value
                 filtersAndCounters?.let {
                     if (value)
                         it.viewEntity.observeForever(viewEntityObserver)

@@ -9,5 +9,6 @@ class ExportImportViewModel : ViewModel() {
     /** The book repository **/
     val repo: BookRepository = BookRepository.repo
 
+    /** The filters and counters for the export import fragment */
     val exportCount: BookRepository.FilteredBookCount = repo.FilteredBookCount(repo.bookFlags, BookEntity.SELECTED, viewModelScope)
 }

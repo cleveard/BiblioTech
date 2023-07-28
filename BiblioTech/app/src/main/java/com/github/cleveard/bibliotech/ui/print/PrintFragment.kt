@@ -28,7 +28,6 @@ import androidx.recyclerview.widget.ListAdapter
 import com.github.cleveard.bibliotech.BookStats
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
-import com.github.cleveard.bibliotech.db.BookFilter
 import com.github.cleveard.bibliotech.db.Column
 import com.github.cleveard.bibliotech.print.PDFPrinter
 import com.github.cleveard.bibliotech.print.PageLayoutHandler
@@ -148,6 +147,7 @@ class PrintFragment : Fragment() {
         }
     }
 
+    /** Flow of current book list */
     private lateinit var bookListFlow: Flow<Pair<Long, List<BookAndAuthors>?>>
 
     /**
@@ -483,22 +483,25 @@ class PrintFragment : Fragment() {
     /** @inheritDoc */
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Get the view model
+        // Initialize the view model
         viewModel.initialize(booksViewModel.repo, requireContext()) {id, large ->
             booksViewModel.getThumbnail(id, large)
         }
 
+        // Make a flow of the books list for the current filter.
         bookListFlow = viewModel.printCount.transform(viewModel.printCount.generationFlow) {bookFilter ->
             ensureActive()
-            // Get the PageSource for the books
+            // Get the LiveData for the books
             val source = if (bookFilter != null)
                 booksViewModel.repo.getBookList(bookFilter, requireContext())
             else
                 booksViewModel.repo.getBookList()
             ensureActive()
+            // Get the book list
             source.getLive()
         }
 
+        // Create a job to collect the book list as it changes
         viewLifecycleOwner.lifecycleScope.launch {
             bookListFlow
                 .onEach {
@@ -747,6 +750,7 @@ class PrintFragment : Fragment() {
             setOnClickListener {
                 print()
             }
+            // Disable the print button if there aren't any books to print.
             isEnabled = (viewModel.printCount.itemCount.value?: 0) > 0
             viewModel.printCount.itemCount.observe(viewLifecycleOwner) {
                 isEnabled = (viewModel.printCount.itemCount.value?: 0) > 0
@@ -754,15 +758,19 @@ class PrintFragment : Fragment() {
         }
     }
 
+    /** @inheritDoc */
     override fun onResume() {
         super.onResume()
         (activity as? BookStats)?.let {
+            // Set the printCount for the app bar UI
             it.observeFilterChanges = true
             it.filtersAndCounters = viewModel.printCount
         }
     }
 
+    /** @inheritDoc */
     override fun onPause() {
+        // Clear the printCount for the app bar UI
         (activity as? BookStats)?.filtersAndCounters = null
         super.onPause()
     }
@@ -843,6 +851,8 @@ class PrintFragment : Fragment() {
      */
     private fun print() {
         viewModel.viewModelScope.launch {
+            // Wait for the book list to be generated. It is collect
+            // in a job created for that purpose in onViewCreated
             viewModel.printCount.awaitForResult(bookListFlow)
             // Don't print if there aren't any books
             if (!viewModel.pdfPrinter.bookList.isNullOrEmpty()) {

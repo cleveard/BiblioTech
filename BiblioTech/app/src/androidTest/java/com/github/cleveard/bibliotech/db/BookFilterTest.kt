@@ -193,9 +193,11 @@ class BookFilterTest {
             assertWithMessage("Test Empty").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty Filters", 40)
             for (c in ColumnValue.values()) {
-                for (p in PredicateValue.values()) {
-                    TestFilter(emptySequence(), sequenceOf(Triple(c, p, emptyArray())))
-                        .test(this@BookFilterTest, "Empty", contents.asSequence())
+                if (c.column.desc.singleValue == null) {
+                    for (p in PredicateValue.values()) {
+                        TestFilter(emptySequence(), sequenceOf(Triple(c, p, emptyArray())))
+                            .test(this@BookFilterTest, "Empty", contents.asSequence())
+                    }
                 }
             }
         }
@@ -329,7 +331,12 @@ class BookFilterTest {
             order: Sequence<Pair<ColumnValue, Order>>,
             filter: Sequence<Pair<ColumnValue, PredicateValue>>,
             getValues: (ColumnValue, PredicateValue) -> Array<String>
-        ): this(order, filter.map { Triple(it.first, it.second, getValues(it.first, it.second)) })
+        ): this(order, filter.map {
+            Triple(
+                it.first, it.second,
+                it.first.column.desc.singleValue?.let {single -> arrayOf(single) }?: getValues(it.first, it.second)
+            )
+        })
 
         constructor(
             order: Sequence<Pair<ColumnValue, Order>>,
@@ -367,7 +374,10 @@ class BookFilterTest {
 
             for (f in filter) {
                 message.append("${f.first.column}, ${f.second.predicate}, ")
-                filterList.add(FilterField(f.first.column, f.second.predicate, f.third))
+                filterList.add(FilterField(
+                    f.first.column, f.second.predicate,
+                    if (f.first.column.desc.singleValue == null) f.third else emptyArray()
+                ))
                 sequence = sequence.filterSequence(f.first, f.second, f.third)
             }
 
@@ -595,6 +605,11 @@ class BookFilterTest {
                     })?: book.copy(sortSeries = null)
                 }
             }, { sequenceOf(sequenceOf(series?.title)) }
+        ),
+        SELECTED(Column.SELECTED, { if ((book.flags and BookEntity.SELECTED) != 0) "1" else "0" },
+            { (book.flags.inv() and BookEntity.SELECTED).compareTo((it.book.flags.inv() and BookEntity.SELECTED)) },
+            { this },
+            { sequenceOf(sequenceOf(if ((book.flags and BookEntity.SELECTED) != 0) "1" else "0")) }
         );
 
         companion object {

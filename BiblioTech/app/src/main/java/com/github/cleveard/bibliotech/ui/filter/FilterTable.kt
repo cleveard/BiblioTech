@@ -99,6 +99,8 @@ class FilterTable(private val fragment: Fragment) {
                 predicates[it].name
             }
 
+            // If the column only has a single value then, set the value to it
+            // and disable input for the value row.
             if (newColumn.desc.singleValue != null)
                 tagBox.setChips(booksViewModel.viewModelScope, sequenceOf(newColumn.desc.localizeValue(newColumn.desc.singleValue, valueRow.context)))
             valueRow.isEnabled = newColumn.desc.singleValue == null
@@ -219,12 +221,13 @@ class FilterTable(private val fragment: Fragment) {
         /** The array of values from the value text view */
         var values: Array<String>
             get() {
+                // Get the current values in the filter field. Make sure they are globalized. if needed
                 val vSeq = tagBox.values.value!!.iterator()
                 val c = column
                 return Array(tagBox.valueCount) { c.desc.globalizeValue(vSeq.next(), valueRow.context) }
             }
             set(value) {
-                // Form the value text by joining the values
+                // Form the value text by joining the values. Localize if needed
                 val c = column
                 tagBox.chipInput.value = ""
                 tagBox.setChips(booksViewModel.viewModelScope, value.asSequence().map { c.desc.localizeValue(it, valueRow.context) })
@@ -464,7 +467,7 @@ class FilterTable(private val fragment: Fragment) {
         rowItem.changeColumn()
         // Set the predicate
         rowItem.predicate = field.predicate
-        // Set the value
+        // Set the value, if this column isn't a single value column
         if (field.column.desc.singleValue == null)
             rowItem.values = field.values
     }

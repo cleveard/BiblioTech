@@ -45,7 +45,9 @@ class BookDatabaseClassesTest {
             OrderField(Column.SOURCE_ID, Order.Descending, true),
             OrderField(Column.SUBTITLE, Order.Descending, true),
             OrderField(Column.TAGS, Order.Ascending, false),
-            OrderField(Column.TITLE, Order.Descending, true)
+            OrderField(Column.TITLE, Order.Descending, true),
+            OrderField(Column.SERIES, Order.Ascending, true),
+            OrderField(Column.SELECTED, Order.Descending, true)
         ), arrayOf(
             FilterField(Column.ANY, Predicate.GE, arrayOf("xx", "yy")),
             FilterField(Column.BOOK_COUNT, Predicate.GLOB, arrayOf("zz")),
@@ -62,7 +64,9 @@ class BookDatabaseClassesTest {
             FilterField(Column.SOURCE_ID, Predicate.GLOB, arrayOf("ww", "ll", "33", "44", "55", "765")),
             FilterField(Column.SUBTITLE, Predicate.ONE_OF, arrayOf("ww", "ll", "33", "44", "55", "765")),
             FilterField(Column.TAGS, Predicate.GT, arrayOf("ww", "ll", "33", "44", "55", "765")),
-            FilterField(Column.TITLE, Predicate.GE, arrayOf("ww", "ll", "33", "44", "55", "765"))
+            FilterField(Column.TITLE, Predicate.GE, arrayOf("ww", "ll", "33", "44", "55", "765")),
+            FilterField(Column.SERIES, Predicate.ONE_OF, arrayOf("ww", "ll", "33", "44", "55", "765")),
+            FilterField(Column.SELECTED, Predicate.NOT_ONE_OF, arrayOf()),
         ))
         val string = BookFilter.encodeToString(filter)
         assertThat(string).isEqualTo(cvt.filterToString(filter))
@@ -90,8 +94,9 @@ class BookDatabaseClassesTest {
     }
 
     @Test(timeout = 5000L) fun bookEntityTest() {
-        val book1 = makeBook()
-        val book2 = makeBook()
+        val time = Calendar.getInstance().timeInMillis
+        val book1 = makeBook(0, 0, "0", time)
+        val book2 = makeBook(0, 0, "0", time)
 
         // Assert that the books compare
         assertThat(book1 == book2).isTrue()
@@ -331,9 +336,9 @@ class BookDatabaseClassesTest {
     }
 
    @Test(timeout = 5000L) fun bookAndAuthorsTest() {
-       fun makeBookAndAuthors(): BookAndAuthors {
+       fun makeBookAndAuthors(bookTestNow: Long = Calendar.getInstance().timeInMillis): BookAndAuthors {
            return BookAndAuthors(
-               book = makeBook(),
+               book = makeBook(0, 0, "0", bookTestNow),
                authors = listOf(AuthorEntity(0L, "sourceId volumeId")),
                categories = listOf(makeCategory()),
                tags = listOf(makeTag()),
@@ -342,8 +347,9 @@ class BookDatabaseClassesTest {
            )
        }
 
-       val book1 = makeBookAndAuthors()
-       val book2 = makeBookAndAuthors()
+       val time = Calendar.getInstance().timeInMillis
+       val book1 = makeBookAndAuthors(time)
+       val book2 = makeBookAndAuthors(time)
 
        // Assert that the books compare
        assertThat(book1 == book2).isTrue()
