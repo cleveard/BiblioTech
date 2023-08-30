@@ -143,6 +143,11 @@ class BookRepository private constructor(context: Context) {
             buildFilter(context, ++lastGeneration)
         }
 
+        init {
+            // Force the counter switch maps to initialize
+            _builtFilter.value = null
+        }
+
         /**
          * Transform a generation flow
          */
