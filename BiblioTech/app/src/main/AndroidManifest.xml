@@ -17,7 +17,8 @@
         <activity android:name=".SplashScreenActivity"
             android:screenOrientation="portrait"
             android:theme="@style/AppTheme.SplashScreen"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="LockedOrientationActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -27,7 +28,8 @@
             android:name=".MainActivity"
             android:screenOrientation="portrait"
             android:theme="@style/AppTheme.NoActionBar"
-            android:exported="false">
+            android:exported="false"
+            tools:ignore="LockedOrientationActivity">
         </activity>
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
