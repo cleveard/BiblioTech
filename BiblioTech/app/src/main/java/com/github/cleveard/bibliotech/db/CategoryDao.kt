@@ -69,7 +69,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * Get the list of categories
      */
     @Query(value = "SELECT * FROM $CATEGORIES_TABLE WHERE ( ( $CATEGORIES_FLAGS & ${CategoryEntity.HIDDEN} ) = 0 ) ORDER BY $CATEGORY_COLUMN")
-    abstract suspend fun get(): List<CategoryEntity>?
+    abstract suspend fun get(): List<CategoryEntity>
 
     /**
      * Add a category to the categories table
@@ -180,7 +180,7 @@ abstract class CategoryDao(private val db: BookDatabase) {
      * @param query The SQLite query to get the ids
      */
     @RawQuery(observedEntities = [BookAndCategoryEntity::class])
-    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>
 
     /**
      * Query author ids for a set of books

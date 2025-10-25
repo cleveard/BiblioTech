@@ -22,6 +22,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 // import androidx.appcompat.app.AlertDialog
 import androidx.camera.core.*
 import androidx.camera.core.Camera
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -65,6 +67,8 @@ import kotlin.coroutines.suspendCoroutine
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.util.isNotEmpty
+import androidx.core.util.size
 
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
@@ -571,7 +575,7 @@ class ScanFragment : Fragment() {
     /** Initialize CameraX, and prepare to bind the camera use cases  */
     private fun setUpCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
-        cameraProviderFuture.addListener(Runnable {
+        cameraProviderFuture.addListener({
 
             // CameraProvider
             cameraProvider = cameraProviderFuture.get()
@@ -621,7 +625,11 @@ class ScanFragment : Fragment() {
         // Preview
         preview = Preview.Builder()
             // We request aspect ratio but no resolution
-            .setTargetAspectRatio(screenAspectRatio)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy(screenAspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO))
+                    .build()
+            )
             // Set initial target rotation
             .setTargetRotation(rotation)
             .build()
@@ -630,7 +638,11 @@ class ScanFragment : Fragment() {
         this.imageCapture = ImageCapture.Builder()
             // We request aspect ratio but no resolution to match preview config but letting
             // CameraX optimize for whatever specific resolution best fits requested capture mode
-            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy(AspectRatio.RATIO_4_3, AspectRatioStrategy.FALLBACK_RULE_AUTO))
+                    .build()
+            )
             // Set initial target rotation, we will have to call this again if rotation changes
             // during the lifecycle of this use case
             .setTargetRotation(rotation)
@@ -646,8 +658,8 @@ class ScanFragment : Fragment() {
             )
 
             // Attach the viewfinder's surface provider to preview use case
-            preview?.setSurfaceProvider(viewFinder.surfaceProvider)
-        } catch(e: Exception) {
+            preview?.surfaceProvider = viewFinder.surfaceProvider
+        } catch(_: Exception) {
             // Log.e(TAG, "Use case binding failed", e)
         }
     }
@@ -717,7 +729,7 @@ class ScanFragment : Fragment() {
 
                 // Select a book from the ones we found
                 val array = selectBook(result.list, isbn, result.itemCount, false)
-                if (array.size() > 0) {
+                if (array.isNotEmpty()) {
                     val book = array.valueAt(0)
                     // When a book is selected, set the title
                     container.findViewById<EditText>(R.id.scan_title).text.setString(book.book.title)
@@ -795,7 +807,7 @@ class ScanFragment : Fragment() {
                 val array = selectBook(result.list, spec, result.itemCount, true)
                 // Deselect all
                 booksViewModel.selection.selectAll(false)
-                for (i in 0 until array.size()) {
+                for (i in 0 until array.size) {
                     val book = array.valueAt(i)
                     // Add the book to the database
                     addBook(book)
@@ -876,7 +888,7 @@ class ScanFragment : Fragment() {
                     }
                 } else
                     true        // Assume focused if auto-focus isn't supported
-            } catch (e: CameraInfoUnavailableException) {
+            } catch (_: CameraInfoUnavailableException) {
                 // Log.d(TAG, "cannot access camera", e)
                 false
             } finally {
@@ -907,7 +919,7 @@ class ScanFragment : Fragment() {
                                 cont.resume(null)
                             }
                         })
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Log.d(TAG, "Start capture failed $e")
                     cont.resume(null)
                 }
@@ -1021,7 +1033,7 @@ class ScanFragment : Fragment() {
             // Scan the image for bar code. Returns 0 if nothing was found
             val result = try {
                 scanner.scanImage(barcode)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Log.d(TAG, "ZBar failed $e")
                 0
             }
@@ -1429,7 +1441,7 @@ class ScanFragment : Fragment() {
 
                         // Clear the selected items - only use for !isMulti
                         fun clearSelection(selected: Boolean) {
-                            for (i in 0 until selection.size())
+                            for (i in 0 until selection.size)
                                 selection.valueAt(i).book.isSelected = selected
                             selection.clear()
                             adapter.notifyItemRangeChanged(0, adapter.itemCount)

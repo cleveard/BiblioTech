@@ -75,7 +75,7 @@ class DateConverters {
         )
     ]
 )
-data class BookEntity constructor(
+data class BookEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_ID_COLUMN) var id: Long,
     @ColumnInfo(name = VOLUME_ID_COLUMN) var volumeId: String?,
     @ColumnInfo(name = SOURCE_ID_COLUMN) var sourceId: String?,
@@ -474,7 +474,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param query The SQLite query to get the book ids
      */
     @RawQuery(observedEntities = [BookEntity::class])
-    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<BookId>?
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<BookId>
 
     /**
      * Query book ids
@@ -511,7 +511,7 @@ abstract class BookDao(private val db: BookDatabase) {
      * @param sourceId The source id
      */
     @Transaction
-    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     @Query(value = "SELECT * FROM $BOOK_TABLE WHERE ( ( $VOLUME_ID_COLUMN = :volumeId AND $SOURCE_ID_COLUMN = :sourceId ) ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): BookAndAuthors?
 
@@ -690,7 +690,7 @@ abstract class BookDao(private val db: BookDatabase) {
     @Transaction
     @Query(value = "SELECT * FROM $BOOK_TABLE"
             + " WHERE $BOOK_ID_COLUMN = :bookId AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) LIMIT 1")
-    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     abstract suspend fun getBook(bookId: Long): BookAndAuthors?
 
     /**
@@ -748,8 +748,8 @@ abstract class BookDao(private val db: BookDatabase) {
      */
     @Transaction
     @Query("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ( ${BookEntity.HIDDEN} | ${BookEntity.SERIES} ) ) = 0 )")
-    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
-    abstract suspend fun getBooksWithoutSeriesUpdate(): List<BookAndAuthors>?
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    abstract suspend fun getBooksWithoutSeriesUpdate(): List<BookAndAuthors>
 
     /**
      * Get the small thumbnail url for a book

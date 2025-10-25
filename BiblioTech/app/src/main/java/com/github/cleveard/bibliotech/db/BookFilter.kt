@@ -356,7 +356,7 @@ private class SQLiteQueryBuilderImpl(context: Context, table: BookDatabase.Table
         // If we call begin without calling end
         // it will clear any expressions for the field
         while (argList.size > argRollback)
-            argList.removeLast()
+            argList.removeAt(argList.lastIndex)
         filterFieldExpression.clear()
     }
 

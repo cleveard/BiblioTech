@@ -309,7 +309,7 @@ abstract class BookDatabase : RoomDatabase() {
                     val stream = assets.open(asset)
                     stream.close()
                     builder.createFromAsset(asset)
-                } catch (ex: IOException) {
+                } catch (_: IOException) {
                     // No prepopulate asset, create empty database
                 }
 
@@ -350,12 +350,13 @@ abstract class BookDatabase : RoomDatabase() {
             if (!emptyIds) {
                 builder.append("( ")
                 builder.append(column)
-                if (ids != null) {
+                if (!ids.isNullOrEmpty()) {
                     if (invert == true)
                         builder.append(" NOT")
                     builder.append(" IN ( ")
-                    for (i in 1 until ids.size)
+                    repeat (ids.size - 1) {
                         builder.append("?, ")
+                    }
                     builder.append("? )")
                     args.addAll(ids)
                 } else
@@ -556,85 +557,85 @@ abstract class BookDatabase : RoomDatabase() {
          */
         private val migrations = arrayOf(
             object: Migration(1, 2) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                     // This SQL is take from the BookDatabase_Impl file
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$VIEWS_NAME_COLUMN` TEXT NOT NULL COLLATE NOCASE, `$VIEWS_DESC_COLUMN` TEXT NOT NULL DEFAULT '', `$VIEWS_FILTER_COLUMN` TEXT)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_ID_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_NAME_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$VIEWS_NAME_COLUMN` TEXT NOT NULL COLLATE NOCASE, `$VIEWS_DESC_COLUMN` TEXT NOT NULL DEFAULT '', `$VIEWS_FILTER_COLUMN` TEXT)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_ID_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_${VIEWS_TABLE}_$VIEWS_NAME_COLUMN` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
                 }
             },
             object: Migration(2, 3) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                     // This SQL is take from the BookDatabase_Impl file
-                    database.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$BOOK_FLAGS` INTEGER NOT NULL DEFAULT 0")
-                    database.execSQL("ALTER TABLE $TAGS_TABLE ADD COLUMN `$TAGS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$BOOK_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $TAGS_TABLE ADD COLUMN `$TAGS_FLAGS` INTEGER NOT NULL DEFAULT 0")
                 }
             },
             object: Migration(3, 4) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                 }
             },
             object: Migration(4, 5) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                     // Add tables for the undo and redo
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`, `$OPERATION_OPERATION_ID_COLUMN`)")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL, `$TRANSACTION_FLAGS_COLUMN` INTEGER NOT NULL)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OPERATION_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_TYPE_COLUMN` INTEGER NOT NULL, `$OPERATION_CUR_ID_COLUMN` INTEGER NOT NULL, `$OPERATION_OLD_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$OPERATION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `$OPERATION_TABLE` (`$OPERATION_UNDO_ID_COLUMN`, `$OPERATION_OPERATION_ID_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$TRANSACTION_UNDO_ID_COLUMN` INTEGER NOT NULL, `$TRANSACTION_DESC_COLUMN` TEXT NOT NULL, `$TRANSACTION_FLAGS_COLUMN` INTEGER NOT NULL)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `$UNDO_TABLE` (`$TRANSACTION_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `$UNDO_TABLE` (`$TRANSACTION_UNDO_ID_COLUMN`)")
                     // Add flags to authors, categories and views tables
-                    database.execSQL("ALTER TABLE $AUTHORS_TABLE ADD COLUMN `$AUTHORS_FLAGS` INTEGER NOT NULL DEFAULT 0")
-                    database.execSQL("ALTER TABLE $CATEGORIES_TABLE ADD COLUMN `$CATEGORIES_FLAGS` INTEGER NOT NULL DEFAULT 0")
-                    database.execSQL("ALTER TABLE $VIEWS_TABLE ADD COLUMN `$VIEWS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $AUTHORS_TABLE ADD COLUMN `$AUTHORS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $CATEGORIES_TABLE ADD COLUMN `$CATEGORIES_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $VIEWS_TABLE ADD COLUMN `$VIEWS_FLAGS` INTEGER NOT NULL DEFAULT 0")
                     // Change UNIQUE indexes to be non-unique
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`books_isbn`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_authors_authors_last_name_authors_remaining`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `$AUTHORS_TABLE` (`$LAST_NAME_COLUMN`, `$REMAINING_COLUMN`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_tags_tags_name`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_tags_name` ON `$TAGS_TABLE` (`$TAGS_NAME_COLUMN`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_categories_categories_category`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_categories_categories_category` ON `$CATEGORIES_TABLE` (`$CATEGORY_COLUMN`)")
-                    database.execSQL("DROP INDEX IF EXISTS `index_views_views_name`")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_views_views_name` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_isbn` ON `$BOOK_TABLE` (`books_isbn`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_authors_authors_last_name_authors_remaining`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `$AUTHORS_TABLE` (`$LAST_NAME_COLUMN`, `$REMAINING_COLUMN`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_tags_tags_name`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_tags_tags_name` ON `$TAGS_TABLE` (`$TAGS_NAME_COLUMN`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_categories_categories_category`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_categories_categories_category` ON `$CATEGORIES_TABLE` (`$CATEGORY_COLUMN`)")
+                    db.execSQL("DROP INDEX IF EXISTS `index_views_views_name`")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_views_views_name` ON `$VIEWS_TABLE` (`$VIEWS_NAME_COLUMN`)")
                 }
             },
             object: Migration(5, 6) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                     // Create new tables and indices for isbns
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$ISBN_COLUMN` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `$ISBNS_FLAGS` INTEGER NOT NULL DEFAULT 0)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_isbns_isbns_id` ON `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_isbns_isbns_isbn` ON `$ISBNS_TABLE` (`$ISBN_COLUMN`)")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_ISBNS_ISBN_ID_COLUMN` INTEGER NOT NULL, `$BOOK_ISBNS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_ISBNS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_ISBNS_ISBN_ID_COLUMN`) REFERENCES `$ISBNS_TABLE`(`$ISBNS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$ISBN_COLUMN` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `$ISBNS_FLAGS` INTEGER NOT NULL DEFAULT 0)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_isbns_isbns_id` ON `$ISBNS_TABLE` (`$ISBNS_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_isbns_isbns_isbn` ON `$ISBNS_TABLE` (`$ISBN_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_ISBNS_ISBN_ID_COLUMN` INTEGER NOT NULL, `$BOOK_ISBNS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_ISBNS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_ISBNS_ISBN_ID_COLUMN`) REFERENCES `$ISBNS_TABLE`(`$ISBNS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
 
                     // Clear all undo from the database
-                    database.delete(OPERATION_TABLE, null, null)
-                    database.delete(UNDO_TABLE, null, null)
-                    deleteUndo(database, authorsTable, bookAuthorsTable)
-                    deleteUndo(database, tagsTable, bookTagsTable)
-                    deleteUndo(database, categoriesTable, bookCategoriesTable)
-                    database.delete(BOOK_TABLE, "( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )", null)
+                    db.delete(OPERATION_TABLE, null, null)
+                    db.delete(UNDO_TABLE, null, null)
+                    deleteUndo(db, authorsTable, bookAuthorsTable)
+                    deleteUndo(db, tagsTable, bookTagsTable)
+                    deleteUndo(db, categoriesTable, bookCategoriesTable)
+                    db.delete(BOOK_TABLE, "( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) != 0 )", null)
 
                     // Insert all of the isbns in to the isbn table
-                    database.execSQL("INSERT OR ABORT INTO $ISBNS_TABLE ( $ISBNS_ID_COLUMN, $ISBN_COLUMN ) SELECT NULL, `books_isbn` FROM `$BOOK_TABLE` WHERE `books_isbn` NOTNULL")
+                    db.execSQL("INSERT OR ABORT INTO $ISBNS_TABLE ( $ISBNS_ID_COLUMN, $ISBN_COLUMN ) SELECT NULL, `books_isbn` FROM `$BOOK_TABLE` WHERE `books_isbn` NOTNULL")
 
                     // Insert all of the isbns in to the isbn table
-                    database.execSQL("INSERT OR ABORT INTO $BOOK_ISBNS_TABLE ( $BOOK_ISBNS_ID_COLUMN, $BOOK_ISBNS_BOOK_ID_COLUMN, $BOOK_ISBNS_ISBN_ID_COLUMN ) SELECT NULL, $BOOK_ID_COLUMN, $ISBNS_ID_COLUMN FROM `$BOOK_TABLE` LEFT JOIN $ISBNS_TABLE ON $ISBN_COLUMN = `books_isbn` WHERE `books_isbn` NOTNULL")
+                    db.execSQL("INSERT OR ABORT INTO $BOOK_ISBNS_TABLE ( $BOOK_ISBNS_ID_COLUMN, $BOOK_ISBNS_BOOK_ID_COLUMN, $BOOK_ISBNS_ISBN_ID_COLUMN ) SELECT NULL, $BOOK_ID_COLUMN, $ISBNS_ID_COLUMN FROM `$BOOK_TABLE` LEFT JOIN $ISBNS_TABLE ON $ISBN_COLUMN = `books_isbn` WHERE `books_isbn` NOTNULL")
 
                     // Delete the isbn index and set all values to NULL
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_isbn`")
                     // Set the original books_isbn column to null
-                    database.execSQL("UPDATE OR ABORT $BOOK_TABLE SET `books_isbn` = NULL")
+                    db.execSQL("UPDATE OR ABORT $BOOK_TABLE SET `books_isbn` = NULL")
                 }
             },
             object: Migration(6, 7) {
-                override fun migrate(database: SupportSQLiteDatabase) {
+                override fun migrate(db: SupportSQLiteDatabase) {
                     // Drop unused isbn column from book table
                     // Dropping a column is a pain, because a new books table must be created
                     // without the column. This means that all of the tables with foreign keys,
@@ -651,88 +652,88 @@ abstract class BookDatabase : RoomDatabase() {
                     // 7) Recreate the indexes for the original tables
                     
                     // 1) Drop the temp tables
-                    database.execSQL("DROP TABLE IF EXISTS `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE IF EXISTS `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE IF EXISTS `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE IF EXISTS `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE IF EXISTS `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE IF EXISTS `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE IF EXISTS `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE IF EXISTS `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE IF EXISTS `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE IF EXISTS `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
 
                     // 2) Drop the indexes for the all of the tables
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_books_books_series_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_author_id_book_authors_book_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_book_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_book_id_book_tags_tag_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_tag_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_category_id_book_categories_book_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_book_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id`")
-                    database.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_volume_id_books_source_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_books_books_series_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_author_id_book_authors_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_authors_book_authors_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_book_id_book_tags_tag_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_tags_book_tags_tag_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_category_id_book_categories_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_categories_book_categories_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id`")
+                    db.execSQL("DROP INDEX IF EXISTS `index_book_isbns_book_isbns_book_id`")
 
                     // 3) Rename the original tables to the temp tables
-                    database.execSQL("ALTER TABLE `$BOOK_TABLE` RENAME TO `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("ALTER TABLE `$BOOK_AUTHORS_TABLE` RENAME TO `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("ALTER TABLE `$BOOK_TAGS_TABLE` RENAME TO `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("ALTER TABLE `$BOOK_CATEGORIES_TABLE` RENAME TO `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("ALTER TABLE `$BOOK_ISBNS_TABLE` RENAME TO `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("ALTER TABLE `$BOOK_TABLE` RENAME TO `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("ALTER TABLE `$BOOK_AUTHORS_TABLE` RENAME TO `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("ALTER TABLE `$BOOK_TAGS_TABLE` RENAME TO `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("ALTER TABLE `$BOOK_CATEGORIES_TABLE` RENAME TO `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("ALTER TABLE `$BOOK_ISBNS_TABLE` RENAME TO `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
 
                     // 4) Create the original tables
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_TABLE` (`$BOOK_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$VOLUME_ID_COLUMN` TEXT, `$SOURCE_ID_COLUMN` TEXT, `$TITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$SUBTITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$DESCRIPTION_COLUMN` TEXT NOT NULL DEFAULT '', `$PAGE_COUNT_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOK_COUNT_COLUMN` INTEGER NOT NULL DEFAULT 1, `$VOLUME_LINK` TEXT NOT NULL DEFAULT '', `$RATING_COLUMN` REAL NOT NULL DEFAULT -1.0, `$DATE_ADDED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$DATE_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$SMALL_THUMB_COLUMN` TEXT, `$LARGE_THUMB_COLUMN` TEXT, `$BOOK_FLAGS` INTEGER NOT NULL DEFAULT 0 )")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN` INTEGER NOT NULL, `$BOOK_AUTHORS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_AUTHORS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_AUTHORS_AUTHOR_ID_COLUMN`) REFERENCES `$AUTHORS_TABLE`(`$AUTHORS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_TAGS_TAG_ID_COLUMN` INTEGER NOT NULL, `$BOOK_TAGS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_TAGS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_TAGS_TAG_ID_COLUMN`) REFERENCES `$TAGS_TABLE`(`$TAGS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN` INTEGER NOT NULL, `$BOOK_CATEGORIES_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_CATEGORIES_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`) REFERENCES `$CATEGORIES_TABLE`(`$CATEGORIES_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_ISBNS_ISBN_ID_COLUMN` INTEGER NOT NULL, `$BOOK_ISBNS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_ISBNS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_ISBNS_ISBN_ID_COLUMN`) REFERENCES `$ISBNS_TABLE`(`$ISBNS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_TABLE` (`$BOOK_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$VOLUME_ID_COLUMN` TEXT, `$SOURCE_ID_COLUMN` TEXT, `$TITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$SUBTITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$DESCRIPTION_COLUMN` TEXT NOT NULL DEFAULT '', `$PAGE_COUNT_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOK_COUNT_COLUMN` INTEGER NOT NULL DEFAULT 1, `$VOLUME_LINK` TEXT NOT NULL DEFAULT '', `$RATING_COLUMN` REAL NOT NULL DEFAULT -1.0, `$DATE_ADDED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$DATE_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$SMALL_THUMB_COLUMN` TEXT, `$LARGE_THUMB_COLUMN` TEXT, `$BOOK_FLAGS` INTEGER NOT NULL DEFAULT 0 )")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN` INTEGER NOT NULL, `$BOOK_AUTHORS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_AUTHORS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_AUTHORS_AUTHOR_ID_COLUMN`) REFERENCES `$AUTHORS_TABLE`(`$AUTHORS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_TAGS_TAG_ID_COLUMN` INTEGER NOT NULL, `$BOOK_TAGS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_TAGS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_TAGS_TAG_ID_COLUMN`) REFERENCES `$TAGS_TABLE`(`$TAGS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN` INTEGER NOT NULL, `$BOOK_CATEGORIES_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_CATEGORIES_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`) REFERENCES `$CATEGORIES_TABLE`(`$CATEGORIES_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOK_ISBNS_ISBN_ID_COLUMN` INTEGER NOT NULL, `$BOOK_ISBNS_BOOK_ID_COLUMN` INTEGER NOT NULL, FOREIGN KEY(`$BOOK_ISBNS_BOOK_ID_COLUMN`) REFERENCES `$BOOK_TABLE`(`$BOOK_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`$BOOK_ISBNS_ISBN_ID_COLUMN`) REFERENCES `$ISBNS_TABLE`(`$ISBNS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE )")
 
                     // 5) Insert the rows from the temp tables back into the original one
-                    database.execSQL("INSERT INTO `$BOOK_TABLE` (`$BOOK_ID_COLUMN`, `$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`, `$TITLE_COLUMN`, `$SUBTITLE_COLUMN`, `$DESCRIPTION_COLUMN`, `$PAGE_COUNT_COLUMN`, `$BOOK_COUNT_COLUMN`, `$VOLUME_LINK`, `$RATING_COLUMN`, `$DATE_ADDED_COLUMN`, `$DATE_MODIFIED_COLUMN`, `$SMALL_THUMB_COLUMN`, `$LARGE_THUMB_COLUMN`, `$BOOK_FLAGS`) SELECT `$BOOK_ID_COLUMN`, `$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`, `$TITLE_COLUMN`, `$SUBTITLE_COLUMN`, `$DESCRIPTION_COLUMN`, `$PAGE_COUNT_COLUMN`, `$BOOK_COUNT_COLUMN`, `$VOLUME_LINK`, `$RATING_COLUMN`, `$DATE_ADDED_COLUMN`, `$DATE_MODIFIED_COLUMN`, `$SMALL_THUMB_COLUMN`, `$LARGE_THUMB_COLUMN`, `$BOOK_FLAGS` FROM `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("INSERT INTO `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN`, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN`) SELECT `$BOOK_AUTHORS_ID_COLUMN`, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN` FROM `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("INSERT INTO `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`, `$BOOK_TAGS_BOOK_ID_COLUMN`) SELECT `$BOOK_TAGS_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`, `$BOOK_TAGS_BOOK_ID_COLUMN` FROM `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("INSERT INTO `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN`, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN`) SELECT `$BOOK_CATEGORIES_ID_COLUMN`, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN` FROM `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("INSERT INTO `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`, `$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`) SELECT `$BOOK_ISBNS_ID_COLUMN`, `$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN` FROM `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("INSERT INTO `$BOOK_TABLE` (`$BOOK_ID_COLUMN`, `$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`, `$TITLE_COLUMN`, `$SUBTITLE_COLUMN`, `$DESCRIPTION_COLUMN`, `$PAGE_COUNT_COLUMN`, `$BOOK_COUNT_COLUMN`, `$VOLUME_LINK`, `$RATING_COLUMN`, `$DATE_ADDED_COLUMN`, `$DATE_MODIFIED_COLUMN`, `$SMALL_THUMB_COLUMN`, `$LARGE_THUMB_COLUMN`, `$BOOK_FLAGS`) SELECT `$BOOK_ID_COLUMN`, `$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`, `$TITLE_COLUMN`, `$SUBTITLE_COLUMN`, `$DESCRIPTION_COLUMN`, `$PAGE_COUNT_COLUMN`, `$BOOK_COUNT_COLUMN`, `$VOLUME_LINK`, `$RATING_COLUMN`, `$DATE_ADDED_COLUMN`, `$DATE_MODIFIED_COLUMN`, `$SMALL_THUMB_COLUMN`, `$LARGE_THUMB_COLUMN`, `$BOOK_FLAGS` FROM `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("INSERT INTO `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN`, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN`) SELECT `$BOOK_AUTHORS_ID_COLUMN`, `$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN` FROM `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("INSERT INTO `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`, `$BOOK_TAGS_BOOK_ID_COLUMN`) SELECT `$BOOK_TAGS_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`, `$BOOK_TAGS_BOOK_ID_COLUMN` FROM `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("INSERT INTO `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN`, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN`) SELECT `$BOOK_CATEGORIES_ID_COLUMN`, `$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN` FROM `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("INSERT INTO `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`, `$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`) SELECT `$BOOK_ISBNS_ID_COLUMN`, `$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN` FROM `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
 
                     // 6) Drop the temp tables
-                    database.execSQL("DROP TABLE `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
-                    database.execSQL("DROP TABLE `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE `$BOOK_AUTHORS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE `$BOOK_TAGS_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE `$BOOK_CATEGORIES_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE `$BOOK_ISBNS_TABLE$TEMP_SUFFIX_6_7`")
                     // Drop last after foreign keys are dropped
-                    database.execSQL("DROP TABLE `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
+                    db.execSQL("DROP TABLE `$BOOK_TABLE$TEMP_SUFFIX_6_7`")
 
                     // 7) Recreate the original indexes
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_books_books_id` ON `$BOOK_TABLE` (`$BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_author_id_book_authors_book_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_authors_book_authors_book_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_book_id_book_tags_tag_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_BOOK_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_tags_book_tags_tag_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_TAG_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_category_id_book_categories_book_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_categories_book_categories_book_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_books_books_id` ON `$BOOK_TABLE` (`$BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `$BOOK_TABLE` (`$VOLUME_ID_COLUMN`, `$SOURCE_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_author_id_book_authors_book_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_AUTHOR_ID_COLUMN`, `$BOOK_AUTHORS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_authors_book_authors_book_id` ON `$BOOK_AUTHORS_TABLE` (`$BOOK_AUTHORS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_book_id_book_tags_tag_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_BOOK_ID_COLUMN`, `$BOOK_TAGS_TAG_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_tags_book_tags_tag_id` ON `$BOOK_TAGS_TABLE` (`$BOOK_TAGS_TAG_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_category_id_book_categories_book_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_CATEGORY_ID_COLUMN`, `$BOOK_CATEGORIES_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_categories_book_categories_book_id` ON `$BOOK_CATEGORIES_TABLE` (`$BOOK_CATEGORIES_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_ISBN_ID_COLUMN`, `$BOOK_ISBNS_BOOK_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `$BOOK_ISBNS_TABLE` (`$BOOK_ISBNS_BOOK_ID_COLUMN`)")
 
                     // Add series columns to book table
-                    database.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$BOOK_SERIES_COLUMN` INTEGER DEFAULT NULL REFERENCES `$SERIES_TABLE`(`$SERIES_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE")
-                    database.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$SERIES_ORDER_COLUMN` INTEGER DEFAULT NULL")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_series_id` ON `$BOOK_TABLE` (`$BOOK_SERIES_COLUMN`)")
+                    db.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$BOOK_SERIES_COLUMN` INTEGER DEFAULT NULL REFERENCES `$SERIES_TABLE`(`$SERIES_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE CASCADE")
+                    db.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$SERIES_ORDER_COLUMN` INTEGER DEFAULT NULL")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_books_books_series_id` ON `$BOOK_TABLE` (`$BOOK_SERIES_COLUMN`)")
 
                     // Add series table and indices
-                    database.execSQL("CREATE TABLE IF NOT EXISTS `$SERIES_TABLE` (`$SERIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$SERIES_SERIES_ID_COLUMN` TEXT NOT NULL, `$SERIES_TITLE_COLUMN` TEXT NOT NULL, `$SERIES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0)")
-                    database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_series_series_id` ON `$SERIES_TABLE` (`$SERIES_ID_COLUMN`)")
-                    database.execSQL("CREATE INDEX IF NOT EXISTS `index_series_series_series_id` ON `$SERIES_TABLE` (`$SERIES_SERIES_ID_COLUMN`)")
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$SERIES_TABLE` (`$SERIES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$SERIES_SERIES_ID_COLUMN` TEXT NOT NULL, `$SERIES_TITLE_COLUMN` TEXT NOT NULL, `$SERIES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_series_series_id` ON `$SERIES_TABLE` (`$SERIES_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_series_series_series_id` ON `$SERIES_TABLE` (`$SERIES_SERIES_ID_COLUMN`)")
                 }
             },
             object: Migration(7,8) {
-                override fun migrate(database: SupportSQLiteDatabase) {
-                    database.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
 
                 }
             }

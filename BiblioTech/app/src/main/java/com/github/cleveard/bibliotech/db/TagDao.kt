@@ -270,7 +270,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * @param query SQLite query used to get the tag ids
      */
     @RawQuery(observedEntities = [TagEntity::class])
-    protected abstract suspend fun queryTagIds(query: SupportSQLiteQuery): List<TagId>?
+    protected abstract suspend fun queryTagIds(query: SupportSQLiteQuery): List<TagId>
 
     /**
      * Query Tag ids for a list of tags
@@ -284,7 +284,7 @@ abstract class TagDao(private val db: BookDatabase) {
             selectedIdSubQuery,                                   // Selected tag ids sub-query
             tagIds,                                               // Ids to query
             false                                                 // Query for ids, or not ids
-        )?.let {query -> queryTagIds(query)?.map { it.id } }
+        )?.let {query -> queryTagIds(query).map { it.id } }
     }
 
     /**
@@ -575,7 +575,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param query The SQLite query
      */
     @RawQuery(observedEntities = [BookAndTagEntity::class])
-    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>
 
     /**
      * Query tag ids for a set of books
@@ -597,7 +597,7 @@ abstract class BookTagDao(private val db:BookDatabase) {
      * @param query The SQLite query
      */
     @RawQuery(observedEntities = [BookAndTagEntity::class])
-    protected abstract suspend fun queryTags(query: SupportSQLiteQuery): List<BookAndTagEntity>?
+    protected abstract suspend fun queryTags(query: SupportSQLiteQuery): List<BookAndTagEntity>
 
     /**
      * Query book tag links for a set of tags

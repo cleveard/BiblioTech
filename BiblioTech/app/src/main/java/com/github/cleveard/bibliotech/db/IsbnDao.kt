@@ -69,7 +69,7 @@ abstract class IsbnDao(private val db: BookDatabase) {
      * Get the list of isbns
      */
     @Query(value = "SELECT * FROM $ISBNS_TABLE WHERE ( ( $ISBNS_FLAGS & ${IsbnEntity.HIDDEN} ) = 0 ) ORDER BY $ISBN_COLUMN")
-    abstract suspend fun get(): List<IsbnEntity>?
+    abstract suspend fun get(): List<IsbnEntity>
 
     /**
      * Add an isbn to the isbns table
@@ -180,7 +180,7 @@ abstract class IsbnDao(private val db: BookDatabase) {
      * @param query The SQLite query to get the ids
      */
     @RawQuery(observedEntities = [BookAndIsbnEntity::class])
-    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>
 
     /**
      * Query author ids for a set of books

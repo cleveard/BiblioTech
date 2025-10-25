@@ -108,7 +108,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * Get the list of authors
      */
     @Query(value = "SELECT * FROM $AUTHORS_TABLE WHERE ( ( $AUTHORS_FLAGS & ${AuthorEntity.HIDDEN} ) = 0 ) ORDER BY $LAST_NAME_COLUMN, $REMAINING_COLUMN")
-    abstract suspend fun get(): List<AuthorEntity>?
+    abstract suspend fun get(): List<AuthorEntity>
 
     /**
      * Raw Query for author cursor
@@ -208,7 +208,7 @@ abstract class AuthorDao(private val db: BookDatabase) {
      * @param query SQLite query to query the authors
      */
     @RawQuery(observedEntities = [BookAndAuthorEntity::class])
-    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>?
+    protected abstract suspend fun queryBookIds(query: SupportSQLiteQuery): List<Long>
 
     /**
      * Query author ids for a set of books

@@ -515,7 +515,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             // OK, undo is enable and we aren't recording
             if (!succeeded) {
                 // Didn't succeed, so remove the last values saved in undoStarted
-                undoneState.removeLast()
+                undoneState.removeAt(undoneState.lastIndex)
             } else {
                 // It did work
                 val state = undoneState.last()
@@ -566,7 +566,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             // Make sure the undo tracker is in sync
             that(undoTracker.undo()).isEqualTo(canUndo)
             if (undoneState.isNotEmpty()) {
-                val state = undoneState.removeLast()
+                val state = undoneState.last().also { undoneState.removeAt(undoneState.lastIndex) }
                 // Move flags from the current state to the undo state
                 state.swapTables(tables)
                 // Make the current state the redo state
@@ -602,7 +602,7 @@ abstract class BookDbTracker(val db: BookDatabase, seed: Long) {
             // Make sure the undo tracker is in sync
             that(undoTracker.redo()).isEqualTo(canRedo)
             if (redoneState.isNotEmpty()) {
-                val state = redoneState.removeLast()
+                val state = redoneState.last().also { redoneState.removeAt(redoneState.lastIndex) }
                 // Move current flags to redo state
                 state.swapTables(tables)
                 // Make the current state the undo state

@@ -1022,7 +1022,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * Get a list of all transactions
      */
     @Query("SELECT * FROM $UNDO_TABLE ORDER BY $TRANSACTION_UNDO_ID_COLUMN ASC")
-    abstract suspend fun getTransactions(): List<UndoTransactionEntity>?
+    abstract suspend fun getTransactions(): List<UndoTransactionEntity>
 
     /**
      * Get a list of all transactions
@@ -1048,7 +1048,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param max The inclusive max undo id in the range
      */
     @Query("SELECT * FROM $OPERATION_TABLE WHERE $OPERATION_UNDO_ID_COLUMN BETWEEN :min and :max ORDER BY $OPERATION_UNDO_ID_COLUMN ASC, $OPERATION_OPERATION_ID_COLUMN ASC")
-    abstract suspend fun getOperationsAsc(min: Int, max: Int): List<UndoRedoOperationEntity>?
+    abstract suspend fun getOperationsAsc(min: Int, max: Int): List<UndoRedoOperationEntity>
 
     /**
      * Get a list of operations in a range of undo ids in descending undo id, operation order
@@ -1056,7 +1056,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
      * @param max The inclusive max undo id in the range
      */
     @Query("SELECT * FROM $OPERATION_TABLE WHERE $OPERATION_UNDO_ID_COLUMN BETWEEN :min and :max ORDER BY $OPERATION_UNDO_ID_COLUMN DESC, $OPERATION_OPERATION_ID_COLUMN DESC")
-    abstract suspend fun getOperationsDesc(min: Int, max: Int): List<UndoRedoOperationEntity>?
+    abstract suspend fun getOperationsDesc(min: Int, max: Int): List<UndoRedoOperationEntity>
 
     /**
      * Run an update/delete SQLite command

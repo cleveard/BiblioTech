@@ -79,7 +79,7 @@ abstract class SeriesDao(private val db: BookDatabase) {
      * Return a list of series ids that are not reference by a book
      */
     @Query("SELECT $SERIES_ID_COLUMN FROM $SERIES_TABLE WHERE ( ( $SERIES_FLAG_COLUMN & ${SeriesEntity.HIDDEN} ) = 0 ) AND NOT EXISTS ( SELECT NULL FROM $BOOK_TABLE WHERE ( $SERIES_ID_COLUMN = $BOOK_SERIES_COLUMN AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN}) = 0) ) )")
-    protected abstract fun queryUnusedSeriesIds(): List<Long>?
+    protected abstract fun queryUnusedSeriesIds(): List<Long>
 
     /**
      * Delete all series from books

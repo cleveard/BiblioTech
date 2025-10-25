@@ -153,39 +153,37 @@ class UndoTracker(
         // Get all of the transactions
         val trans = dao.getTransactions()
         var opCount = 0
-        return if (trans != null) {
-            // We have some transactions, get all of the operations
-            val ops = dao.getOperationsAsc(Int.MIN_VALUE, Int.MAX_VALUE)!!.sortedWith(compareBy({ it.undoId }, { it.operationId }, { it.id }))
-            // map trans to a list of Transaction
-            val list = trans.map { t ->
-                // Create the ops list from the first and last position of the undo Id
-                Transaction(t, ops.subList(
-                    ops.indexOfFirst { it.undoId == t.undoId },
-                    ops.indexOfLast { it.undoId == t.undoId } + 1
-                ).toList()).also {
-                    // Count the number of ops we collect in transactions
-                    opCount += it.ops.size
-                }
-            }.toMutableList()
 
-            assertWithMessage("Sync Undo $message", *args).apply {
-                // Make sure we collected all of the ops
-                that(opCount).isEqualTo(ops.size)
-                if (list.isEmpty()) {
-                    // No undo transaction make sure the min and max are valid
-                    // The -1 check, handles the case were undo isn't initialized yet
-                    that(dao.minUndoId).isIn(listOf(-1, dao.undoId + 1))
-                    that(dao.maxUndoId).isEqualTo(dao.undoId)
-                } else {
-                    // Make sure the min max and undo ids are all correct
-                    that(dao.minUndoId).isEqualTo(list.first().trans.undoId)
-                    that(dao.maxUndoId).isEqualTo(list.last().trans.undoId)
-                    that(dao.undoId).isEqualTo(list.indexOfLast { !it.trans.isRedo } + dao.minUndoId)
-                }
+        // We have some transactions, get all of the operations
+        val ops = dao.getOperationsAsc(Int.MIN_VALUE, Int.MAX_VALUE)!!.sortedWith(compareBy({ it.undoId }, { it.operationId }, { it.id }))
+        // map trans to a list of Transaction
+        val list = trans.map { t ->
+            // Create the ops list from the first and last position of the undo Id
+            Transaction(t, ops.subList(
+                ops.indexOfFirst { it.undoId == t.undoId },
+                ops.indexOfLast { it.undoId == t.undoId } + 1
+            ).toList()).also {
+                // Count the number of ops we collect in transactions
+                opCount += it.ops.size
             }
-            list
-        } else
-            ArrayList() // No transaction return an empty list
+        }.toMutableList()
+
+        assertWithMessage("Sync Undo $message", *args).apply {
+            // Make sure we collected all of the ops
+            that(opCount).isEqualTo(ops.size)
+            if (list.isEmpty()) {
+                // No undo transaction make sure the min and max are valid
+                // The -1 check, handles the case were undo isn't initialized yet
+                that(dao.minUndoId).isIn(listOf(-1, dao.undoId + 1))
+                that(dao.maxUndoId).isEqualTo(dao.undoId)
+            } else {
+                // Make sure the min max and undo ids are all correct
+                that(dao.minUndoId).isEqualTo(list.first().trans.undoId)
+                that(dao.maxUndoId).isEqualTo(list.last().trans.undoId)
+                that(dao.undoId).isEqualTo(list.indexOfLast { !it.trans.isRedo } + dao.minUndoId)
+            }
+        }
+        return list
     }
 
     /**

@@ -2,33 +2,39 @@ package com.github.cleveard.bibliotech.utils
 
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
-import android.net.Uri
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
 import net.openid.appauth.*
-import java.io.IOException
 import java.lang.Exception
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import androidx.core.net.toUri
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.emptyPreferences
+import kotlinx.coroutines.runBlocking
 
 abstract class OAuth(
-    context: Context,
+    val context: Context,
     authEndpoint: String,
     tokenEndpoint: String,
     private val clientId: String,
     private val redirectUri: String,
-    private val preferenceKey: String
+    preferenceKey: String
 ) {
-    private val persist: SharedPreferences = createSecretPreferences(context)
+    private val tokenKey = EncryptedPreferences.stringKey(preferenceKey)
+    private val Context.persist: EncryptedPreferences by EncryptedPreferences.create(
+    "encrypted_data_preferences",
+    "google_books_keyset",
+    "android-keystore://google_books_oauth_key",
+    ReplaceFileCorruptionHandler { emptyPreferences() })
     private val authConfig = AuthorizationServiceConfiguration(
-        Uri.parse(authEndpoint),
-        Uri.parse(tokenEndpoint))
+        authEndpoint.toUri(),
+        tokenEndpoint.toUri())
     private var authService: AuthorizationService = AuthorizationService(context)
-    private var authState: AuthState = try {
-        AuthState.jsonDeserialize(persist.getString(preferenceKey, "")!!)
-    } catch (e: Exception) {
-        AuthState(authConfig)
+    private var authState: AuthState = runBlocking {
+        try {
+            AuthState.jsonDeserialize(context.applicationContext.persist.get(tokenKey)!!)
+        } catch (_: Exception) {
+            AuthState(authConfig)
+        }
     }
     val authorizationException: AuthorizationException?
         get() = authState.authorizationException
@@ -45,7 +51,7 @@ abstract class OAuth(
                 authConfig,
                 clientId,
                 ResponseTypeValues.CODE,
-                Uri.parse(redirectUri)
+                redirectUri.toUri()
             )
                 .also { it.setupRequest() }
                 .build()
@@ -63,10 +69,10 @@ abstract class OAuth(
                             resp.createTokenExchangeRequest()
                         ) { response, ex ->
                             authState.update(response, ex)
-                            save()
                             resume.resume(Unit)
                         }
                     }
+                    save()
                 }
             }
         }
@@ -74,7 +80,7 @@ abstract class OAuth(
         return authState.isAuthorized
     }
 
-    fun logout(): Boolean {
+    suspend fun logout(): Boolean {
         if (authState.isAuthorized) {
             authState = AuthState(authConfig)
             save()
@@ -87,40 +93,19 @@ abstract class OAuth(
     suspend fun <T> execute(action: suspend (token:String?) -> T): T {
         val result = suspendCoroutine {
             authState.performActionWithFreshTokens(authService) {token, id, ex ->
-                save()
                 it.resume(Triple(token, id, ex))
             }
         }
+        save()
         if (result.third != null)
             throw AuthException("Not authorized", result.third)
         return action(result.first)
     }
 
-    private fun save(state: AuthState = authState): AuthState {
-        persist.edit().let {
-            it.putString(preferenceKey, state.jsonSerializeString())
-            it.commit()
+    private suspend fun save(state: AuthState = authState): AuthState {
+        context.persist.edit {
+            it.put(tokenKey, state.jsonSerializeString())
         }
         return state
-    }
-
-    companion object {
-        private fun createSecretPreferences(context: Context): SharedPreferences {
-            val name = "secret_shared_prefs"
-            return try {
-                EncryptedSharedPreferences.create(
-                    name, MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            } catch (_: IOException) {
-                context.deleteSharedPreferences(name)
-                EncryptedSharedPreferences.create(
-                    name, MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC), context,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            }
-        }
     }
 }
