@@ -135,7 +135,7 @@ dependencies {
 
     implementation "com.google.http-client:google-http-client:2.0.2"
     implementation "com.google.http-client:google-http-client-android:2.0.2"
-    implementation "com.google.apis:google-api-services-books:v1-rev20201021-1.32.1"
+    implementation "com.google.apis:google-api-services-books:v1-rev20240214-2.0.0"
     //implementation "com.google.http-client:google-api-client:1.41.0"
     //implementation "com.google.http-client:google-api-client-android:1.41.0"
     //implementation "com.google.http-client:google-http-client-gson:1.41.0"
