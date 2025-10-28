@@ -8,6 +8,7 @@ import com.github.cleveard.bibliotech.db.BookAndAuthors
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
+import androidx.core.graphics.withTranslation
 
 const val EPSILON = 1.0e-3f
 
@@ -61,16 +62,15 @@ class PageLayoutHandler(
         /** @inheritDoc */
         override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>, handler: PageLayoutHandler) {
             // Save the current canvas state
-            canvas.save()
-            // Set the clip rectangle and location
-            canvas.translate(position.x, position.y)
-            canvas.clipRect(clipRect)
-            // Print the book
-            handler.layoutBook(bookList[bookIndex])
-                .verticalClip(position.y, handler.pageHeight)
-                .draw(canvas)
-            // Restore the canvas
-            canvas.restore()
+            canvas.withTranslation(position.x, position.y) {
+                // Set the clip rectangle and location
+                clipRect(clipRect)
+                // Print the book
+                handler.layoutBook(bookList[bookIndex])
+                    .verticalClip(position.y, handler.pageHeight)
+                    .draw(this)
+                // Restore the canvas
+            }
         }
     }
 
@@ -87,14 +87,13 @@ class PageLayoutHandler(
         /** @inheritDoc */
         override suspend fun draw(canvas: Canvas, bookList: List<BookAndAuthors>, handler: PageLayoutHandler) {
             // Save the current canvas state
-            canvas.save()
-            // Set the location
-            canvas.translate(position.x, position.y)
-            // Print the line
-            paint.style = Paint.Style.FILL
-            canvas.drawRect(0.0f, 0.0f, handler.columnWidth, handler.printer.separatorLineWidth, paint)
-            // Restore the canvas
-            canvas.restore()
+            canvas.withTranslation(position.x, position.y) {
+                // Set the location
+                // Print the line
+                paint.style = Paint.Style.FILL
+                drawRect(0.0f, 0.0f, handler.columnWidth, handler.printer.separatorLineWidth, paint)
+                // Restore the canvas
+            }
         }
     }
 
@@ -159,7 +158,7 @@ class PageLayoutHandler(
         }
 
         // Add the last page to the list of pages
-        if (page.size > 0)
+        if (page.isNotEmpty())
             nextPage()
         // Return the list of pages
         return pages

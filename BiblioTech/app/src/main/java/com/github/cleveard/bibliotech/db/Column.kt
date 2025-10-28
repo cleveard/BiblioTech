@@ -623,7 +623,7 @@ private val anyColumn = object: ColumnDataDescriptor(
             else -> predicate
         }
         // Add an expression for every other column unless excluded
-        for (c in Column.values()) {
+        for (c in Column.entries) {
             if (c.desc != this && excludeFilterColumn.indexOf(c.name) == -1)
                 hasValues = c.desc.addExpression(buildQuery, positivePredicate, values) || hasValues
         }

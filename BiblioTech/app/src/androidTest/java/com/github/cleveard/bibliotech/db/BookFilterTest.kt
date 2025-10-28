@@ -151,7 +151,7 @@ class BookFilterTest {
                 repeat (random.nextInt(0, 7)) {
                     var p: Pair<ColumnValue,Order>
                     do {
-                        p = Pair(ColumnValue.values()[random.nextInt(ColumnValue.values().size)],
+                        p = Pair(ColumnValue.entries[random.nextInt(ColumnValue.entries.size)],
                             if (random.nextBoolean()) Order.Ascending else Order.Descending)
                     } while (orderDesc.contains(p))
                     orderDesc.add(p)
@@ -161,10 +161,10 @@ class BookFilterTest {
                     do {
                         var c: ColumnValue
                         do {
-                            c = ColumnValue.values()[random.nextInt(ColumnValue.values().size)]
+                            c = ColumnValue.entries[random.nextInt(ColumnValue.entries.size)]
                         } while (c.column.desc.predicates.isEmpty())
                         val pr = c.column.desc.predicates[random.nextInt(c.column.desc.predicates.size)]
-                        p = Pair(c, PredicateValue.values().first {x -> x.predicate == pr })
+                        p = Pair(c, PredicateValue.entries.first {x -> x.predicate == pr })
                     } while (filterDesc.contains(p))
                     filterDesc.add(p)
                 }
@@ -192,9 +192,9 @@ class BookFilterTest {
         runBlocking {
             assertWithMessage("Test Empty").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty Filters", 40)
-            for (c in ColumnValue.values()) {
+            for (c in ColumnValue.entries) {
                 if (c.column.desc.singleValue == null) {
-                    for (p in PredicateValue.values()) {
+                    for (p in PredicateValue.entries) {
                         TestFilter(emptySequence(), sequenceOf(Triple(c, p, emptyArray())))
                             .test(this@BookFilterTest, "Empty", contents.asSequence())
                     }
@@ -210,8 +210,8 @@ class BookFilterTest {
             assertWithMessage("Test Random").that(contents.size).isGreaterThan(39)
             //val expected = BookDbTracker.addBooks(repo, 8832156L, "Test Empty", 40)
             val random = Random(8832156L)
-            for (c in ColumnValue.values()) {
-                for (p in PredicateValue.values()) {
+            for (c in ColumnValue.entries) {
+                for (p in PredicateValue.entries) {
                     TestFilter(emptySequence(), sequenceOf(Pair(c, p))) { column, predicate ->
                         val values = ArrayList<String>()
                         val count = random.nextInt(1, 5)
@@ -236,8 +236,8 @@ class BookFilterTest {
     @Test fun testSingleOrderFieldNoFilter() {
         runBlocking {
             assertWithMessage("Test Random").that(contents.size).isGreaterThan(39)
-            for (c in ColumnValue.values()) {
-                for (o in Order.values()) {
+            for (c in ColumnValue.entries) {
+                for (o in Order.entries) {
                     TestFilter(sequenceOf(Pair(c, o)), emptySequence()) {_, _ -> emptyArray() }
                         .test(this@BookFilterTest, "Single Order", contents.asSequence())
                 }
@@ -258,7 +258,7 @@ class BookFilterTest {
                 repeat (random.nextInt(1, 3)) {
                     var p: Pair<ColumnValue,Order>
                     do {
-                        p = Pair(ColumnValue.values()[random.nextInt(ColumnValue.values().size)],
+                        p = Pair(ColumnValue.entries[random.nextInt(ColumnValue.entries.size)],
                             if (random.nextBoolean()) Order.Ascending else Order.Descending)
                     } while (orderDesc.contains(p))
                     orderDesc.add(p)
@@ -268,10 +268,10 @@ class BookFilterTest {
                     do {
                         var c: ColumnValue
                         do {
-                            c = ColumnValue.values()[random.nextInt(ColumnValue.values().size)]
+                            c = ColumnValue.entries[random.nextInt(ColumnValue.entries.size)]
                         } while (c.column.desc.predicates.isEmpty())
                         val pr = c.column.desc.predicates[random.nextInt(c.column.desc.predicates.size)]
-                        p = Pair(c, PredicateValue.values().first {x -> x.predicate == pr })
+                        p = Pair(c, PredicateValue.entries.first {x -> x.predicate == pr })
                     } while (filterDesc.contains(p))
                     filterDesc.add(p)
                 }
@@ -388,7 +388,7 @@ class BookFilterTest {
                 val sortSequence = sortOrder.asSequence()
                 if (sortOrder.isNotEmpty())
                     checkOrder(books, sortSequence)
-                val withId = sortSequence + sequenceOf({ this.book.id.compareTo(it.book.id) })
+                val withId = sortSequence + sequenceOf { this.book.id.compareTo(it.book.id) }
                 books.sortWith { b1, b2 -> orderBooks(b1, b2, withId) }
                 val expected = ArrayList<BookAndAuthors>().apply { addAll(sequence); sortWith { b1, b2 -> orderBooks(b1, b2, withId) } }
                 compare(books, expected)
@@ -477,7 +477,7 @@ class BookFilterTest {
         // Set the entry for the Column.Any column
         ANY(Column.ANY, { anyValue(it) }, { 0 }, { this },
             {predicate ->
-                values().asSequence()
+                entries.asSequence()
                 .filter { it != ANY &&
                     // All of the columns that ANY will add. You can uncomment
                     // these if you are trying to narrow a test error
@@ -630,7 +630,7 @@ class BookFilterTest {
             private fun BookAndAuthors.anyValue(r: Random): String {
                 var v: String?
                 do {
-                    val c = values()[r.nextInt(1, values().size)]
+                    val c = entries[r.nextInt(1, entries.size)]
                     v = c.oneValue.invoke(this, r)
                 } while (v == null || !c.column.desc.predicates.contains(Predicate.GLOB))
                 return v

@@ -53,7 +53,7 @@ class BookRepositoryTest {
     private suspend fun BookDbTracker.testBookFlags(message: String, bookFilter: BookFilter?) {
         // Get the book do and build the filter
         val bookFlags = repo.bookFlags
-        val filter = bookFilter?.let { it.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true) }
+        val filter = bookFilter?.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
 
         // Make sure we can count bit patterns
         suspend fun StandardSubjectBuilder.checkCountBits(bits: Int, value: Int, include: Boolean, id: Long?) {

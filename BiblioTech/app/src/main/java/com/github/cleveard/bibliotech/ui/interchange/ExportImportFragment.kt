@@ -4,31 +4,67 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.net.Uri
-import androidx.lifecycle.ViewModelProvider
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.Spinner
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.documentfile.provider.DocumentFile
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.room.withTransaction
 import com.github.cleveard.bibliotech.BookStats
 import com.github.cleveard.bibliotech.R
-import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.db.BOOK_COUNT_COLUMN
+import com.github.cleveard.bibliotech.db.BOOK_FLAGS
+import com.github.cleveard.bibliotech.db.BOOK_ID_COLUMN
+import com.github.cleveard.bibliotech.db.BookAndAuthors
+import com.github.cleveard.bibliotech.db.BookDatabase
+import com.github.cleveard.bibliotech.db.BookFilter
+import com.github.cleveard.bibliotech.db.CATEGORY_COLUMN
+import com.github.cleveard.bibliotech.db.DATE_ADDED_COLUMN
+import com.github.cleveard.bibliotech.db.DATE_MODIFIED_COLUMN
+import com.github.cleveard.bibliotech.db.DESCRIPTION_COLUMN
+import com.github.cleveard.bibliotech.db.ISBN_COLUMN
+import com.github.cleveard.bibliotech.db.LARGE_THUMB_COLUMN
+import com.github.cleveard.bibliotech.db.PAGE_COUNT_COLUMN
+import com.github.cleveard.bibliotech.db.RATING_COLUMN
+import com.github.cleveard.bibliotech.db.SMALL_THUMB_COLUMN
+import com.github.cleveard.bibliotech.db.SOURCE_ID_COLUMN
+import com.github.cleveard.bibliotech.db.SUBTITLE_COLUMN
+import com.github.cleveard.bibliotech.db.TAGS_DESC_COLUMN
+import com.github.cleveard.bibliotech.db.TAGS_NAME_COLUMN
+import com.github.cleveard.bibliotech.db.TITLE_COLUMN
+import com.github.cleveard.bibliotech.db.VIEWS_DESC_COLUMN
+import com.github.cleveard.bibliotech.db.VIEWS_FILTER_COLUMN
+import com.github.cleveard.bibliotech.db.VIEWS_ID_COLUMN
+import com.github.cleveard.bibliotech.db.VIEWS_NAME_COLUMN
+import com.github.cleveard.bibliotech.db.VOLUME_ID_COLUMN
+import com.github.cleveard.bibliotech.db.VOLUME_LINK
+import com.github.cleveard.bibliotech.db.ViewEntity
 import com.github.cleveard.bibliotech.utils.coroutineAlert
 import com.github.cleveard.bibliotech.utils.getLive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.*
-import java.lang.StringBuilder
-import java.util.*
+import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.io.IOException
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.io.Writer
 
 class ExportImportFragment : Fragment() {
 
@@ -598,7 +634,7 @@ class ExportImportFragment : Fragment() {
                 list.add(builder.toString())
             }
             // return true if we are not at end of file or something was read
-            return !eof || list.size > 0
+            return !eof || list.isNotEmpty()
         }
     }
 

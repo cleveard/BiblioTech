@@ -20,34 +20,30 @@ import kotlin.coroutines.coroutineContext
 
 class Thumbnails(dir: String = "db") {
 
-    private val thumbDir: File?
-
-    init {
-        // Make sure the directory exists. Create it if it doesn't
-        thumbDir = MainActivity.cache?.let {
-            var path = it
-            // Internal function to add a directory
-            fun addDir(d: String) {
-                if (d.isNotEmpty()) {
-                    path = File(path, d)
-                    // If it is already a directory, it is OK
-                    if (!path.isDirectory) {
-                        // If it already exists, then remove it
-                        if (path.exists())
-                            path.delete()
-                        // Add the directory
-                        path.mkdir()
-                    }
+    // Make sure the directory exists. Create it if it doesn't
+    private val thumbDir: File? = MainActivity.cache?.let {
+        var path = it
+        // Internal function to add a directory
+        fun addDir(d: String) {
+            if (d.isNotEmpty()) {
+                path = File(path, d)
+                // If it is already a directory, it is OK
+                if (!path.isDirectory) {
+                    // If it already exists, then remove it
+                    if (path.exists())
+                        path.delete()
+                    // Add the directory
+                    path.mkdir()
                 }
             }
-
-            // Add thumbnails directory
-            addDir("thumbnails")
-            // Add directories from the constructor argument
-            for (d in dir.split('/'))
-                addDir(d)
-            path
         }
+
+        // Add thumbnails directory
+        addDir("thumbnails")
+        // Add directories from the constructor argument
+        for (d in dir.split('/'))
+            addDir(d)
+        path
     }
 
     /**

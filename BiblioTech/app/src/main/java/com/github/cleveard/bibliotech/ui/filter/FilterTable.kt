@@ -431,7 +431,7 @@ class FilterTable(private val fragment: Fragment) {
 
         // Reconnect following rows, to change the row index
         for (i in row until rows.size) {
-            connectListeners(row)
+            connectListeners(i)
         }
     }
 
@@ -525,7 +525,7 @@ class FilterTable(private val fragment: Fragment) {
 
         // First collect the columns that have predicates
         val filterColumns = ArrayList<ColumnName>()
-        for (f in Column.values()) {
+        for (f in Column.entries) {
             if (f.desc.predicates.isNotEmpty())
                 filterColumns.add(ColumnName(f))
         }

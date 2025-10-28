@@ -7,6 +7,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.math.ceil
+import androidx.core.graphics.withTranslation
 
 /** Class to hold absolute layout for a book */
 data class BookLayout(
@@ -523,17 +524,16 @@ data class BookLayout(
             var lastX = 0.0f
             var lastY = 0.0f
             if (!clip.isEmpty) {
-                canvas.save()
-                canvas.translate(position.x, position.y)
-                canvas.clipRect(clip)
-                //canvas.drawColor(0x400000ff)  // Color clip region for debugging
-                for (span in textSpans) {
-                    canvas.translate(span.position.x - lastX, span.position.y - lastY)
-                    lastX = span.position.x
-                    lastY = span.position.y
-                    span.layout.draw(canvas)
+                canvas.withTranslation(position.x, position.y) {
+                    clipRect(clip)
+                    //canvas.drawColor(0x400000ff)  // Color clip region for debugging
+                    for (span in textSpans) {
+                        translate(span.position.x - lastX, span.position.y - lastY)
+                        lastX = span.position.x
+                        lastY = span.position.y
+                        span.layout.draw(this)
+                    }
                 }
-                canvas.restore()
             }
         }
 
@@ -1134,11 +1134,10 @@ data class BookLayout(
                 dst.offset(bounds.left + (bounds.width() - dst.right) / 2.0f,
                     bounds.top + (bounds.height() - dst.bottom) / 2.0f)
                 // Draw the bitmap
-                canvas.save()
-                canvas.translate(position.x, position.y)
-                canvas.clipRect(clip)
-                canvas.drawBitmap(bitmap, null, dst, paint)
-                canvas.restore()
+                canvas.withTranslation(position.x, position.y) {
+                    clipRect(clip)
+                    drawBitmap(bitmap, null, dst, paint)
+                }
             }
         }
 

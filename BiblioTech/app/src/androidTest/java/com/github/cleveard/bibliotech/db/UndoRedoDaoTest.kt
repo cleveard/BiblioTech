@@ -46,7 +46,7 @@ class UndoRedoDaoTest {
     private suspend fun BookDbTracker.testBookFlags(message: String, bookFilter: BookFilter?) {
         undoTracker.syncUndo(message)
         val bookFlags = repo.bookFlags
-        val filter = bookFilter?.let { it.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true) }
+        val filter = bookFilter?.buildFilter(context, arrayOf(BOOK_ID_COLUMN), true)
 
         suspend fun StandardSubjectBuilder.checkCountBits(bits: Int, value: Int, include: Boolean, id: Long?) {
             var s = tables.bookEntities.entities

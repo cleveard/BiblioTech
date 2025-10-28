@@ -137,7 +137,7 @@ class UndoTracker(
         transactions.clear()
         assertWithMessage("Clear Undo %s", message).apply {
             // Make sure there are no transaction and the max, min and undo id are correct
-            that(dao.getTransactions().isNullOrEmpty()).isTrue()
+            that(dao.getTransactions().isEmpty()).isTrue()
             that(dao.maxUndoId).isEqualTo(0)
             that(dao.undoId).isEqualTo(0)
             that(dao.minUndoId).isEqualTo(1)

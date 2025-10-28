@@ -135,7 +135,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
             TextAppearanceSpan(context, R.style.HeaderItem2)
         )
         // Get the localized names of the columns
-        for (c in Column.values()) {
+        for (c in Column.entries) {
             names.put(c.desc.nameResourceId,
                 if (c.desc.nameResourceId == 0) null else resources.getString(c.desc.nameResourceId))
         }

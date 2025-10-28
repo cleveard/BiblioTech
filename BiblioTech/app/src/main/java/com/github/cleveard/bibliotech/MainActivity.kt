@@ -18,6 +18,7 @@ import androidx.navigation.ui.setupWithNavController
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.net.toUri
 import androidx.core.view.GravityCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
@@ -111,7 +112,7 @@ private var googleBooksAuth: OAuth? = null
 class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, BookStats {
     companion object {
         /** Url to the  BiblioTech help web page */
-        private const val HELP_URL: String = "https://cleveard.github.io/BiblioTech/help/"
+        private val HELP_URI: Uri = "https://cleveard.github.io/BiblioTech/help/".toUri()
 
         // The File to the app cache directory. Used to save thumbnails
         private var mCache: File? = null
@@ -252,7 +253,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                     }
                 }
                 R.id.action_help -> {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(HELP_URL)))
+                    startActivity(Intent(Intent.ACTION_VIEW, HELP_URI))
                     return@setNavigationItemSelectedListener true
                 }
                 else -> return@setNavigationItemSelectedListener false
@@ -405,7 +406,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
 
         try {
             return googleBooksAuth!!.execute(action)
-        } catch (e: OAuth.AuthException) {
+        } catch (_: OAuth.AuthException) {
             logout()
         }
 

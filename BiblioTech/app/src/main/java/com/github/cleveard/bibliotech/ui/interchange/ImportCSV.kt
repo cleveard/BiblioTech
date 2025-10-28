@@ -55,7 +55,7 @@ class ImportCSV {
         }
         handler.flush()     // Make sure the last one is added
 
-        if (handler.records.size > 0) {
+        if (handler.records.isNotEmpty()) {
             try {
                 val result = withContext(Dispatchers.Main) {
                     var recycler: RecyclerView? = null
@@ -368,11 +368,11 @@ class ImportCSV {
                             false
                         }
                     }
-                } catch (e: SQLiteException) {
+                } catch (_: SQLiteException) {
                     0L
                 }
                 if (id == 0L) {
-                    if (records.size > 0 && records.last() === data)
+                    if (records.isNotEmpty() && records.last() === data)
                         ++rejectCount
                     else
                         ++invalidCount
@@ -482,7 +482,7 @@ class ImportCSV {
                             (book.tags as ArrayList).popDuplicate({ this.name == it.name }) { name.isEmpty() }
                     } ?: ++invalidCount  // Invalid input
                 }
-            } catch (e: NumberFormatException) {
+            } catch (_: NumberFormatException) {
                 // Format error
                 ++invalidCount
             }
@@ -502,7 +502,7 @@ class ImportCSV {
         override suspend fun addToDatabase(data: BookAndAuthors, conflictCallback: suspend CoroutineScope.(conflict: BookAndAuthors) -> Boolean): Long {
             data.book.id = 0L
             val id = repo.addOrUpdateBook(data, conflictCallback)
-            if (records.size > 0 && data == records.last())
+            if (records.isNotEmpty() && data == records.last())
                 data.book.id = records.size.toLong()
             return id
         }
@@ -667,7 +667,7 @@ class ImportCSV {
                     flush()
                 } else
                     ++invalidCount      // No name, invalid
-            } catch (e: NumberFormatException) {
+            } catch (_: NumberFormatException) {
                 // Format error
                 ++invalidCount
             }
@@ -778,14 +778,14 @@ class ImportCSV {
         }
 
         // If we didn't get any columns, then that is a bad format
-        if (bookColumns.size == 0 && viewColumns.size == 0)
+        if (bookColumns.isEmpty() && viewColumns.isEmpty())
             throw ImportError(ImportError.ErrorCode.BAD_FORMAT, "No valid columns in header")
         // If we got both book and filter columns, then that is a bad format
-        if (bookColumns.size != 0 && viewColumns.size != 0)
+        if (bookColumns.isNotEmpty() && viewColumns.isNotEmpty())
             throw ImportError(ImportError.ErrorCode.BAD_FORMAT, "Cannot determine whether to import books or views")
 
         // If we got filter columns, then return a ViewHandler
-        if (viewColumns.size != 0) {
+        if (viewColumns.isNotEmpty()) {
             // For views we need both a name and filter column
             if (!viewColumns.containsKey(VIEWS_NAME_COLUMN) && ! viewColumns.containsKey(VIEWS_FILTER_COLUMN))
                 throw ImportError(ImportError.ErrorCode.BAD_FORMAT, "View import must contain \"$VIEWS_NAME_COLUMN\" and \"$VIEWS_FILTER_COLUMN\"")

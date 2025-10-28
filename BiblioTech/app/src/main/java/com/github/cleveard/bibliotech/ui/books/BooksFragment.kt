@@ -5,7 +5,12 @@ import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.util.SparseArray
-import android.view.*
+import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -27,8 +32,17 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.bibliotech.*
-import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.BookCredentials
+import com.github.cleveard.bibliotech.BookStats
+import com.github.cleveard.bibliotech.BuildConfig
+import com.github.cleveard.bibliotech.ManageNavigation
+import com.github.cleveard.bibliotech.MobileNavigationDirections
+import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.BookEntity
+import com.github.cleveard.bibliotech.db.BookFilter
+import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
+import com.github.cleveard.bibliotech.db.UndoTransactionEntity
+import com.github.cleveard.bibliotech.db.ViewEntity
 import com.github.cleveard.bibliotech.ui.filter.FilterTable
 import com.github.cleveard.bibliotech.ui.filter.OrderTable
 import com.github.cleveard.bibliotech.ui.modes.DeleteModalAction
@@ -39,7 +53,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import java.util.*
 
 /**
  * Fragment to display the book list

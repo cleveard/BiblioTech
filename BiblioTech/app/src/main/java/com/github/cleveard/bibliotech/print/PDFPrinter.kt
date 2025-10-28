@@ -31,7 +31,7 @@ class PDFPrinter(
     class NoBooksException: IllegalStateException("A list of books must be selected to print")
     /** The pdf document we are printing to */
     private var pdf: PrintedPdfDocument? = null
-        private set(v) {
+        set(v) {
             field.let {
                 field = v
                 if (it != v) {

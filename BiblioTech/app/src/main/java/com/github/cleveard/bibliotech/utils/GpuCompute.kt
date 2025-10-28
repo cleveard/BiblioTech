@@ -12,6 +12,7 @@ import com.google.android.renderscript.YuvFormat
 import java.nio.ByteBuffer
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import androidx.core.graphics.createBitmap
 
 /**
  * Class to interface with GPU compute
@@ -325,10 +326,7 @@ class GpuCompute {
                         inputAllocation =
                             Allocation.createSized(rs, elemType.element, yuvBuffer.array().size)
                     }
-                    val output = Bitmap.createBitmap(
-                        image.width, image.height,
-                        Bitmap.Config.ARGB_8888
-                    )
+                    val output = createBitmap(image.width, image.height)
                     if (!::outputAllocation.isInitialized) {
                         outputAllocation = Allocation.createFromBitmap(rs, output)
                     }

@@ -94,7 +94,7 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
     ) {
         /** @inheritDoc */
         override fun hashCode(): Int {
-            return BookFilter.hashArray(args) * 31 + command.hashCode()
+            return hashArray(args) * 31 + command.hashCode()
         }
 
         /** @inheritDoc */
@@ -105,7 +105,7 @@ data class BookFilter(val orderList: Array<OrderField>, val filterList: Array<Fi
             other as BuiltFilter
 
             if (command != other.command) return false
-            if (!BookFilter.equalArray(args, other.args)) return false
+            if (!equalArray(args, other.args)) return false
             return true
         }
 

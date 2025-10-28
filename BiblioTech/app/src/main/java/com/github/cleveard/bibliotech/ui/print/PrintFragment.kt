@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlin.math.roundToInt
+import androidx.core.graphics.withSave
 
 class PrintFragment : Fragment() {
 
@@ -280,15 +281,15 @@ class PrintFragment : Fragment() {
                     try {
                         // Make the canvas for the page and save its state
                         val canvas = Canvas(image)
-                        canvas.save()
-                        // Scale the canvas to use points for coordinates
-                        val scaleX = (viewModel.pdfPrinter.attributes.mediaSize?.widthMils ?: 8500).toFloat() / 1000.0f
-                        val scaleY = (viewModel.pdfPrinter.attributes.mediaSize?.heightMils ?: 11000).toFloat() / 1000.0f
-                        canvas.scale(image.width.toFloat() / (scaleX * 72.0f), image.height.toFloat() / (scaleY * 72.0f))
-                        // Draw the page
-                        viewModel.pdfPrinter.drawPage(canvas, page, books, handler.first)
-                        // Restore the canvas state
-                        canvas.restore()
+                        canvas.withSave {
+                            // Scale the canvas to use points for coordinates
+                            val scaleX = (viewModel.pdfPrinter.attributes.mediaSize?.widthMils ?: 8500).toFloat() / 1000.0f
+                            val scaleY = (viewModel.pdfPrinter.attributes.mediaSize?.heightMils ?: 11000).toFloat() / 1000.0f
+                            scale(image.width.toFloat() / (scaleX * 72.0f), image.height.toFloat() / (scaleY * 72.0f))
+                            // Draw the page
+                            viewModel.pdfPrinter.drawPage(this, page, books, handler.first)
+                            // Restore the canvas state
+                        }
                         // Invalidate the view
                         imageView.invalidate()
                     } finally {

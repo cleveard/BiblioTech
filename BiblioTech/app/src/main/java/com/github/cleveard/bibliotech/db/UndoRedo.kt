@@ -52,7 +52,7 @@ data class WhereExpression(val expression: String, val args: Array<Any>) {
 class EnumConverters {
     @TypeConverter
     fun operationFromInt(value: Int): UndoRedoDao.OperationType {
-        return UndoRedoDao.OperationType.values()[value]
+        return UndoRedoDao.OperationType.entries[value]
     }
 
     @TypeConverter
@@ -440,7 +440,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         // Get the undo and redo transactions
         var error = false
         val transactions = getTransactions()
-        if (transactions.isNullOrEmpty()) {
+        if (transactions.isEmpty()) {
             // No transactions, initialize the min, max and current undo
             undoId = 0
             minUndoId = 1

@@ -2,28 +2,39 @@ package com.github.cleveard.bibliotech.ui.books
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
-import com.github.cleveard.bibliotech.db.*
-import com.github.cleveard.bibliotech.*
 import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.drawable.Drawable
-import android.net.Uri
 import android.text.Spannable
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.ImageView
+import android.widget.RatingBar
+import android.widget.SimpleCursorAdapter
+import android.widget.TextView
+import android.widget.ViewFlipper
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.net.toUri
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.BookAndAuthors
+import com.github.cleveard.bibliotech.db.BookDatabase
+import com.github.cleveard.bibliotech.db.BookRepository
+import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
+import com.github.cleveard.bibliotech.db.TAGS_NAME_COLUMN
 import com.github.cleveard.bibliotech.ui.widget.ChipBox
 import com.github.cleveard.bibliotech.utils.ParentAccess
 import com.google.android.material.chip.Chip
-import kotlinx.coroutines.*
-import java.lang.StringBuilder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
 /**
@@ -435,7 +446,7 @@ internal open class BooksAdapter(
     private val clickLinkListener: View.OnClickListener = View.OnClickListener {
         if (it is TextView) {
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(it.text.toString()))
+                val intent = Intent(Intent.ACTION_VIEW, it.text.toString().toUri())
                 access.context.startActivity(intent)
             } catch (e: ActivityNotFoundException) {
                 Log.e("BiblioTech", "Failed to launch browser")
