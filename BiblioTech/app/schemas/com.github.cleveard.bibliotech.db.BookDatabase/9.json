@@ -1,0 +1,1100 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 9,
+    "identityHash": "724caf445393ef212818074528f74d39",
+    "entities": [
+      {
+        "tableName": "books",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`books_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `books_volume_id` TEXT, `books_source_id` TEXT, `books_title` TEXT NOT NULL DEFAULT '', `books_subtitle` TEXT NOT NULL DEFAULT '', `books_description` TEXT NOT NULL DEFAULT '', `books_page_count` INTEGER NOT NULL DEFAULT 0, `books_count` INTEGER NOT NULL DEFAULT 1, `books_volume_link` TEXT NOT NULL DEFAULT '', `books_rating` REAL NOT NULL DEFAULT -1.0, `books_series_id` INTEGER DEFAULT NULL, `books_series_order` INTEGER DEFAULT NULL, `books_date_added` INTEGER NOT NULL DEFAULT 0, `books_date_modified` INTEGER NOT NULL DEFAULT 0, `books_small_thumb` TEXT, `books_large_thumb` TEXT, `books_flags` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`books_series_id`) REFERENCES `series`(`series_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "books_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volumeId",
+            "columnName": "books_volume_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "books_source_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "books_title",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "subTitle",
+            "columnName": "books_subtitle",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "books_description",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "pageCount",
+            "columnName": "books_page_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "bookCount",
+            "columnName": "books_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "linkUrl",
+            "columnName": "books_volume_link",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "books_rating",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "-1.0"
+          },
+          {
+            "fieldPath": "seriesId",
+            "columnName": "books_series_id",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "seriesOrder",
+            "columnName": "books_series_order",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "added",
+            "columnName": "books_date_added",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "modified",
+            "columnName": "books_date_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "smallThumb",
+            "columnName": "books_small_thumb",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "largeThumb",
+            "columnName": "books_large_thumb",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "books_flags",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "books_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_books_books_id",
+            "unique": true,
+            "columnNames": [
+              "books_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_books_books_id` ON `${TABLE_NAME}` (`books_id`)"
+          },
+          {
+            "name": "index_books_books_volume_id_books_source_id",
+            "unique": false,
+            "columnNames": [
+              "books_volume_id",
+              "books_source_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_books_books_volume_id_books_source_id` ON `${TABLE_NAME}` (`books_volume_id`, `books_source_id`)"
+          },
+          {
+            "name": "index_books_books_series_id",
+            "unique": false,
+            "columnNames": [
+              "books_series_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_books_books_series_id` ON `${TABLE_NAME}` (`books_series_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "series",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "books_series_id"
+            ],
+            "referencedColumns": [
+              "series_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "authors",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`authors_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `authors_last_name` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `authors_remaining` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `authors_flags` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "authors_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastName",
+            "columnName": "authors_last_name",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "remainingName",
+            "columnName": "authors_remaining",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "authors_flags",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "authors_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_authors_authors_id",
+            "unique": true,
+            "columnNames": [
+              "authors_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_authors_authors_id` ON `${TABLE_NAME}` (`authors_id`)"
+          },
+          {
+            "name": "index_authors_authors_last_name_authors_remaining",
+            "unique": false,
+            "columnNames": [
+              "authors_last_name",
+              "authors_remaining"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_authors_authors_last_name_authors_remaining` ON `${TABLE_NAME}` (`authors_last_name`, `authors_remaining`)"
+          }
+        ]
+      },
+      {
+        "tableName": "book_authors",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`book_authors_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `book_authors_author_id` INTEGER NOT NULL, `book_authors_book_id` INTEGER NOT NULL, FOREIGN KEY(`book_authors_book_id`) REFERENCES `books`(`books_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`book_authors_author_id`) REFERENCES `authors`(`authors_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "book_authors_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorId",
+            "columnName": "book_authors_author_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookId",
+            "columnName": "book_authors_book_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "book_authors_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_book_authors_book_authors_id",
+            "unique": true,
+            "columnNames": [
+              "book_authors_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_id` ON `${TABLE_NAME}` (`book_authors_id`)"
+          },
+          {
+            "name": "index_book_authors_book_authors_author_id_book_authors_book_id",
+            "unique": true,
+            "columnNames": [
+              "book_authors_author_id",
+              "book_authors_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_authors_book_authors_author_id_book_authors_book_id` ON `${TABLE_NAME}` (`book_authors_author_id`, `book_authors_book_id`)"
+          },
+          {
+            "name": "index_book_authors_book_authors_book_id",
+            "unique": false,
+            "columnNames": [
+              "book_authors_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_book_authors_book_authors_book_id` ON `${TABLE_NAME}` (`book_authors_book_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "books",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_authors_book_id"
+            ],
+            "referencedColumns": [
+              "books_id"
+            ]
+          },
+          {
+            "table": "authors",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_authors_author_id"
+            ],
+            "referencedColumns": [
+              "authors_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tags_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tags_name` TEXT NOT NULL COLLATE NOCASE, `tags_desc` TEXT NOT NULL DEFAULT '', `tags_flags` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "tags_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "tags_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "desc",
+            "columnName": "tags_desc",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "tags_flags",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "tags_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tags_tags_id",
+            "unique": true,
+            "columnNames": [
+              "tags_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_tags_tags_id` ON `${TABLE_NAME}` (`tags_id`)"
+          },
+          {
+            "name": "index_tags_tags_name",
+            "unique": false,
+            "columnNames": [
+              "tags_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tags_tags_name` ON `${TABLE_NAME}` (`tags_name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "book_tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`book_tags_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `book_tags_tag_id` INTEGER NOT NULL, `book_tags_book_id` INTEGER NOT NULL, FOREIGN KEY(`book_tags_book_id`) REFERENCES `books`(`books_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`book_tags_tag_id`) REFERENCES `tags`(`tags_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "book_tags_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagId",
+            "columnName": "book_tags_tag_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookId",
+            "columnName": "book_tags_book_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "book_tags_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_book_tags_book_tags_id",
+            "unique": true,
+            "columnNames": [
+              "book_tags_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_id` ON `${TABLE_NAME}` (`book_tags_id`)"
+          },
+          {
+            "name": "index_book_tags_book_tags_book_id_book_tags_tag_id",
+            "unique": true,
+            "columnNames": [
+              "book_tags_book_id",
+              "book_tags_tag_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_tags_book_tags_book_id_book_tags_tag_id` ON `${TABLE_NAME}` (`book_tags_book_id`, `book_tags_tag_id`)"
+          },
+          {
+            "name": "index_book_tags_book_tags_tag_id",
+            "unique": false,
+            "columnNames": [
+              "book_tags_tag_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_book_tags_book_tags_tag_id` ON `${TABLE_NAME}` (`book_tags_tag_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "books",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_tags_book_id"
+            ],
+            "referencedColumns": [
+              "books_id"
+            ]
+          },
+          {
+            "table": "tags",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_tags_tag_id"
+            ],
+            "referencedColumns": [
+              "tags_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`categories_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `categories_category` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `categories_flags` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "categories_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "categories_category",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "categories_flags",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "categories_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_categories_categories_id",
+            "unique": true,
+            "columnNames": [
+              "categories_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_categories_categories_id` ON `${TABLE_NAME}` (`categories_id`)"
+          },
+          {
+            "name": "index_categories_categories_category",
+            "unique": false,
+            "columnNames": [
+              "categories_category"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_categories_categories_category` ON `${TABLE_NAME}` (`categories_category`)"
+          }
+        ]
+      },
+      {
+        "tableName": "book_categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`book_categories_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `book_categories_category_id` INTEGER NOT NULL, `book_categories_book_id` INTEGER NOT NULL, FOREIGN KEY(`book_categories_book_id`) REFERENCES `books`(`books_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`book_categories_category_id`) REFERENCES `categories`(`categories_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "book_categories_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "book_categories_category_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookId",
+            "columnName": "book_categories_book_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "book_categories_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_book_categories_book_categories_id",
+            "unique": true,
+            "columnNames": [
+              "book_categories_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_id` ON `${TABLE_NAME}` (`book_categories_id`)"
+          },
+          {
+            "name": "index_book_categories_book_categories_category_id_book_categories_book_id",
+            "unique": true,
+            "columnNames": [
+              "book_categories_category_id",
+              "book_categories_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_categories_book_categories_category_id_book_categories_book_id` ON `${TABLE_NAME}` (`book_categories_category_id`, `book_categories_book_id`)"
+          },
+          {
+            "name": "index_book_categories_book_categories_book_id",
+            "unique": false,
+            "columnNames": [
+              "book_categories_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_book_categories_book_categories_book_id` ON `${TABLE_NAME}` (`book_categories_book_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "books",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_categories_book_id"
+            ],
+            "referencedColumns": [
+              "books_id"
+            ]
+          },
+          {
+            "table": "categories",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_categories_category_id"
+            ],
+            "referencedColumns": [
+              "categories_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "views",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`views_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `views_name` TEXT NOT NULL COLLATE NOCASE, `views_desc` TEXT NOT NULL DEFAULT '', `views_filter` TEXT, `views_flags` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "views_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "views_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "desc",
+            "columnName": "views_desc",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "filter",
+            "columnName": "views_filter",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "views_flags",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "views_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_views_views_id",
+            "unique": true,
+            "columnNames": [
+              "views_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_views_views_id` ON `${TABLE_NAME}` (`views_id`)"
+          },
+          {
+            "name": "index_views_views_name",
+            "unique": false,
+            "columnNames": [
+              "views_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_views_views_name` ON `${TABLE_NAME}` (`views_name`)"
+          }
+        ]
+      },
+      {
+        "tableName": "operation_table",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operation_undo_id` INTEGER NOT NULL, `operation_operation_id` INTEGER NOT NULL, `operation_type` INTEGER NOT NULL, `operation_cur_id` INTEGER NOT NULL, `operation_old_id` INTEGER NOT NULL DEFAULT 0, `operation_mod_time` INTEGER DEFAULT NULL, `operation_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "undoId",
+            "columnName": "operation_undo_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operation_operation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "operation_type",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curId",
+            "columnName": "operation_cur_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldId",
+            "columnName": "operation_old_id",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "modTime",
+            "columnName": "operation_mod_time",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "operation_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "operation_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_operation_table_operation_id",
+            "unique": true,
+            "columnNames": [
+              "operation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_operation_table_operation_id` ON `${TABLE_NAME}` (`operation_id`)"
+          },
+          {
+            "name": "index_operation_table_operation_undo_id_operation_operation_id",
+            "unique": false,
+            "columnNames": [
+              "operation_undo_id",
+              "operation_operation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_operation_table_operation_undo_id_operation_operation_id` ON `${TABLE_NAME}` (`operation_undo_id`, `operation_operation_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "undo_table",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`transaction_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `transaction_undo_id` INTEGER NOT NULL, `transaction_desc` TEXT NOT NULL, `transaction_flags` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "transaction_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "undoId",
+            "columnName": "transaction_undo_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "desc",
+            "columnName": "transaction_desc",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "transaction_flags",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "transaction_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_undo_table_transaction_id",
+            "unique": true,
+            "columnNames": [
+              "transaction_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_undo_table_transaction_id` ON `${TABLE_NAME}` (`transaction_id`)"
+          },
+          {
+            "name": "index_undo_table_transaction_undo_id",
+            "unique": false,
+            "columnNames": [
+              "transaction_undo_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_undo_table_transaction_undo_id` ON `${TABLE_NAME}` (`transaction_undo_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "isbns",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`isbns_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `isbns_isbn` TEXT NOT NULL COLLATE NOCASE DEFAULT '', `isbns_flags` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "isbns_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isbn",
+            "columnName": "isbns_isbn",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "isbns_flags",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "isbns_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_isbns_isbns_id",
+            "unique": true,
+            "columnNames": [
+              "isbns_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_isbns_isbns_id` ON `${TABLE_NAME}` (`isbns_id`)"
+          },
+          {
+            "name": "index_isbns_isbns_isbn",
+            "unique": false,
+            "columnNames": [
+              "isbns_isbn"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_isbns_isbns_isbn` ON `${TABLE_NAME}` (`isbns_isbn`)"
+          }
+        ]
+      },
+      {
+        "tableName": "book_isbns",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`book_isbns_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `book_isbns_isbn_id` INTEGER NOT NULL, `book_isbns_book_id` INTEGER NOT NULL, FOREIGN KEY(`book_isbns_book_id`) REFERENCES `books`(`books_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`book_isbns_isbn_id`) REFERENCES `isbns`(`isbns_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "book_isbns_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isbnId",
+            "columnName": "book_isbns_isbn_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookId",
+            "columnName": "book_isbns_book_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "book_isbns_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_book_isbns_book_isbns_id",
+            "unique": true,
+            "columnNames": [
+              "book_isbns_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_id` ON `${TABLE_NAME}` (`book_isbns_id`)"
+          },
+          {
+            "name": "index_book_isbns_book_isbns_isbn_id_book_isbns_book_id",
+            "unique": true,
+            "columnNames": [
+              "book_isbns_isbn_id",
+              "book_isbns_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_isbn_id_book_isbns_book_id` ON `${TABLE_NAME}` (`book_isbns_isbn_id`, `book_isbns_book_id`)"
+          },
+          {
+            "name": "index_book_isbns_book_isbns_book_id",
+            "unique": false,
+            "columnNames": [
+              "book_isbns_book_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_book_isbns_book_isbns_book_id` ON `${TABLE_NAME}` (`book_isbns_book_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "books",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_isbns_book_id"
+            ],
+            "referencedColumns": [
+              "books_id"
+            ]
+          },
+          {
+            "table": "isbns",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "book_isbns_isbn_id"
+            ],
+            "referencedColumns": [
+              "isbns_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "series",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`series_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `series_series_id` TEXT NOT NULL, `series_title` TEXT NOT NULL, `series_flag` INTEGER NOT NULL DEFAULT 0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "series_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesId",
+            "columnName": "series_series_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "series_title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "series_flag",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "series_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_series_series_id",
+            "unique": true,
+            "columnNames": [
+              "series_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_series_series_id` ON `${TABLE_NAME}` (`series_id`)"
+          },
+          {
+            "name": "index_series_series_series_id",
+            "unique": false,
+            "columnNames": [
+              "series_series_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_series_series_series_id` ON `${TABLE_NAME}` (`series_series_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "bookshelves",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT NOT NULL DEFAULT '', `bookshelves_self_link` TEXT NOT NULL DEFAULT '', `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `tags`(`tags_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "bookshelves_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookshelfId",
+            "columnName": "bookshelves_bookshelf_id",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "bookshelves_title",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "bookshelves_description",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "selfLink",
+            "columnName": "bookshelves_self_link",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "modified",
+            "columnName": "bookshelves_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "booksModified",
+            "columnName": "bookshelves_books_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "tagId",
+            "columnName": "bookshelves_tag_id",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "flags",
+            "columnName": "bookshelves_flag",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "bookshelves_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_bookshelves_bookshelves_id",
+            "unique": true,
+            "columnNames": [
+              "bookshelves_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_id` ON `${TABLE_NAME}` (`bookshelves_id`)"
+          },
+          {
+            "name": "index_bookshelves_bookshelves_bookshelf_id",
+            "unique": false,
+            "columnNames": [
+              "bookshelves_bookshelf_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_bookshelf_id` ON `${TABLE_NAME}` (`bookshelves_bookshelf_id`)"
+          },
+          {
+            "name": "index_bookshelves_bookshelves_tag_id",
+            "unique": true,
+            "columnNames": [
+              "bookshelves_tag_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id` ON `${TABLE_NAME}` (`bookshelves_tag_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "tags",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "bookshelves_tag_id"
+            ],
+            "referencedColumns": [
+              "tags_id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '724caf445393ef212818074528f74d39')"
+    ]
+  }
+}

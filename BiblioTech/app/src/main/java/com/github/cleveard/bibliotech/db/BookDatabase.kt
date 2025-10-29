@@ -54,9 +54,10 @@ const val kAsc = "ASC"
         UndoTransactionEntity::class,
         IsbnEntity::class,
         BookAndIsbnEntity::class,
-        SeriesEntity::class
+        SeriesEntity::class,
+        BookshelfEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -69,6 +70,7 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getUndoRedoDao(): UndoRedoDao
     abstract fun getIsbnDao(): IsbnDao
     abstract fun getSeriesDao(): SeriesDao
+    abstract fun getBookshelvesDao(): BookshelvesDao
 
     /**
      * Descriptor for tables in the book database
@@ -225,6 +227,8 @@ abstract class BookDatabase : RoomDatabase() {
         val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, 0, IsbnEntity.PRESERVE, null, null, null)
         /** The book_isbns link table descriptor */
         val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, 0, null, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
+        /** The bookshelves table descriptor */
+        val bookshelvesTable = TableDescription(BOOKSHELVES_TABLE, BOOKSHELVES_ID_COLUMN, BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, 0, BookshelfEntity.PRESERVE, null, null, null)
 
         /** Undo levels preference key */
         const val UNDO_LEVEL_KEY = "undo_levels"
@@ -735,6 +739,14 @@ abstract class BookDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
 
+                }
+            },
+            object: Migration(8,9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOKSHELVES_BOOKSHELF_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_TITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_DESCRIPTION_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_SELF_LINK_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_BOOKS_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_TAG_ID_COLUMN` INTEGER DEFAULT NULL, `$BOOKSHELVES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`$BOOKSHELVES_TAG_ID_COLUMN`) REFERENCES `tags`(`$TAGS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE RESTRICT )")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_id` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_ID_COLUMN`)")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_bookshelf_id` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_BOOKSHELF_ID_COLUMN`)")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id_column` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_TAG_ID_COLUMN`)")
                 }
             }
         )

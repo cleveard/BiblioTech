@@ -330,6 +330,28 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             override suspend fun recordModTimeUpdate(dao: UndoRedoDao, e: WhereExpression, t: Long, update: suspend (expression: WhereExpression, time: Long) -> Int): Int {
                 return dao.recordModTimeUpdate(this, e, t, update)
             }
+        },
+        /** Add a BookshelfEntity operation */
+        ADD_BOOKSHELF(AddDataDescriptor(BookDatabase.bookshelvesTable)) {
+            override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
+                dao.record(this, id)
+            }
+        },
+        /** Delete a BookshelfEntity operation */
+        DELETE_BOOKSHELF(DeleteDataDescriptor(BookDatabase.bookshelvesTable)) {
+            override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
+                return dao.recordDelete(this, expression, delete)
+            }
+        },
+        /** Update a BookshelfEntity operation */
+        CHANGE_BOOKSHELF(ChangeDataDescriptor(BookDatabase.bookshelvesTable) {
+            swapBookshelf(it.curId, it.oldId)
+        }) {
+            override suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
+                if (dao.started > 0)
+                    return dao.recordUpdate(this, id, dao.copyForSeriesUndo(id), update)
+                return update()
+            }
         };
 
         /**
@@ -1199,6 +1221,36 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
+     * Get a bookshelf entity and its copy
+     */
+    @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $BOOKSHELVES_ID_COLUMN")
+    protected abstract suspend fun queryBookshelf(id1: Long, id2: Long): List<BookshelfEntity>
+
+    /**
+     * Update a series entity
+     */
+    @Update
+    protected abstract suspend fun updateBookshelf(entity: BookshelfEntity): Int
+
+    /**
+     * Swap a bookshelf entity with its copy
+     */
+    @Transaction
+    protected open suspend fun swapBookshelf(curId: Long, copyId: Long): Int {
+        return swapEntity(queryBookshelf(curId, copyId), if (curId < copyId) 0 else 1) {copy ->
+            // Copy flags from current to copy
+            copy.flags = (copy.flags and BookshelfEntity.PRESERVE) or (flags and BookshelfEntity.PRESERVE.inv())
+            // Hide current
+            flags = (flags and BookshelfEntity.PRESERVE) or SeriesEntity.HIDDEN
+            // Swap ids
+            id = copy.id.also {copy.id = id }
+        }?.let {
+            // Update the series
+            updateBookshelf(it[0]) + updateBookshelf(it[1])
+        }?: 0
+    }
+
+    /**
      * Delete a range of transactions and operations
      * @param min The inclusive min undo id in the range
      * @param max The inclusive max undo id in the range
@@ -1255,6 +1307,21 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         return db.execInsert(SimpleSQLiteQuery(
             """INSERT INTO $SERIES_TABLE ( $SERIES_ID_COLUMN, $SERIES_SERIES_ID_COLUMN, $SERIES_TITLE_COLUMN, $SERIES_FLAG_COLUMN )
                 | SELECT NULL, $SERIES_SERIES_ID_COLUMN, $SERIES_TITLE_COLUMN, $SERIES_FLAG_COLUMN | ${SeriesEntity.HIDDEN} FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN = ?
+            """.trimMargin(),
+            arrayOf(seriesId)
+        ))
+    }
+
+    /**
+     * Make a copy of a bookshelf entity
+     * @param seriesId The id of the bookshelf entity
+     * @return The id of the copy
+     */
+    @Transaction
+    protected open suspend fun copyForBookshelfUndo(seriesId: Long): Long {
+        return db.execInsert(SimpleSQLiteQuery(
+            """INSERT INTO $BOOKSHELVES_TABLE ( $BOOKSHELVES_ID_COLUMN, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_FLAG_COLUMN )
+                | SELECT NULL, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_FLAG_COLUMN | ${BookshelfEntity.HIDDEN} FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(seriesId)
         ))
