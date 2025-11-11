@@ -61,6 +61,10 @@
         <item quantity="one">Delete %d tag?</item>
         <item quantity="other">Delete %d tags?</item>
     </plurals>
+    <plurals name="ask_delete_shelves">
+        <item quantity="one">Delete %d shelf?</item>
+        <item quantity="other">Delete %d shelves?</item>
+    </plurals>
     <string name="add_title">Add New Tag</string>
     <string name="add_message">Enter the name and description for the new tag</string>
     <string name="edit_title">Edit Tag</string>
@@ -327,4 +331,11 @@
     <string name="selected_books_only">Selected Only</string>
     <string name="localTrue">True</string>
     <string name="localFalse">False</string>
+    <string name="bookshelf_title">Bookshelf Title</string>
+    <string name="bookshelf_description">Bookshelf Description</string>
+    <string name="commit">Commit</string>
+    <string name="revert">Revert</string>
+    <string name="self_link">Self link</string>
+    <string name="linked_to_tag">Linked to tag</string>
+    <string name="new_shelf">New Shelf</string>
 </resources>
