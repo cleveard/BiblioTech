@@ -1,6 +1,15 @@
 package com.github.cleveard.bibliotech.db
 
+import androidx.lifecycle.LiveData
+import androidx.paging.PagingSource
 import androidx.room.*
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
+import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectByFlagBits
+import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectVisible
+import com.github.cleveard.bibliotech.db.TagDao.Companion.selectedIdSubQuery
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.withContext
 import java.lang.StringBuilder
 
 const val BOOKSHELVES_TABLE = "bookshelves"
@@ -14,6 +23,9 @@ const val BOOKSHELVES_BOOKS_MODIFIED_COLUMN = "bookshelves_books_modified"
 const val BOOKSHELVES_TAG_ID_COLUMN = "bookshelves_tag_id"
 const val BOOKSHELVES_FLAG_COLUMN = "bookshelves_flag"
 
+/**
+ * Entity for a bookshelf
+ */
 @Entity(tableName = BOOKSHELVES_TABLE,
     indices = [
         Index(value = [BOOKSHELVES_ID_COLUMN], unique = true),
@@ -21,15 +33,15 @@ const val BOOKSHELVES_FLAG_COLUMN = "bookshelves_flag"
         Index(value = [BOOKSHELVES_TAG_ID_COLUMN], unique = true)
     ],
     foreignKeys = [
-        ForeignKey(entity = TagEntity::class,
-            parentColumns = [TAGS_ID_COLUMN],
+        ForeignKey(entity = BookshelfEntity::class,
+            parentColumns = [BOOKSHELVES_ID_COLUMN],
             childColumns = [BOOKSHELVES_TAG_ID_COLUMN],
             onDelete = ForeignKey.RESTRICT
         )
     ]
 )
 data class BookshelfEntity (
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOKSHELVES_ID_COLUMN) var id: Long,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOKSHELVES_ID_COLUMN) var id: Long?,
     @ColumnInfo(name = BOOKSHELVES_BOOKSHELF_ID_COLUMN, defaultValue = "0") var bookshelfId: Int,
     @ColumnInfo(name = BOOKSHELVES_TITLE_COLUMN, defaultValue = "") var title: String,
     @ColumnInfo(name = BOOKSHELVES_DESCRIPTION_COLUMN, defaultValue = "") var description: String,
@@ -41,14 +53,57 @@ data class BookshelfEntity (
 ) {
     companion object {
         const val HIDDEN = 1
+        const val SELECTED = 2
+        const val EDITING = 4
         const val PRESERVE = 0
     }
 }
 
+/**
+ * Bookshelf entity with associated tag entity
+ */
+data class BookshelfAndTag(
+    @Embedded val bookshelf: BookshelfEntity,
+    @Relation(
+        entity = BookshelfEntity::class,
+        parentColumn = BOOKSHELVES_TAG_ID_COLUMN,
+        entityColumn = BOOKSHELVES_ID_COLUMN
+    )
+    var tag: BookshelfEntity?
+)
+
 @Dao
 abstract class BookshelvesDao(private val db: BookDatabase) {
-    @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE (($BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN}) = 0)")
-    abstract suspend fun get(): List<BookshelfEntity>
+    /**
+     * Get the paging source for all tags
+     */
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) ORDER BY $BOOKSHELVES_TITLE_COLUMN")
+    abstract fun getShelvesAndTags(): PagingSource<Int, BookshelfAndTag>
+
+    /**
+     * Get a LiveData of the list of tags ordered by name
+     */
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) ORDER BY $BOOKSHELVES_TITLE_COLUMN")
+    protected abstract fun doGetLive(): LiveData<List<BookshelfAndTag>>
+
+    /**
+     * Get a LiveData of the list of tags ordered by name
+     */
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.SELECTED or BookshelfEntity.HIDDEN} ) == ${BookshelfEntity.SELECTED} ORDER BY $BOOKSHELVES_TITLE_COLUMN")
+    protected abstract fun doGetSelectedLive(): LiveData<List<BookshelfAndTag>>
+
+    /**
+     * Get a LiveData of the list of tags ordered by name
+     * @param selected True to get the selected tags. False to get all tags
+     */
+    suspend fun getShelvesAndTagsLive(selected: Boolean = false): LiveData<List<BookshelfAndTag>> {
+        return withContext(db.queryExecutor.asCoroutineDispatcher()) {
+            if (selected)
+                doGetSelectedLive()
+            else
+                doGetLive()
+        }
+    }
 
     /**
      * Add a new bookshelf to the database
@@ -68,6 +123,9 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
      */
     @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE ( $BOOKSHELVES_BOOKSHELF_ID_COLUMN = :bookshelfId ) AND ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) LIMIT 1")
     abstract suspend fun findBookshelfByBookshelfId(bookshelfId: Int): BookshelfEntity?
+
+    @Query("SELECT $BOOKSHELVES_ID_COLUMN WHERE ( $BOOKSHELVES_FLAG_COLUMN  AND ( ${BookshelfEntity.HIDDEN} OR ${BookshelfEntity.EDITING} ) ) = ${BookshelfEntity.EDITING}")
+    abstract fun getEditCount(): LiveData<Set<BookshelfAndTag>>
 
     @Transaction
     open suspend fun addWithUndo(bookshelfEntity: BookshelfEntity): Long {
@@ -90,5 +148,109 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
             }
         }
         return bookshelfEntity.id
+    }
+
+    /**
+     * Delete multiple tags
+     */
+    @Transaction
+    open suspend fun deleteSelectedWithUndo(): Int {
+        return BookDatabase.buildWhereExpressionForIds(
+            BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, null, // Select visible tags
+            BOOKSHELVES_BOOKSHELF_ID_COLUMN,                           // Column to query
+            selectedIdSubQuery,                       // Selected tag ids sub-query
+            null,                                     // Ids to delete
+            false                                     // Delete ids or not ids
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOKSHELF.recordDelete(db.getUndoRedoDao(), e) {
+                db.setHidden(BookDatabase.bookshelvesTable, e)
+            }
+        }?: 0
+    }
+
+    /**
+     * Query to count bits in the flags column
+     */
+    @RawQuery(observedEntities = [BookshelfEntity::class])
+    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int
+
+    /**
+     * Query to count bits in the flags column
+     */
+    @RawQuery(observedEntities = [BookshelfEntity::class])
+    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int>
+
+    /**
+     * Query to count bits in the flags column
+     * @param bits The bits we are checking
+     * @param value The value we are checking
+     * @param include True to include values that match. False to exclude values that match.
+     * @param id A tag id to count
+     * @return The count in a LiveData
+     */
+    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int {
+        // Build the selection from the bits
+        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, BOOKSHELVES_FLAG_COLUMN)
+            .toString()
+        // Return the query
+        return countBits(SimpleSQLiteQuery(
+            "SELECT COUNT($BOOKSHELVES_ID_COLUMN) FROM $BOOKSHELVES_TABLE$condition"
+        ))
+    }
+
+    /**
+     * Query to count bits in the flags column
+     * @param bits The bits we are checking
+     * @param value The value we are checking
+     * @param include True to include values that match. False to exclude values that match.
+     * @param id A tag id to count
+     * @return The count in a LiveData
+     */
+    open fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
+        // Build the selection from the bits
+        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, BOOKSHELVES_FLAG_COLUMN)
+            .toString()
+        // Return the query
+        return countBitsLive(
+            SimpleSQLiteQuery(
+                "SELECT COUNT($BOOKSHELVES_ID_COLUMN) FROM $BOOKSHELVES_TABLE$condition"
+            )
+        )
+    }
+
+    /**
+     * Change bits in the flags column
+     * @param mask The bits to change
+     * @param value The value to set
+     * @param id The id of the tag to change. Null to change all
+     * @return The number of rows changed
+     */
+    @Transaction
+    open suspend fun changeBits(mask: Int, value: Int, id: Long?): Int? {
+        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
+        // Only select the rows where the change will make a difference
+        condition.selectByFlagBits(mask, value, false, BOOKSHELVES_FLAG_COLUMN)
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOKSHELVES_TABLE SET $BOOKSHELVES_FLAG_COLUMN = ( $BOOKSHELVES_FLAG_COLUMN & ${mask.inv()} ) | $value$condition"))
+    }
+
+    /**
+     * Change bits in the flags column
+     * @param operation The operation to perform. True to set, false to clear, null to toggle
+     * @param mask The bits to change
+     * @param id The id of the tag to change. Null to change all
+     * @return The number of rows changed
+     */
+    @Transaction
+    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int {
+        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
+        // Only select the rows where the change will make a difference
+        if (operation == true)
+            condition.selectByFlagBits(mask, mask, false, BOOKSHELVES_FLAG_COLUMN)
+        else if (operation == false)
+            condition.selectByFlagBits(mask, 0, false, BOOKSHELVES_FLAG_COLUMN)
+        val bits = BookDatabase.changeBits(operation, BOOKSHELVES_FLAG_COLUMN, mask)
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOKSHELVES_TABLE $bits$condition"))
     }
 }

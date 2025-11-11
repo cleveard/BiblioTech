@@ -55,7 +55,8 @@ data class TagEntity(
     companion object {
         const val SELECTED = 1
         const val HIDDEN = 2
-        const val PRESERVE = 0
+        const val LINKED_TO_BOOKSHELF = 4
+        const val PRESERVE = LINKED_TO_BOOKSHELF
     }
 }
 

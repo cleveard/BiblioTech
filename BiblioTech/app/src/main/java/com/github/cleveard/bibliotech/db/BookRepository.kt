@@ -388,6 +388,43 @@ class BookRepository private constructor(context: Context) {
         }
     }
 
+    /**
+     * Object for dealing with the bits in the book shelf flags
+     */
+    val shelfFlags: FlagsInterface = object: FlagsInterface {
+        /** inheritDoc **/
+        override suspend fun changeBits(
+            operation: Boolean?,
+            mask: Int,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int {
+            return db.getBookshelvesDao().changeBits(operation, mask, id)
+        }
+
+        /** inheritDoc **/
+        override suspend fun countBits(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): Int {
+            return db.getBookshelvesDao().countBits(bits, value, include, id)
+        }
+
+        /** inheritDoc **/
+        override fun countBitsLive(
+            bits: Int,
+            value: Int,
+            include: Boolean,
+            id: Long?,
+            filter: BookFilter.BuiltFilter?
+        ): LiveData<Int> {
+            return db.getBookshelvesDao().countBitsLive(bits, value, include, id)
+        }
+    }
+
     // Undo description strings
     private val addBook = context.resources.getString(R.string.addBookUndo)
     private val deleteBooks = context.resources.getString(R.string.deleteBooksUndo)
@@ -547,6 +584,27 @@ class BookRepository private constructor(context: Context) {
     }
 
     /**
+     * Get all shelves
+     * @return PagingSource containing the shelves
+     */
+    fun getShelves(): PagingSource<Int, BookshelfAndTag> {
+        return db.getBookshelvesDao().getShelvesAndTags()
+    }
+
+    /**
+     * Get all shelves
+     * @param selected True to get selected shelves. False to get all shelves.
+     * @return LiveData with the list of shelves
+     */
+    suspend fun getShelvesLive(selected: Boolean = false): LiveData<List<BookshelfAndTag>> {
+        return db.getBookshelvesDao().getShelvesAndTagsLive(selected)
+    }
+
+    suspend fun deleteSelectedShelves(): Int {
+        return db.getBookshelvesDao().deleteSelectedWithUndo()
+    }
+
+    /**
      * Get the thumbnail for a book
      * @param bookId The id of the book
      * @param large True to get the large thumbnail. False to get the small thumbnail
@@ -679,5 +737,13 @@ class BookRepository private constructor(context: Context) {
      */
     suspend fun redo(): Boolean {
         return db.getUndoRedoDao().redo()
+    }
+
+    fun getShelvesAndTags(): PagingSource<Int, BookshelfAndTag> {
+        return db.getBookshelvesDao().getShelvesAndTags()
+    }
+
+    fun getEditItems(): LiveData<Set<BookshelfAndTag>> {
+        return db.getBookshelvesDao().getEditCount()
     }
 }
