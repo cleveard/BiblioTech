@@ -57,7 +57,7 @@ const val kAsc = "ASC"
         SeriesEntity::class
     ],
     version = 8,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class BookDatabase : RoomDatabase() {
     abstract fun getBookDao(): BookDao
