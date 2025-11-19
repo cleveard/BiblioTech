@@ -52,11 +52,20 @@ data class TagEntity(
                 flags and SELECTED.inv()
         }
 
+    var hasBookshelf
+        get() = ((flags and HAS_BOOKSHELF) != 0)
+        set(v) {
+            flags = if (v)
+                flags or HAS_BOOKSHELF
+            else
+                flags and HAS_BOOKSHELF.inv()
+        }
+
     companion object {
         const val SELECTED = 1
         const val HIDDEN = 2
-        const val LINKED_TO_BOOKSHELF = 4
-        const val PRESERVE = LINKED_TO_BOOKSHELF
+        const val HAS_BOOKSHELF = 4
+        const val PRESERVE = HAS_BOOKSHELF
     }
 }
 

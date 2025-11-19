@@ -13,8 +13,11 @@ import com.google.api.client.http.HttpResponseException
 import com.google.api.services.books.v1.BooksRequestInitializer
 import com.google.api.services.books.v1.model.Volume
 import com.google.api.services.books.v1.model.Volumes
+import com.google.api.services.books.v1.model.Bookshelves
+import com.google.api.services.books.v1.model.Bookshelf
 import kotlinx.coroutines.*
 import java.net.MalformedURLException
+import java.time.Instant
 import java.util.*
 import kotlin.collections.ArrayDeque
 import kotlin.collections.ArrayList
@@ -138,6 +141,8 @@ internal class GoogleBookLookup {
         private const val kAuthorParameter = "author:\"%s\""
         private const val kBooksVolumes = "books#volumes"
         private const val kBooksVolume = "books#volume"
+        private const val kBooksBookshelves = "books#bookshelves"
+        private const val kBooksBookshelf = "books#bookshelf"
         private const val kISBN_13 = "ISBN_13"
         private const val kISBN_10 = "ISBN_10"
         private val kSmallThumb = arrayOf<(Volume.VolumeInfo.ImageLinks) -> String?>(
@@ -226,6 +231,17 @@ internal class GoogleBookLookup {
             else
                 SeriesEntity(0L, list[0].seriesId, list[0].title, 0)
         }
+    }
+
+    suspend fun getBookShelves(auth: BookCredentials): List<BookshelfEntity>? {
+        val shelves = execute(auth) {
+            service.Mylibrary().bookshelves().list().apply {
+                this.prettyPrint = true
+                oauthToken = it
+            }
+        }
+        return mapResponse(shelves)
+
     }
 
     /**
@@ -349,6 +365,48 @@ internal class GoogleBookLookup {
                 items.map { mapVolume(it) },
                 volumes.totalItems
             )
+        }
+        throw LookupException("Invalid Response")
+    }
+
+    private fun mapShelf(shelf: Bookshelf): BookshelfEntity? {
+        return if (shelf.kind != kBooksBookshelf)
+            null
+        else
+            BookshelfEntity(
+                id = 0L,
+                bookshelfId = shelf.id,
+                title = shelf.title,
+                description = shelf.description,
+                selfLink = shelf.selfLink,
+                modified = shelf.updated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
+                booksModified = shelf.volumesLastUpdated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
+                booksLastUpdate = 0L,
+                tagId = null,
+                flags = 0
+
+            )
+    }
+
+    /**
+     * Map a volumes query response to a LookupResult
+     * @param shelves The query response converted to a Bookshelves object
+     * @return List of BookshelfEntity or null if the list is empty
+     */
+    @Throws(LookupException::class)
+    private fun mapResponse(shelves: Bookshelves): List<BookshelfEntity>? {
+        // Do we have a list of books
+        if (shelves.kind == kBooksBookshelves) {
+            // Get the array of books from the object
+            val items = shelves.items?: return null
+            val count = items.size
+            // If count is 0, then nothing left to do
+            if (count == 0)
+                return null
+            // Return the result
+            return items.mapNotNull { mapShelf(it) }.let {
+                it.ifEmpty { null }
+            }
         }
         throw LookupException("Invalid Response")
     }

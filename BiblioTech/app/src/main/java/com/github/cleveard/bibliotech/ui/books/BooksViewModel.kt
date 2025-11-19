@@ -390,7 +390,7 @@ class BooksViewModel(val app: Application) : GenericViewModel<BookAndAuthors>(ap
      * @inheritDoc
      */
     override fun toggleExpanded(id: Long) {
-        openBooks.toggleAsync(id)
+        openBooks.toggleAsync(id, false)
     }
 
     /**

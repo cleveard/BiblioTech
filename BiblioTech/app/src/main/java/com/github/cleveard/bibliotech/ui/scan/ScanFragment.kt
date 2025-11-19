@@ -3,6 +3,7 @@ package com.github.cleveard.bibliotech.ui.scan
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.gb.*
 import android.Manifest
+import android.app.Application
 import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
@@ -31,7 +32,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.paging.*
@@ -82,7 +82,7 @@ fun Editable.setString(text: String): Editable {
     return this
 }
 
-internal class ScanViewModel: ViewModel() {
+internal class ScanViewModel(app: Application): AndroidViewModel(app) {
     /** Lookup to use with this view model */
     val lookup: GoogleBookLookup = GoogleBookLookup()
 }
@@ -95,7 +95,7 @@ class ScanFragment : Fragment() {
      * Scan view model
      * Only used for its viewModelScope
      */
-    private val scanViewModel: ScanViewModel by viewModels()
+    private val scanViewModel: ScanViewModel by activityViewModels()
 
     /**
      * The books view model
@@ -198,13 +198,13 @@ class ScanFragment : Fragment() {
     private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.removeView(chip)
-        tagViewModel.selection.selectAsync(chip.tag.id, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, chip.tag.hasBookshelf, false)
     }
 
     private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.editChip(chip)
-        tagViewModel.selection.selectAsync(chip.tag.id, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, chip.tag.hasBookshelf, false)
     }
 
     private inner class TagChip(val tag: TagEntity, context: Context): Chip(context) {
@@ -514,7 +514,7 @@ class ScanFragment : Fragment() {
             }
 
             override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
-                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, true)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, true,)
             }
 
             override suspend fun onChipRemoved(
@@ -522,7 +522,7 @@ class ScanFragment : Fragment() {
                 chip: View,
                 scope: CoroutineScope
             ) {
-                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, false)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, false)
             }
 
             override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) { }
@@ -1447,7 +1447,7 @@ class ScanFragment : Fragment() {
                             adapter.notifyItemRangeChanged(0, adapter.itemCount)
                         }
                         // Toggle the selection for an id
-                        override fun toggleSelection(id: Long, position: Int) {
+                        override fun toggleSelection(id: Long, editable: Boolean, position: Int) {
                             val index = id.toInt()
                             if (selection.indexOfKey(index) >= 0) {
                                 // Selection contains the key, remove it

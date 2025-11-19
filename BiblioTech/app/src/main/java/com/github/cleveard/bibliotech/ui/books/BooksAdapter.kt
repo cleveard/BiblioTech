@@ -192,7 +192,7 @@ internal open class BooksAdapter(
             if (v is ViewFlipper) {
                 val pos = layoutPosition
                 boundBook?.apply {
-                    access.toggleSelection(book.id, pos)
+                    access.toggleSelection(book.id, false, pos)
                     notifyItemChanged(pos)
                 }
             }

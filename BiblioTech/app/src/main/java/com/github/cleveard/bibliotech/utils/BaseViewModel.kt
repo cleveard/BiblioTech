@@ -22,7 +22,7 @@ internal interface ParentAccess {
      * Toggle the selection for and id
      * @param id The id to toggle
      */
-    fun toggleSelection(id: Long, position: Int)
+    fun toggleSelection(id: Long, editable: Boolean, position: Int)
 
     /**
      * Toggle the open/close state of the book
@@ -121,28 +121,30 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         /**
          * Select an item. May return before completion
          * @param id The id of the item to select
+         * @param editable True if the selected item is editable
          * @param select True to select. False to clear selection
          */
-        fun selectAsync(id: Long, select: Boolean)
+        fun selectAsync(id: Long, editable: Boolean, select: Boolean)
 
         /**
          * Select an item
          * @param id The id of the item to select
+         * @param editable True if the selected item is editable
          * @param select True to select. False to clear selection
          */
-        suspend fun select(id: Long, select: Boolean) = selectAsync(id, select)
+        suspend fun select(id: Long, editable: Boolean, select: Boolean) = selectAsync(id, editable, select)
 
         /**
          * Toggle an item selection. May return before completion
          * @param id The id of the item
          */
-        fun toggleAsync(id: Long)
+        fun toggleAsync(id: Long, editable: Boolean)
 
         /**
          * Toggle an item selection
          * @param id The id of the item
          */
-        suspend fun toggle(id: Long) = toggleAsync(id)
+        suspend fun toggle(id: Long, editable: Boolean) = toggleAsync(id, editable)
 
         /**
          * Toggle all oll items' selection. May return before completion
@@ -222,8 +224,8 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         }
 
         /** @inheritDoc **/
-        override suspend fun select(id: Long, select: Boolean) {
-            if (select)
+        override suspend fun select(id: Long, editable: Boolean, select: Boolean) {
+            if (select && editable)
                 _lastSelection.value = id
             else
                 clearLastSelection()
@@ -231,23 +233,23 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
         }
 
         /** @inheritDoc **/
-        override fun selectAsync(id: Long, select: Boolean) {
+        override fun selectAsync(id: Long, editable: Boolean, select: Boolean) {
             counter.scope.launch {
-                select(id, select)
+                select(id, editable, select)
             }
         }
 
         /** @inheritDoc **/
-        override fun toggleAsync(id: Long) {
+        override fun toggleAsync(id: Long, editable: Boolean) {
             counter.scope.launch {
-                toggle(id)
+                toggle(id, editable)
             }
         }
 
         /** @inheritDoc **/
-        override suspend fun toggle(id: Long) {
+        override suspend fun toggle(id: Long, editable: Boolean) {
             counter.flags.changeBits(null, counter.mask, id, filter)
-            if (isSelected(id))
+            if (isSelected(id) && editable)
                 _lastSelection.value = id
             else
                 clearLastSelection()
@@ -280,8 +282,8 @@ abstract class BaseViewModel(app: Application) : AndroidViewModel(app), ParentAc
     /**
      * @inheritDoc
      */
-    override fun toggleSelection(id: Long, position: Int) {
-        selection.toggleAsync(id)
+    override fun toggleSelection(id: Long, editable: Boolean, position: Int) {
+        selection.toggleAsync(id, editable)
     }
 
     /**
