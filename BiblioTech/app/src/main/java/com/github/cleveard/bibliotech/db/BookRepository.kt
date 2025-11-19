@@ -592,19 +592,6 @@ class BookRepository private constructor(context: Context) {
     }
 
     /**
-     * Get all shelves
-     * @param selected True to get selected shelves. False to get all shelves.
-     * @return LiveData with the list of shelves
-     */
-    suspend fun getShelvesLive(selected: Boolean = false): LiveData<List<BookshelfAndTag>> {
-        return db.getBookshelvesDao().getShelvesAndTagsLive(selected)
-    }
-
-    suspend fun deleteSelectedShelves(): Int {
-        return db.getBookshelvesDao().deleteSelectedWithUndo()
-    }
-
-    /**
      * Get the thumbnail for a book
      * @param bookId The id of the book
      * @param large True to get the large thumbnail. False to get the small thumbnail
@@ -743,7 +730,23 @@ class BookRepository private constructor(context: Context) {
         return db.getBookshelvesDao().getShelvesAndTags()
     }
 
-    fun getEditItems(): LiveData<Set<BookshelfAndTag>> {
-        return db.getBookshelvesDao().getEditCount()
+    suspend fun getShelfAndTag(id: Long): BookshelfAndTag? {
+        return db.getBookshelvesDao().getShelfAndTag(id)
+    }
+
+    suspend fun updateBookshelf(bookshelf: BookshelfEntity): Boolean {
+        return db.getBookshelvesDao().updateBookshelf(bookshelf)
+    }
+
+    suspend fun getBookShelves(): List<BookshelfAndTag> {
+        return db.getBookshelvesDao().getShelves()
+    }
+
+    suspend fun addBookshelf(bookshelf: BookshelfEntity): Long {
+        return db.getBookshelvesDao().addWithUndo(bookshelf)
+    }
+
+    suspend fun removeBookshelf(bookshelf: BookshelfAndTag): Int {
+        return db.getBookshelvesDao().deleteWithUndo(bookshelf)
     }
 }

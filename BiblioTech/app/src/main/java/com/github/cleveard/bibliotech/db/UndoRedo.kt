@@ -349,7 +349,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         }) {
             override suspend fun recordUpdate(dao: UndoRedoDao, id: Long, update: suspend () -> Boolean): Boolean {
                 if (dao.started > 0)
-                    return dao.recordUpdate(this, id, dao.copyForSeriesUndo(id), update)
+                    return dao.recordUpdate(this, id, dao.copyForBookshelfUndo(id), update)
                 return update()
             }
         };
@@ -1320,8 +1320,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     @Transaction
     protected open suspend fun copyForBookshelfUndo(seriesId: Long): Long {
         return db.execInsert(SimpleSQLiteQuery(
-            """INSERT INTO $BOOKSHELVES_TABLE ( $BOOKSHELVES_ID_COLUMN, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_FLAG_COLUMN )
-                | SELECT NULL, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_FLAG_COLUMN | ${BookshelfEntity.HIDDEN} FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN = ?
+            """INSERT INTO $BOOKSHELVES_TABLE ( $BOOKSHELVES_ID_COLUMN, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, $BOOKSHELVES_FLAG_COLUMN )
+                | SELECT NULL, $BOOKSHELVES_BOOKSHELF_ID_COLUMN, $BOOKSHELVES_TITLE_COLUMN, $BOOKSHELVES_DESCRIPTION_COLUMN, $BOOKSHELVES_SELF_LINK_COLUMN, $BOOKSHELVES_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_MODIFIED_COLUMN, $BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, $BOOKSHELVES_FLAG_COLUMN | ${BookshelfEntity.HIDDEN} FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN = ?
             """.trimMargin(),
             arrayOf(seriesId)
         ))

@@ -63,8 +63,8 @@ internal open class TagsAdapter(private val access: ParentAccess) :
         val holder = ViewHolder(contactView)
         // Set a click listener to toggle the tag selection
         contactView.setOnClickListener {view ->
-            (view.tag as? Long)?.let {id ->
-                access.toggleSelection(id, holder.layoutPosition)
+            (view.tag as? TagEntity)?.let {tag ->
+                access.toggleSelection(tag.id, tag.hasBookshelf, holder.layoutPosition)
                 notifyItemChanged(holder.layoutPosition)
             }
         }
@@ -81,9 +81,8 @@ internal open class TagsAdapter(private val access: ParentAccess) :
 
         // Set the name of the tag
         name.text = tag?.name ?: ""
-        val id = tag?.id ?: 0L
         // Set the id of the tag
-        holder.itemView.tag = id
+        holder.itemView.tag = tag
         // Set the background color
         holder.itemView.setBackgroundColor(
             if (tag?.isSelected == true)

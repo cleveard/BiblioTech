@@ -1,35 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--xmlns:tools="http://schemas.android.com/tools"-->
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <EditText
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/refresh_shelf"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:backgroundTint="@color/toggle_button_bg"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        android:textSize="16sp"
+        app:backgroundTintMode="src_over"
+        app:cornerRadius="20dp"
+        app:icon="@drawable/outline_refresh_24"
+        app:iconGravity="textStart"
+        app:iconPadding="0dp"
+        app:iconSize="24dp"
+        app:iconTint="@color/enable_icon_tint"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
         android:id="@+id/bookshelf_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
+        android:gravity="center_horizontal"
         android:hint="@string/bookshelf_title"
         android:importantForAutofill="no"
         android:textSize="24sp"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/refresh_shelf"
         app:layout_constraintEnd_toStartOf="@id/linked"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toEndOf="@id/refresh_shelf"
+        app:layout_constraintTop_toTopOf="@id/refresh_shelf" />
 
-    <androidx.appcompat.widget.SwitchCompat
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/linked"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
         android:layout_marginEnd="8dp"
-        android:text="@string/linked_to_tag"
+        android:backgroundTint="@color/toggle_button_bg"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
         android:textSize="16sp"
-        app:layout_constraintBaseline_toBaselineOf="@id/bookshelf_title"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:backgroundTintMode="src_over"
+        app:cornerRadius="20dp"
+        app:icon="@drawable/ic_replace_tags_24"
+        app:iconGravity="textStart"
+        app:iconPadding="0dp"
+        app:iconTint="@color/enable_icon_tint"
+        app:layout_constraintBottom_toBottomOf="@id/refresh_shelf"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/refresh_shelf" />
 
-    <EditText
+    <TextView
         android:id="@+id/bookshelf_description"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -38,9 +72,9 @@
         android:ems="10"
         android:hint="@string/bookshelf_description"
         android:importantForAutofill="no"
-        android:textSize="24sp"
+        android:textSize="20sp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/bookshelf_title" />
+        app:layout_constraintTop_toBottomOf="@+id/refresh_shelf" />
 
     <TextView
         android:id="@+id/bookshelf_self_link"

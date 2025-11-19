@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "724caf445393ef212818074528f74d39",
+    "identityHash": "e4401c7b75fb4a277fcf303fc8ea3f0c",
     "entities": [
       {
         "tableName": "books",
@@ -978,7 +978,7 @@
       },
       {
         "tableName": "bookshelves",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT NOT NULL DEFAULT '', `bookshelves_self_link` TEXT NOT NULL DEFAULT '', `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `tags`(`tags_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT NOT NULL DEFAULT '', `bookshelves_self_link` TEXT NOT NULL DEFAULT '', `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_last_update` INTEGER NOT NULL DEFAULT 0, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `bookshelves`(`bookshelves_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1024,6 +1024,13 @@
           {
             "fieldPath": "booksModified",
             "columnName": "bookshelves_books_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "booksLastUpdate",
+            "columnName": "bookshelves_books_last_update",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -1079,14 +1086,14 @@
         ],
         "foreignKeys": [
           {
-            "table": "tags",
+            "table": "bookshelves",
             "onDelete": "RESTRICT",
             "onUpdate": "NO ACTION",
             "columns": [
               "bookshelves_tag_id"
             ],
             "referencedColumns": [
-              "tags_id"
+              "bookshelves_id"
             ]
           }
         ]
@@ -1094,7 +1101,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '724caf445393ef212818074528f74d39')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e4401c7b75fb4a277fcf303fc8ea3f0c')"
     ]
   }
 }

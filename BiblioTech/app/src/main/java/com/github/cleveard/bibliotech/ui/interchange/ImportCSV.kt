@@ -515,7 +515,7 @@ class ImportCSV {
                 source = PagingSourceList(records)
                 return source
             }
-            override fun toggleSelection(id: Long, position: Int) {
+            override fun toggleSelection(id: Long, editable: Boolean, position: Int) {
                 records[id.toInt() - 1].book.isSelected = !records[id.toInt() - 1].book.isSelected
             }
 

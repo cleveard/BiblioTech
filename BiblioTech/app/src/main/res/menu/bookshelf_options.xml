@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_refresh"
+        android:enabled="true"
+        android:icon="@drawable/outline_refresh_24"
+        android:title="@string/refresh"
+        android:visible="true"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_select_all"
+        android:enabled="true"
+        android:title="@string/select_all"
+        android:titleCondensed="@string/all"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_select_none"
+        android:enabled="true"
+        android:title="@string/select_none"
+        android:titleCondensed="@string/none"
+        android:visible="true"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_select_invert"
+        android:enabled="true"
+        android:title="@string/select_invert"
+        android:titleCondensed="@string/swap"
+        android:visible="true"
+        app:showAsAction="ifRoom" />
+</menu>

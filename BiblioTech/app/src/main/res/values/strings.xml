@@ -338,4 +338,6 @@
     <string name="self_link">Self link</string>
     <string name="linked_to_tag">Linked to tag</string>
     <string name="new_shelf">New Shelf</string>
+    <string name="refresh">Refresh</string>
+    <string name="toggle_bookshelf_link">Toggle Shelf Link</string>
 </resources>
