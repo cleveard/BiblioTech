@@ -65,7 +65,7 @@ data class TagEntity(
         const val SELECTED = 1
         const val HIDDEN = 2
         const val HAS_BOOKSHELF = 4
-        const val PRESERVE = HAS_BOOKSHELF
+        const val PRESERVE = 0
     }
 }
 

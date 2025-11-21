@@ -2,7 +2,6 @@ package com.github.cleveard.bibliotech.ui.bookshelves
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookRepository
@@ -13,21 +12,13 @@ import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 internal class BookshelvesViewModel(private val app: Application) : AndroidViewModel(app) {
     /**
      * Repository with the tag data
      */
     val repo: BookRepository = BookRepository.repo
-
-    /**
-     * Tag recycler adapter
-     */
-    internal val adapter = object: BookshelvesAdapter(viewModelScope) {
-        override suspend fun toggleTagAndBookshelfLink(bookshelfId: Long) {
-            this@BookshelvesViewModel.toggleTagAndBookshelfLink(bookshelfId)
-        }
-    }
 
     /** Lookup to use with this view model */
     val lookup: GoogleBookLookup = GoogleBookLookup()
@@ -99,34 +90,13 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
             // Current shelf from the database. Remove it from the list
             var lbs: BookshelfAndTag? = localShelfList.removeLastOrNull()
 
-            // Check for changes. Don't use == because the tag id and
-            // some flag bits don't matter
-            fun BookshelfEntity.changed(from: BookshelfEntity): Boolean {
-                return this.title != from.title
-                    || this.description != from.description
-                    || this.selfLink != from.selfLink
-                    || this.bookshelfId != from.bookshelfId
-                    || this.modified != from.modified
-                    || this.booksModified != from.booksModified
-            }
-
             // Loop until the end of the list
             while (lbs != null || gbs != null) {
                 // compare the current book shelf ids
                 when {
                     lbs?.bookshelf?.bookshelfId == gbs?.bookshelfId -> {
                         // Update local bookshelf with data from google
-                        if (lbs!!.bookshelf.changed(gbs!!)) {
-                            // Something change update the local shelf
-                            lbs.bookshelf.title = gbs.title
-                            lbs.bookshelf.description = gbs.description
-                            lbs.bookshelf.bookshelfId = gbs.bookshelfId
-                            lbs.bookshelf.selfLink = gbs.selfLink
-                            lbs.bookshelf.modified = gbs.modified
-                            lbs.bookshelf.booksModified = gbs.booksModified
-                        }
-                        // Update the database
-                        repo.updateBookshelf(lbs.bookshelf)
+                        refreshShelfAndBooks(lbs!!, gbs!!, false)
                         // Pop next shelves from the list
                         gbs = googleShelfList?.removeLastOrNull()
                         lbs = localShelfList.removeLastOrNull()
@@ -147,6 +117,58 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun refreshBooksOnShelves(shelf: BookshelfAndTag) {
+        TODO("Implement book and tag refresh for shelves")
+    }
+
+    suspend fun refreshShelfAndBooks(auth: BookCredentials, shelf: BookshelfAndTag, forceBookRefresh: Boolean) {
+        // Get the list from google. Run this on an IO thread
+        withContext(Dispatchers.IO) {
+            lookup.getBookShelf(auth, shelf.bookshelf.bookshelfId)
+        }?.let {
+            repo.withUndo(app.applicationContext.getString(R.string.refresh_one_book, shelf.bookshelf.title)) {
+                refreshShelfAndBooks(shelf, it, forceBookRefresh)
+            }
+        }
+    }
+
+    suspend fun refreshShelfAndBooks(shelf: BookshelfAndTag, from: BookshelfEntity, forceBookRefresh: Boolean = false) {
+        // Update local bookshelf with data from google
+        if (shelf.bookshelf.changed(from)) {
+            // Something change update the local shelf
+            shelf.bookshelf.title = from.title
+            shelf.bookshelf.description = from.description
+            shelf.bookshelf.bookshelfId = from.bookshelfId
+            shelf.bookshelf.selfLink = from.selfLink
+            shelf.bookshelf.modified = from.modified
+            shelf.bookshelf.booksModified = from.booksModified
+        }
+
+        // If the shelf is linked to a tag, and the books on the shelf have been
+        // modified since the last time we refreshed, then update the book list
+        // and tags for the shelf.
+        if (forceBookRefresh || (shelf.tag != null && shelf.bookshelf.booksModified != shelf.bookshelf.booksLastUpdate)) {
+            refreshBooksOnShelves(shelf)
+        }
+
+        // Update the database
+        repo.updateBookshelf(shelf.bookshelf)
+
+    }
+
+    companion object {
+        // Check for changes. Don't use == because the tag id and
+        // some flag bits don't matter
+        fun BookshelfEntity.changed(from: BookshelfEntity): Boolean {
+            return this.title != from.title
+                || this.description != from.description
+                || this.selfLink != from.selfLink
+                || this.bookshelfId != from.bookshelfId
+                || this.modified != from.modified
+                || this.booksModified != from.booksModified
         }
     }
 }

@@ -244,6 +244,14 @@ internal class GoogleBookLookup {
 
     }
 
+    suspend fun getBookShelf(auth: BookCredentials, bookshelfId: Int): BookshelfEntity? {
+        return execute(auth) {
+            service.Mylibrary().bookshelves().get(bookshelfId.toString())
+        }?.let { shelf ->
+            mapShelf(shelf)
+        }
+    }
+
     /**
      * Get a thumbnail link from a json object
      * @param info The volume info object

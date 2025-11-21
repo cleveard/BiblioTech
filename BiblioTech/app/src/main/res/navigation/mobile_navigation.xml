@@ -38,12 +38,24 @@
             android:id="@+id/action_nav_scan_to_settingsFragment"
             app:destination="@id/settingsFragment" />
     </fragment>
+    <fragment
+        android:id="@+id/nav_bookshelvesFragment"
+        android:name="com.github.cleveard.bibliotech.ui.bookshelves.BookshelvesFragment"
+        android:label="@string/menu_bookshelves"
+        tools:layout="@layout/fragment_bookshelves" >
+        <action
+            android:id="@+id/action_bookshelvesFragment_to_settingsFragment"
+            app:destination="@id/settingsFragment" />
+    </fragment>
     <action
         android:id="@+id/filter_books"
         app:destination="@id/nav_books" />
     <action
         android:id="@+id/scan_codes"
         app:destination="@id/nav_scan" />
+    <action
+        android:id="@+id/bookshelves"
+        app:destination="@id/nav_bookshelvesFragment" />
 
     <fragment
         android:id="@+id/exportImportFragment"
