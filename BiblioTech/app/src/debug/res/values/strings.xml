@@ -7,4 +7,5 @@
     <string name="menu_export_import">Export/Import Test</string>
     <string name="action_settings">Settings Test</string>
     <string name="print">Print Test</string>
+    <string name="menu_bookshelves">Bookshelves Test</string>
 </resources>

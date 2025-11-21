@@ -514,7 +514,7 @@ class ScanFragment : Fragment() {
             }
 
             override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
-                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, true,)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, true)
             }
 
             override suspend fun onChipRemoved(

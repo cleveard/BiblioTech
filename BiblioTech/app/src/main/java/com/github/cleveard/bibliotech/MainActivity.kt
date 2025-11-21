@@ -35,6 +35,7 @@ import java.io.File
 import com.github.cleveard.bibliotech.db.*
 import com.github.cleveard.bibliotech.gb.GoogleBooksOAuth
 import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
+import com.github.cleveard.bibliotech.ui.bookshelves.BookshelvesFragmentDirections
 import com.github.cleveard.bibliotech.ui.scan.ScanFragmentDirections
 import com.github.cleveard.bibliotech.utils.OAuth
 import kotlinx.coroutines.CompletableDeferred
@@ -209,14 +210,14 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
             binding.navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
                 lastNavId == R.id.nav_books
             binding.navView.menu.findItem(R.id.action_to_settingsFragment).isEnabled =
-                lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan
+                lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan || lastNavId == R.id.action_nav_to_bookshelvesFragment
         }
 
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
         appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_books, R.id.nav_scan
+                R.id.nav_books, R.id.nav_scan, R.id.nav_bookshelvesFragment
             ), drawerLayout
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
@@ -232,6 +233,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                 R.id.nav_books -> MobileNavigationDirections.filterBooks()
                 // This is the id for the scan destination
                 R.id.nav_scan -> MobileNavigationDirections.scanCodes()
+                // This is the id for the bookshelves destination
+                R.id.action_nav_to_bookshelvesFragment -> MobileNavigationDirections.bookshelves()
                 R.id.action_nav_books_to_exportImportFragment -> {
                     if (lastNavId != R.id.nav_books)
                         return@setNavigationItemSelectedListener false
@@ -241,6 +244,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                     when (lastNavId) {
                         R.id.nav_books -> BooksFragmentDirections.actionNavBooksToSettingsFragment()
                         R.id.nav_scan -> ScanFragmentDirections.actionNavScanToSettingsFragment()
+                        R.id.nav_bookshelvesFragment -> BookshelvesFragmentDirections.actionBookshelvesFragmentToSettingsFragment()
                         else -> return@setNavigationItemSelectedListener false
                     }
                 }

@@ -11,6 +11,7 @@
     <string name="menu_scan">Scan</string>
     <string name="menu_export_import">Export/Import</string>
     <string name="menu_help">Help</string>
+    <string name="menu_bookshelves">Bookshelves</string>
 
     <string name="book_thumb">Book Thumbnail</string>
     <string name="id">ID:</string>
@@ -340,4 +341,5 @@
     <string name="new_shelf">New Shelf</string>
     <string name="refresh">Refresh</string>
     <string name="toggle_bookshelf_link">Toggle Shelf Link</string>
+    <string name="refresh_one_book">Refresh Shelf %1$s</string>
 </resources>

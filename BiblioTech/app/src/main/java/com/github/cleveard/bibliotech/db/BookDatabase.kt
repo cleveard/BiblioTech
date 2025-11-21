@@ -58,7 +58,10 @@ const val kAsc = "ASC"
         BookshelfEntity::class
     ],
     version = 9,
-    exportSchema = true
+    exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 8, to = 9)
+    ]
 )
 abstract class BookDatabase : RoomDatabase() {
     abstract fun getBookDao(): BookDao
@@ -739,14 +742,6 @@ abstract class BookDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
 
-                }
-            },
-            object: Migration(8,9) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL("CREATE TABLE IF NOT EXISTS `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_ID_COLUMN` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `$BOOKSHELVES_BOOKSHELF_ID_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_TITLE_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_DESCRIPTION_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_SELF_LINK_COLUMN` TEXT NOT NULL DEFAULT '', `$BOOKSHELVES_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_BOOKS_MODIFIED_COLUMN` INTEGER NOT NULL DEFAULT 0, `$BOOKSHELVES_TAG_ID_COLUMN` INTEGER DEFAULT NULL, `$BOOKSHELVES_FLAG_COLUMN` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`$BOOKSHELVES_TAG_ID_COLUMN`) REFERENCES `tags`(`$TAGS_ID_COLUMN`) ON UPDATE NO ACTION ON DELETE RESTRICT )")
-                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_id` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_ID_COLUMN`)")
-                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_bookshelf_id` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_BOOKSHELF_ID_COLUMN`)")
-                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id_column` ON `$BOOKSHELVES_TABLE` (`$BOOKSHELVES_TAG_ID_COLUMN`)")
                 }
             }
         )

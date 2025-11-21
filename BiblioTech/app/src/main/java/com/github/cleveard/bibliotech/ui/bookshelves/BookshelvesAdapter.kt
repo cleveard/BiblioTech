@@ -41,10 +41,14 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
 
     abstract suspend fun toggleTagAndBookshelfLink(bookshelfId: Long)
 
+    abstract suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton)
+
     /**
      * ViewHolder for the adapter. Just the same as the Recycler ViewHolder
      */
-    internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view)
+    internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        var shelf: BookshelfAndTag? = null
+    }
 
     /**
      * @inheritDoc
@@ -65,12 +69,10 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
      */
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val shelf = getItem(position)
+        holder.shelf = shelf
 
         // Set the name of the tag
         holder.itemView.findViewById<EditText>(R.id.title).setText(shelf?.bookshelf?.title ?: "", TextView.BufferType.EDITABLE)
-        val id = shelf?.bookshelf?.id ?: 0L
-        // Set the id of the tag
-        holder.itemView.tag = id
         // Set the description.
         holder.itemView.findViewById<EditText>(R.id.bookshelf_description).setText(shelf?.bookshelf?.description ?: "", TextView.BufferType.EDITABLE)
         // Set the self link
@@ -79,9 +81,20 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
         holder.itemView.findViewById<MaterialButton>(R.id.linked).let<MaterialButton, Unit> { button ->
             button.isChecked = shelf?.tag != null
             button.setOnClickListener {
-                (holder.itemView.tag as? Long)?.let {id ->
+                holder.shelf?.let {shelf ->
                     scope.launch {
-                        toggleTagAndBookshelfLink(id)
+                        toggleTagAndBookshelfLink(shelf.bookshelf.id)
+                        notifyItemChanged(holder.layoutPosition)
+                    }
+                }
+            }
+        }
+        // Action to refresh the shelf and volumes
+        holder.itemView.findViewById<MaterialButton>(R.id.refresh_shelf).let<MaterialButton, Unit> { button ->
+            button.setOnClickListener {
+                holder.shelf?.let { shelf ->
+                    scope.launch {
+                        onRefreshClicked(shelf, button)
                         notifyItemChanged(holder.layoutPosition)
                     }
                 }

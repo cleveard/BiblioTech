@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     tools:showIn="navigation_view">
 
@@ -12,6 +13,10 @@
             android:id="@+id/nav_scan"
             android:icon="@drawable/ic_menu_scan"
             android:title="@string/menu_scan" />
+        <item
+            android:id= "@+id/action_nav_to_bookshelvesFragment"
+            android:icon="@android:drawable/ic_menu_help"
+            android:title="@string/menu_bookshelves" />
         <item
             android:id="@+id/action_nav_books_to_exportImportFragment"
             android:icon="@drawable/ic_menu_import_export"

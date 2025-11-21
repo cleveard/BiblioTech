@@ -29,7 +29,7 @@ const val BOOKSHELVES_FLAG_COLUMN = "bookshelves_flag"
     indices = [
         Index(value = [BOOKSHELVES_ID_COLUMN], unique = true),
         Index(value = [BOOKSHELVES_BOOKSHELF_ID_COLUMN]),
-        Index(value = [BOOKSHELVES_TAG_ID_COLUMN], unique = true)
+        Index(value = [BOOKSHELVES_TAG_ID_COLUMN])
     ],
     foreignKeys = [
         ForeignKey(entity = BookshelfEntity::class,
@@ -119,7 +119,7 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
 
     suspend fun clearSelectedTagIds() {
         BookDatabase.buildWhereExpressionForIds(
-            TAGS_FLAGS, TagEntity.HIDDEN, null, // Select visible tags
+            BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, null, // Select visible tags
             BOOKSHELVES_TAG_ID_COLUMN,                           // Column to query
             selectedIdSubQuery,                       // Selected tag ids sub-query
             null,                                     // Ids to delete

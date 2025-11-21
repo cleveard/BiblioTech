@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "e4401c7b75fb4a277fcf303fc8ea3f0c",
+    "identityHash": "9af11ed2456843a69a4256b91ce32a53",
     "entities": [
       {
         "tableName": "books",
@@ -1076,12 +1076,12 @@
           },
           {
             "name": "index_bookshelves_bookshelves_tag_id",
-            "unique": true,
+            "unique": false,
             "columnNames": [
               "bookshelves_tag_id"
             ],
             "orders": [],
-            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id` ON `${TABLE_NAME}` (`bookshelves_tag_id`)"
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id` ON `${TABLE_NAME}` (`bookshelves_tag_id`)"
           }
         ],
         "foreignKeys": [
@@ -1101,7 +1101,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e4401c7b75fb4a277fcf303fc8ea3f0c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9af11ed2456843a69a4256b91ce32a53')"
     ]
   }
 }
