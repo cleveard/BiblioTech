@@ -10,23 +10,21 @@
         android:visible="true"
         app:showAsAction="ifRoom" />
     <item
-        android:id="@+id/action_select_all"
-        android:enabled="true"
-        android:title="@string/select_all"
-        android:titleCondensed="@string/all"
-        app:showAsAction="ifRoom" />
+        android:id="@+id/action_undo"
+        android:title="@string/undo"
+        app:showAsAction="never" />
     <item
-        android:id="@+id/action_select_none"
-        android:enabled="true"
-        android:title="@string/select_none"
-        android:titleCondensed="@string/none"
-        android:visible="true"
-        app:showAsAction="ifRoom" />
+        android:id="@+id/action_redo"
+        android:title="@string/redo"
+        app:showAsAction="never" />
     <item
-        android:id="@+id/action_select_invert"
-        android:enabled="true"
-        android:title="@string/select_invert"
-        android:titleCondensed="@string/swap"
-        android:visible="true"
-        app:showAsAction="ifRoom" />
+        android:id="@+id/action_to_settingsFragment"
+        android:orderInCategory="100"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_logout"
+        android:orderInCategory="100"
+        android:title="@string/logout"
+        app:showAsAction="never" />
 </menu>

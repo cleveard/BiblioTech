@@ -383,8 +383,8 @@ internal class GoogleBookLookup {
         else
             BookshelfEntity(
                 id = 0L,
-                bookshelfId = shelf.id,
-                title = shelf.title,
+                bookshelfId = shelf.id?: return null,
+                title = shelf.title?: return null,
                 description = shelf.description,
                 selfLink = shelf.selfLink,
                 modified = shelf.updated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
