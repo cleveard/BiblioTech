@@ -2,12 +2,14 @@ package com.github.cleveard.bibliotech.ui.bookshelves
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookRepository
 import com.github.cleveard.bibliotech.db.BookshelfAndTag
 import com.github.cleveard.bibliotech.db.BookshelfEntity
 import com.github.cleveard.bibliotech.db.TagEntity
+import com.github.cleveard.bibliotech.db.UndoTransactionEntity
 import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -22,6 +24,11 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
     /** Lookup to use with this view model */
     val lookup: GoogleBookLookup = GoogleBookLookup()
+
+    /**
+     * Undo list
+     */
+    val undoList: LiveData<List<UndoTransactionEntity>> = repo.getUndoList()
 
     /**
      * Toggle whether a bookshelf is linked to a tag
@@ -43,7 +50,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                 repo.addOrUpdateTag(tag) { true }
             } ?: run {
                 // We don't have a tag, so link to a tag. Create the tag if needed
-                shelf.tag = TagEntity(0L, shelf.bookshelf.title, shelf.bookshelf.description, TagEntity.HAS_BOOKSHELF).also {
+                shelf.tag = TagEntity(0L, shelf.bookshelf.title, shelf.bookshelf.description?: "", TagEntity.HAS_BOOKSHELF).also {
                     // Update the tag
                     it.id = repo.addOrUpdateTag(it) { true }
                     shelf.bookshelf.tagId = it.id
@@ -150,7 +157,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         // If the shelf is linked to a tag, and the books on the shelf have been
         // modified since the last time we refreshed, then update the book list
         // and tags for the shelf.
-        if (forceBookRefresh || (shelf.tag != null && shelf.bookshelf.booksModified != shelf.bookshelf.booksLastUpdate)) {
+        if (shelf.tag != null && (forceBookRefresh || shelf.bookshelf.booksModified != shelf.bookshelf.booksLastUpdate)) {
             refreshBooksOnShelves(shelf)
         }
 
