@@ -71,12 +71,22 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
         val shelf = getItem(position)
         holder.shelf = shelf
 
+        fun goneOrVisible(id: Int, value: String?) {
+            holder.itemView.findViewById<TextView>(id).let {
+                if (value.isNullOrEmpty())
+                    it.visibility = View.GONE
+                else {
+                    it.visibility = View.VISIBLE
+                    it.text = value
+                }
+            }
+        }
         // Set the name of the tag
-        holder.itemView.findViewById<EditText>(R.id.title).setText(shelf?.bookshelf?.title ?: "", TextView.BufferType.EDITABLE)
+        goneOrVisible(R.id.bookshelf_title, shelf?.bookshelf?.title)
         // Set the description.
-        holder.itemView.findViewById<EditText>(R.id.bookshelf_description).setText(shelf?.bookshelf?.description ?: "", TextView.BufferType.EDITABLE)
+        goneOrVisible(R.id.bookshelf_description, shelf?.bookshelf?.description)
         // Set the self link
-        holder.itemView.findViewById<TextView>(R.id.bookshelf_description).text = shelf?.bookshelf?.selfLink ?: ""
+        goneOrVisible(R.id.bookshelf_self_link, shelf?.bookshelf?.selfLink)
         // Note whether this shelf is linked to a tag
         holder.itemView.findViewById<MaterialButton>(R.id.linked).let<MaterialButton, Unit> { button ->
             button.isChecked = shelf?.tag != null
