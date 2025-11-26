@@ -245,8 +245,10 @@ internal class GoogleBookLookup {
     }
 
     suspend fun getBookShelf(auth: BookCredentials, bookshelfId: Int): BookshelfEntity? {
-        return execute(auth) {
-            service.Mylibrary().bookshelves().get(bookshelfId.toString())
+        return execute(auth) {token ->
+            service.Mylibrary().bookshelves().get(bookshelfId.toString()).apply {
+                this.oauthToken = token
+            }
         }?.let { shelf ->
             mapShelf(shelf)
         }
