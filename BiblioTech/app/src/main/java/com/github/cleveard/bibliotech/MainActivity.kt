@@ -1,5 +1,6 @@
 package com.github.cleveard.bibliotech
 
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,6 +11,7 @@ import android.view.Menu
 import android.view.View
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.viewModels
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
@@ -20,9 +22,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.net.toUri
 import androidx.core.view.GravityCompat
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
-import androidx.lifecycle.coroutineScope
+import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
 import androidx.navigation.NavDirections
@@ -35,7 +38,6 @@ import com.github.cleveard.bibliotech.ui.books.BooksFragmentDirections
 import com.github.cleveard.bibliotech.ui.scan.ScanFragmentDirections
 import com.github.cleveard.bibliotech.utils.OAuth
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.completeWith
 import kotlinx.coroutines.flow.flow
@@ -43,11 +45,6 @@ import kotlinx.coroutines.launch
 
 const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"
-
-/** Channel to queue launch requests */
-private val requestChannel: Channel<Pair<Intent,(Intent?)-> Unit>> = Channel()
-/** Channel used to return result */
-private val resultChannel: Channel<Intent?> = Channel()
 
 /**
  * Interface for managing navigation
@@ -104,8 +101,6 @@ interface BookStats {
     var observeFilterChanges: Boolean
 }
 
-private var googleBooksAuth: OAuth? = null
-
 /**
  * The main activity for the app
  */
@@ -152,6 +147,8 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
      */
     private var lastNavFilter: String = ""
 
+    private val viewModel: MainViewModel by viewModels()
+
     /** Launcher to start an activity using an intent and return an intent result */
     private val launcher: ActivityResultLauncher<Intent> =
         registerForActivityResult(object: ActivityResultContract<Intent, Intent?>() {
@@ -163,9 +160,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                 return intent
             }
         }) {
-            MainScope().launch {
-                resultChannel.send(it)
-            }
+            viewModel.send(it)
         }
 
     private lateinit var binding: MainActivityBinding
@@ -174,9 +169,6 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
      * @inheritDoc
      */
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Create the credentials
-        googleBooksAuth = googleBooksAuth?: GoogleBooksOAuth(application)
-
         // Remember the cache directory
         mCache = cacheDir
 
@@ -275,16 +267,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
 
         // Create a job tied to the activity lifecycle that
         // processes the intent launch requests
-        lifecycle.coroutineScope.launch {
-            flow {
-                for (r in requestChannel)
-                    emit(r)
-            }.collect {request ->
-                launcher.launch(request.first)
-                val result = resultChannel.receive()
-                request.second(result)
-            }
-         }
+        viewModel.start(launcher)
     }
 
     /**
@@ -385,38 +368,15 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
         }
     }
 
-    override suspend fun login(): Boolean {
-        return (googleBooksAuth?.login {intent ->
-            val returnValue = CompletableDeferred<Intent?>()
-            requestChannel.send(Pair(intent) { result ->
-                returnValue.completeWith(Result.success(result))
-            })
-            returnValue.await()
-        })?: false
-    }
+    override suspend fun login(): Boolean = viewModel.login()
 
-    override suspend fun logout(): Boolean {
-        return googleBooksAuth?.logout()?: false
-    }
+    override suspend fun logout(): Boolean = viewModel.logout()
 
     @Throws(OAuth.AuthException::class)
-    override suspend fun <T> execute(action: suspend (token: String?) -> T): T {
-        if (!isAuthorized)
-            throw OAuth.AuthException("execute: Not authorized", googleBooksAuth?.authorizationException)
-
-        try {
-            return googleBooksAuth!!.execute(action)
-        } catch (_: OAuth.AuthException) {
-            logout()
-        }
-
-        if (!login())
-            throw OAuth.AuthException("Token refresh failed", googleBooksAuth?.authorizationException)
-        return googleBooksAuth!!.execute(action)
-    }
+    override suspend fun <T> execute(action: suspend (token: String?) -> T): T = viewModel.execute(action)
 
     override val isAuthorized: Boolean
-        get() = googleBooksAuth?.isAuthorized == true
+        get() = viewModel.isAuthorized
 
     /** Observer to book and selected count LiveData. Used to update app bar stats */
     private val reportStats = Observer<Int> {
@@ -492,4 +452,78 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
                 field = value
             }
         }
+
+    class MainViewModel(app: Application): AndroidViewModel(app) {
+        /** Channel to queue launch requests */
+        private val requestChannel: Channel<Pair<Intent,(Intent?)-> Unit>> = Channel()
+        /** Channel used to return result */
+        private val resultChannel: Channel<Intent?> = Channel()
+        /** OAuth access for google books **/
+        private val googleBooksAuth: OAuth = GoogleBooksOAuth(app.applicationContext)
+
+        /**
+         * Login to google books
+         */
+        suspend fun login(): Boolean = googleBooksAuth.login {intent ->
+            val returnValue = CompletableDeferred<Intent?>()
+            requestChannel.send(Pair(intent) { result ->
+                returnValue.completeWith(Result.success(result))
+            })
+            returnValue.await()
+        }
+
+        /**
+         * Logout of google books
+         */
+        suspend fun logout(): Boolean = googleBooksAuth.logout()
+
+        /**
+         * Execute an action on google books
+         */
+        suspend fun <T> execute(action: suspend (String?) -> T): T {
+            if (!isAuthorized)
+                throw OAuth.AuthException("execute: Not authorized", googleBooksAuth.authorizationException)
+
+            try {
+                return googleBooksAuth.execute(action)
+            } catch (_: OAuth.AuthException) {
+                logout()
+            }
+
+            if (!login())
+                throw OAuth.AuthException("Token refresh failed", googleBooksAuth.authorizationException)
+            return googleBooksAuth.execute(action)
+        }
+
+        /**
+         * Is google book authorized
+         */
+        val isAuthorized: Boolean
+            get() = googleBooksAuth.isAuthorized
+
+        /**
+         * Send result of launched intent to result channel
+         */
+        fun send(intent: Intent?) {
+            viewModelScope.launch {
+                resultChannel.send(intent)
+            }
+        }
+
+        /**
+         * Start job to launch oauth intents and return results
+         */
+        fun start(launcher: ActivityResultLauncher<Intent>) {
+            viewModelScope.launch {
+                flow {
+                    for (r in requestChannel)
+                        emit(r)
+                }.collect {request ->
+                    launcher.launch(request.first)
+                    val result = resultChannel.receive()
+                    request.second(result)
+                }
+            }
+        }
+    }
 }
