@@ -190,7 +190,7 @@ class BookTagDaoTest {
         }
 
         // Add the tags for the books, again
-        tags = addTags(books, emptyArray())
+        addTags(books, emptyArray())
         assertWithMessage("Delete filtered keep tags").apply {
             // Delete the tags for books[0]. Check that nothing is delete, because the filter doesn't match
             that(bookTagDao.deleteSelectedBooksWithUndo(arrayOf(books[0].book.id), false, filter)).isEqualTo(0)

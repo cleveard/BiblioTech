@@ -35,16 +35,16 @@ class BookFilterTest {
 
     @Before
     fun startUp() {
-        context = ApplicationProvider.getApplicationContext()
-        //context = InstrumentationRegistry.getInstrumentation().context
-        BookRepository.initialize(context)
-        repo = BookRepository.repo
-        contents = getContents()
-        val locale = context.resources.configuration.locales[0]
-        dayFormat = DateFormat.getDateInstance(DateFormat.SHORT, locale)
-        monthFormat = SimpleDateFormat(context.resources.getString(R.string.month_year_pattern), locale)
-        yearFormat = SimpleDateFormat("y", locale)
         runBlocking {
+            context = ApplicationProvider.getApplicationContext()
+            //context = InstrumentationRegistry.getInstrumentation().context
+            BookRepository.initialize(context)
+            repo = BookRepository.repo
+            contents = getContents()
+            val locale = context.resources.configuration.locales[0]
+            dayFormat = DateFormat.getDateInstance(DateFormat.SHORT, locale)
+            monthFormat = SimpleDateFormat(context.resources.getString(R.string.month_year_pattern), locale)
+            yearFormat = SimpleDateFormat("y", locale)
             repo.clearUndo()
         }
     }
@@ -347,7 +347,7 @@ class BookFilterTest {
             return Json.encodeToString(serializer(), this)
         }
 
-        fun test(test: BookFilterTest, label: String, seq: Sequence<BookAndAuthors>) {
+        suspend fun test(test: BookFilterTest, label: String, seq: Sequence<BookAndAuthors>) {
             val message = StringBuilder("$label Filter ")
             val filterList = ArrayList<FilterField>()
             val orderList = ArrayList<OrderField>()
@@ -787,40 +787,38 @@ class BookFilterTest {
         }
     }
 
-    private fun getContents(): ArrayList<BookAndAuthors> {
+    private suspend fun getContents(): ArrayList<BookAndAuthors> {
         return getContents(repo.getBooks())
     }
 
-    private fun getContents(filter: BookFilter): ArrayList<BookAndAuthors> {
+    private suspend fun getContents(filter: BookFilter): ArrayList<BookAndAuthors> {
         return getContents(repo.getBooks(filter, context))
     }
 
-    private fun getContents(page: PagingSource<Int, BookAndAuthors>): ArrayList<BookAndAuthors> {
-        return runBlocking {
-            val list = ArrayList<BookAndAuthors>()
-            suspend fun nextPage(params: PagingSource.LoadParams<Int>): Int? {
-                val result = page.load(params) as PagingSource.LoadResult.Page
-                list.addAll(result.data)
-                return result.nextKey
-            }
-            var key = nextPage(
-                PagingSource.LoadParams.Refresh(
-                    key = null,
+    private suspend fun getContents(page: PagingSource<Int, BookAndAuthors>): ArrayList<BookAndAuthors> {
+        val list = ArrayList<BookAndAuthors>()
+        suspend fun nextPage(params: PagingSource.LoadParams<Int>): Int? {
+            val result = page.load(params) as PagingSource.LoadResult.Page
+            list.addAll(result.data)
+            return result.nextKey
+        }
+        var key = nextPage(
+            PagingSource.LoadParams.Refresh(
+                key = null,
+                loadSize = 20,
+                placeholdersEnabled = false
+            )
+        )
+        while(key != null) {
+            key = nextPage(
+                PagingSource.LoadParams.Append(
+                    key = key,
                     loadSize = 20,
                     placeholdersEnabled = false
                 )
             )
-            while(key != null) {
-                key = nextPage(
-                    PagingSource.LoadParams.Append(
-                        key = key,
-                        loadSize = 20,
-                        placeholdersEnabled = false
-                    )
-                )
-            }
-            list
         }
+        return list
     }
 
     companion object {

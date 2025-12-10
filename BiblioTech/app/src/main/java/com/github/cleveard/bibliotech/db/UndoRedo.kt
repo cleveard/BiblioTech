@@ -1169,18 +1169,19 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
-     * Get a view entity and its copy
+     * Get a series entity and its copy
      */
     @Query("SELECT * FROM $SERIES_TABLE WHERE $SERIES_ID_COLUMN IN ( :id1, :id2 ) ORDER BY $SERIES_ID_COLUMN")
     protected abstract suspend fun querySeries(id1: Long, id2: Long): List<SeriesEntity>
+
     /**
-     * Update a view entity
+     * Update a series entity
      */
     @Update
     protected abstract suspend fun updateSeries(entity: SeriesEntity): Int
 
     /**
-     * Swap a view entity with its copy
+     * Swap a series entity with its copy
      */
     @Transaction
     protected open suspend fun swapSeries(curId: Long, copyId: Long): Int {
@@ -1245,8 +1246,8 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
-     * Make a copy of a tag entity
-     * @param seriesId The id of the tag entity
+     * Make a copy of a series entity
+     * @param seriesId The id of the series entity
      * @return The id of the copy
      */
     @Transaction

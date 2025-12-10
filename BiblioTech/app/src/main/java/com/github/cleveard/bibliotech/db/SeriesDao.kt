@@ -10,13 +10,14 @@ const val SERIES_TITLE_COLUMN = "series_title"
 
 const val SERIES_FLAG_COLUMN = "series_flag"
 
-@Entity(tableName = SERIES_TABLE,
+@Entity(
+    tableName = SERIES_TABLE,
     indices = [
         Index(value = [SERIES_ID_COLUMN], unique = true),
         Index(value = [SERIES_SERIES_ID_COLUMN])
     ]
 )
-data class SeriesEntity (
+data class SeriesEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = SERIES_ID_COLUMN) var id: Long,
     @ColumnInfo(name = SERIES_SERIES_ID_COLUMN) var seriesId: String,
     @ColumnInfo(name = SERIES_TITLE_COLUMN) var title: String,
@@ -64,7 +65,7 @@ abstract class SeriesDao(private val db: BookDatabase) {
             ) {
                 seriesEntity.id = 0L
             }
-        })?: run {
+        }) ?: run {
             // Add the new series entity
             seriesEntity.id = 0L
             seriesEntity.id = add(seriesEntity).also {
@@ -92,17 +93,15 @@ abstract class SeriesDao(private val db: BookDatabase) {
         // Should we delete series
         if (deleteSeries) {
             // Yes get the id of the series affected
-            val series = queryUnusedSeriesIds()?.toTypedArray<Any>()
-            series?.let {seriesIds ->
-                var size = seriesIds.size
-                if (size > 0) {
-                    val builder = StringBuilder(" WHERE ( $SERIES_ID_COLUMN IN ( ?")
-                    while (--size > 0)
-                        builder.append(", ?")
-                    builder.append(" ) )")
-                    count = UndoRedoDao.OperationType.DELETE_SERIES.recordDelete(db.getUndoRedoDao(), WhereExpression(builder.toString(), seriesIds)) {
-                        db.setHidden(BookDatabase.seriesTable, it)
-                    }
+            val seriesIds = queryUnusedSeriesIds().toTypedArray<Any>()
+            var size = seriesIds.size
+            if (size > 0) {
+                val builder = StringBuilder(" WHERE ( $SERIES_ID_COLUMN IN ( ?")
+                while (--size > 0)
+                    builder.append(", ?")
+                builder.append(" ) )")
+                count = UndoRedoDao.OperationType.DELETE_SERIES.recordDelete(db.getUndoRedoDao(), WhereExpression(builder.toString(), seriesIds)) {
+                    db.setHidden(BookDatabase.seriesTable, it)
                 }
             }
         }
