@@ -4,14 +4,18 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
 import androidx.room.*
+import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQuery
+import androidx.sqlite.driver.SupportSQLiteConnection
 import kotlinx.coroutines.*
 import java.io.*
 import java.lang.StringBuilder
 import kotlin.collections.ArrayList
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 // Database column and table names.
 
@@ -60,7 +64,10 @@ const val kAsc = "ASC"
     version = 9,
     exportSchema = true,
     autoMigrations = [
-        AutoMigration(from = 8, to = 9)
+        AutoMigration(
+            from = 8, to = 9,
+            spec = BookDatabase.AutoMigrationSpec8_9::class
+        )
     ]
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -260,6 +267,9 @@ abstract class BookDatabase : RoomDatabase() {
         /** Temp table suffix used during version 6 to 7 migration */
         const val TEMP_SUFFIX_6_7 = "_tmp_6_7"
 
+        /** Flag set when migration from version 8 to 9, because undo needs to be cleared */
+        var migrate8to9 = false
+
         /**
          * The data base, once it is open
          */
@@ -279,6 +289,18 @@ abstract class BookDatabase : RoomDatabase() {
                 val pref = PreferenceManager.getDefaultSharedPreferences(context)
                 pref.registerOnSharedPreferenceChangeListener(preferenceListener)
                 preferenceListener.onSharedPreferenceChanged(pref, UNDO_LEVEL_KEY)
+
+                // Clear all undo if we migrated from 8 to 9
+                mDb?.let { db ->
+                    if (migrate8to9) {
+                        MainScope().launch(db.transactionExecutor.asCoroutineDispatcher()) {
+                            db.withTransaction {
+                                db.getUndoRedoDao().clear()
+                            }
+                            migrate8to9 = false
+                        }
+                    }
+                }
             }
         }
 
@@ -743,7 +765,16 @@ abstract class BookDatabase : RoomDatabase() {
                     db.execSQL("ALTER TABLE $OPERATION_TABLE ADD COLUMN `$OPERATION_MOD_TIME_COLUMN` INTEGER DEFAULT NULL")
 
                 }
+            },
+            object: Migration(8, 9) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    BookDatabase_AutoMigration_8_9_Impl().migrate(SupportSQLiteConnection(db))
+                    migrate8to9 = true
+                }
             }
         )
     }
+
+    @DeleteColumn(OPERATION_TABLE, OPERATION_MOD_TIME_COLUMN)
+    class AutoMigrationSpec8_9: AutoMigrationSpec
 }

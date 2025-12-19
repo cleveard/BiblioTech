@@ -6,6 +6,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.lang.IllegalStateException
+import java.nio.ByteBuffer
 
 // Names for the undo transaction table
 const val UNDO_TABLE = "undo_table"
@@ -22,7 +23,8 @@ const val OPERATION_OPERATION_ID_COLUMN = "operation_operation_id"
 const val OPERATION_TYPE_COLUMN = "operation_type"
 const val OPERATION_CUR_ID_COLUMN = "operation_cur_id"
 const val OPERATION_OLD_ID_COLUMN = "operation_old_id"
-const val OPERATION_MOD_TIME_COLUMN = "operation_mod_time"
+const val OPERATION_MOD_TIME_COLUMN = "operation_mod_time"  // Deleted in version 9
+const val OPERATION_EXTRA_COLUMN = "operation_extra"
 
 /**
  * Holder for a WHERE clause with arguments
@@ -74,9 +76,62 @@ data class UndoRedoOperationEntity(
     @ColumnInfo(name = OPERATION_TYPE_COLUMN) var type: UndoRedoDao.OperationType,
     @ColumnInfo(name = OPERATION_CUR_ID_COLUMN) var curId: Long,
     @ColumnInfo(name = OPERATION_OLD_ID_COLUMN, defaultValue = "0") var oldId: Long = 0,
-    @ColumnInfo(name = OPERATION_MOD_TIME_COLUMN, defaultValue = "NULL") var modTime: Long? = null,
+    @ColumnInfo(name = OPERATION_EXTRA_COLUMN, defaultValue = "NULL") var extraData: ByteArray? = null,
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = OPERATION_ID_COLUMN) var id: Long = 0L
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as UndoRedoOperationEntity
+
+        if (undoId != other.undoId) return false
+        if (operationId != other.operationId) return false
+        if (curId != other.curId) return false
+        if (oldId != other.oldId) return false
+        if (id != other.id) return false
+        if (type != other.type) return false
+        if (!extraData.contentEquals(other.extraData)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = undoId
+        result = 31 * result + operationId
+        result = 31 * result + curId.hashCode()
+        result = 31 * result + oldId.hashCode()
+        result = 31 * result + id.hashCode()
+        result = 31 * result + type.hashCode()
+        result = 31 * result + (extraData?.contentHashCode() ?: 0)
+        return result
+    }
+
+    var extra: Any?
+        get() {
+            return extraData?.let { bytes ->
+                when (type) {
+                    UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK ->
+                        ByteBuffer.wrap(bytes).getLong()
+                    else -> null
+                }
+            }
+        }
+        set(value) {
+            extraData = if (value == null)
+                null
+            else {
+                when (operationId) {
+                    UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK.ordinal ->
+                        ByteBuffer.allocate(Long.SIZE_BYTES)
+                            .putLong(value as Long)
+                            .array()
+
+                    else -> null
+                }
+            }
+        }
+}
 
 /** UndoRedoTransactionEntity for the undo table */
 @Entity(tableName = UNDO_TABLE,
@@ -643,8 +698,10 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         // Since this command uses the same WHERE clause as the delete, we won't insert anything
         // if nothing is deleted.
         db.execUpdateDelete(SimpleSQLiteQuery(
-            """INSERT OR ABORT INTO $OPERATION_TABLE ( $OPERATION_ID_COLUMN, $OPERATION_UNDO_ID_COLUMN, $OPERATION_OPERATION_ID_COLUMN, $OPERATION_TYPE_COLUMN, $OPERATION_CUR_ID_COLUMN, $OPERATION_OLD_ID_COLUMN, $OPERATION_MOD_TIME_COLUMN )
-            | SELECT null, $undoId, $operationCount, ${undoType.ordinal}, ${undoType.desc.table.idColumn}, $column, $t FROM ${undoType.desc.table.name}${e.expression}
+            """INSERT OR ABORT INTO $OPERATION_TABLE ( $OPERATION_ID_COLUMN, $OPERATION_UNDO_ID_COLUMN, $OPERATION_OPERATION_ID_COLUMN, $OPERATION_TYPE_COLUMN, $OPERATION_CUR_ID_COLUMN, $OPERATION_OLD_ID_COLUMN, $OPERATION_EXTRA_COLUMN )
+            | SELECT null, $undoId, $operationCount, ${undoType.ordinal}, ${undoType.desc.table.idColumn}, $column, X'${
+                ByteBuffer.allocate(Long.SIZE_BYTES).putLong(t).array().toHexString(HexFormat.UpperCase)
+            }' FROM ${undoType.desc.table.name}${e.expression}
         """.trimMargin(),
             e.args
         )).also {
@@ -810,7 +867,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 getNextUndo()?.let { undo ->
                     // Get the list of operations and undo all of them
                     // We undo them backward from the order they are recorded
-                    getOperationsDesc(undo.undoId, undo.undoId)?.let {
+                    getOperationsDesc(undo.undoId, undo.undoId).let {
                         for (op in it) {
                             op.type.desc.undo(this, op)
                         }
@@ -846,7 +903,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 getNextRedo()?.let { redo ->
                     // Get the list of operations and redo all of them
                     // We redo them in the order they are recorded
-                    getOperationsAsc(redo.undoId, redo.undoId)?.let {
+                    getOperationsAsc(redo.undoId, redo.undoId).let {
                         for (op in it) {
                             op.type.desc.redo(this, op)
                         }
@@ -983,7 +1040,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             // Function used to discard each operation
             val dis = if (redo) OperationDescriptor::discardRedo else OperationDescriptor::discardUndo
             // Get the operations
-            get(min, max)?.let {
+            get(min, max).let {
                 // And discard each one
                 for (op in it) {
                     dis.invoke(op.type.desc, this, op)
@@ -1568,7 +1625,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
 
         override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             dao.db.execUpdateDelete(SimpleSQLiteQuery(
-                "UPDATE OR IGNORE $BOOK_TABLE SET $DATE_MODIFIED_COLUMN = ${op.modTime} WHERE $BOOK_ID_COLUMN = ${op.curId}"
+                "UPDATE OR IGNORE $BOOK_TABLE SET $DATE_MODIFIED_COLUMN = ${op.extra} WHERE $BOOK_ID_COLUMN = ${op.curId}"
             ))
         }
 

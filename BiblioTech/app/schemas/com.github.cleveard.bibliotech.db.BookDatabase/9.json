@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "59364e32c434bff8a57f5389abb2fd5a",
+    "identityHash": "2b345b388c487e411af4ed01be222478",
     "entities": [
       {
         "tableName": "books",
@@ -653,7 +653,7 @@
       },
       {
         "tableName": "operation_table",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operation_undo_id` INTEGER NOT NULL, `operation_operation_id` INTEGER NOT NULL, `operation_type` INTEGER NOT NULL, `operation_cur_id` INTEGER NOT NULL, `operation_old_id` INTEGER NOT NULL DEFAULT 0, `operation_mod_time` INTEGER DEFAULT NULL, `operation_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operation_undo_id` INTEGER NOT NULL, `operation_operation_id` INTEGER NOT NULL, `operation_type` INTEGER NOT NULL, `operation_cur_id` INTEGER NOT NULL, `operation_old_id` INTEGER NOT NULL DEFAULT 0, `operation_extra` BLOB DEFAULT NULL, `operation_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)",
         "fields": [
           {
             "fieldPath": "undoId",
@@ -687,9 +687,9 @@
             "defaultValue": "0"
           },
           {
-            "fieldPath": "modTime",
-            "columnName": "operation_mod_time",
-            "affinity": "INTEGER",
+            "fieldPath": "extraData",
+            "columnName": "operation_extra",
+            "affinity": "BLOB",
             "defaultValue": "NULL"
           },
           {
@@ -1099,7 +1099,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '59364e32c434bff8a57f5389abb2fd5a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2b345b388c487e411af4ed01be222478')"
     ]
   }
 }
