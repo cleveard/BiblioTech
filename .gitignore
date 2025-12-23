@@ -24,8 +24,15 @@ proguard/
 
 # Ignore metadata
 .metadata/
-*/.idea/workspace.xml
-.idea/workspace.xml
-.idea/libraries/
+.idea/
+!.idea/workspace.xml
+!.idea/codestyles/
+!.idea/dictionaries/
+!.idea/runConfigurations/
+!.idea/vcs.xml
+!.idea/encodings.xml
+!.idea/misc.xml
+!.idea/external_build_systems/
+!.idea/AndroidProjectSystem.xml
 /db/
 /Test Images/
