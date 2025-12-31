@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "2b345b388c487e411af4ed01be222478",
+    "identityHash": "aa1e1ea0420fd3d42213ac35b366b701",
     "entities": [
       {
         "tableName": "books",
@@ -978,7 +978,7 @@
       },
       {
         "tableName": "bookshelves",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT DEFAULT NULL, `bookshelves_self_link` TEXT DEFAULT NULL, `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_last_update` INTEGER NOT NULL DEFAULT 0, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `bookshelves`(`bookshelves_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT DEFAULT NULL, `bookshelves_self_link` TEXT DEFAULT NULL, `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_last_update` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_download_last_changed` INTEGER DEFAULT NULL, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `bookshelves`(`bookshelves_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1032,6 +1032,12 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "booksDownloadLastChanged",
+            "columnName": "bookshelves_books_download_last_changed",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
           },
           {
             "fieldPath": "tagId",
@@ -1095,11 +1101,120 @@
             ]
           }
         ]
+      },
+      {
+        "tableName": "volume_tags",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`volume_tags_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `volume_tags_tag_id` INTEGER NOT NULL, `volume_book_source_id` TEXT NOT NULL, `volume_book_volume_id` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "volume_tags_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagId",
+            "columnName": "volume_tags_tag_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "volume_book_source_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volumeId",
+            "columnName": "volume_book_volume_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "volume_tags_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_volume_tags_volume_tags_id",
+            "unique": true,
+            "columnNames": [
+              "volume_tags_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_volume_tags_volume_tags_id` ON `${TABLE_NAME}` (`volume_tags_id`)"
+          },
+          {
+            "name": "index_volume_tags_volume_book_source_id_volume_book_volume_id_volume_tags_tag_id",
+            "unique": true,
+            "columnNames": [
+              "volume_book_source_id",
+              "volume_book_volume_id",
+              "volume_tags_tag_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_volume_tags_volume_book_source_id_volume_book_volume_id_volume_tags_tag_id` ON `${TABLE_NAME}` (`volume_book_source_id`, `volume_book_volume_id`, `volume_tags_tag_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "shelf_volumes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`shelf_volumes_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `shelf_volumes_shelf_id` INTEGER NOT NULL, `shelf_volumes_volume_id` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "shelf_volumes_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shelfId",
+            "columnName": "shelf_volumes_shelf_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volumeId",
+            "columnName": "shelf_volumes_volume_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "shelf_volumes_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_shelf_volumes_shelf_volumes_id",
+            "unique": true,
+            "columnNames": [
+              "shelf_volumes_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_shelf_volumes_shelf_volumes_id` ON `${TABLE_NAME}` (`shelf_volumes_id`)"
+          },
+          {
+            "name": "index_shelf_volumes_shelf_volumes_volume_id_shelf_volumes_shelf_id",
+            "unique": true,
+            "columnNames": [
+              "shelf_volumes_volume_id",
+              "shelf_volumes_shelf_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_shelf_volumes_shelf_volumes_volume_id_shelf_volumes_shelf_id` ON `${TABLE_NAME}` (`shelf_volumes_volume_id`, `shelf_volumes_shelf_id`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2b345b388c487e411af4ed01be222478')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'aa1e1ea0420fd3d42213ac35b366b701')"
     ]
   }
 }

@@ -515,6 +515,11 @@ abstract class BookDao(private val db: BookDatabase) {
     @Query(value = "SELECT * FROM $BOOK_TABLE WHERE ( ( $VOLUME_ID_COLUMN = :volumeId AND $SOURCE_ID_COLUMN = :sourceId ) ) AND ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 )")
     protected abstract suspend fun doFindConflict(volumeId: String, sourceId: String): BookAndAuthors?
 
+    @Transaction
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    @Query("SELECT * FROM $BOOK_TABLE WHERE ( ( $BOOK_FLAGS & ${BookEntity.HIDDEN} ) = 0 ) AND :tagId IN ( SELECT $BOOK_TAGS_TAG_ID_COLUMN FROM $BOOK_TAGS_TABLE WHERE $BOOK_ID_COLUMN = $BOOK_TAGS_BOOK_ID_COLUMN )")
+    abstract suspend fun getTaggedBooks(tagId: Long): List<BookAndAuthors>
+
     /**
      * Find a conflicting book
      * @param volumeId The conflicting volume id
@@ -872,6 +877,9 @@ abstract class BookDao(private val db: BookDatabase) {
         thumbnails.deleteThumbFile(bookId, true)
         thumbnails.deleteThumbFile(bookId, false)
     }
+
+    @Query("SELECT $BOOK_ID_COLUMN FROM $BOOK_TABLE WHERE $SOURCE_ID_COLUMN = :sourceId AND $VOLUME_ID_COLUMN = :volumeId LIMIT 1")
+    abstract fun getBookIdByVolumeId(sourceId: String, volumeId: String): Long?
 
     companion object {
         /** Sub-query that returns the selected book ids **/

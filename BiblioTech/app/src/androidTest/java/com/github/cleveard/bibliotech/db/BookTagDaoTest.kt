@@ -76,7 +76,7 @@ class BookTagDaoTest {
     }
 
     // Add tags for the books
-    private suspend fun addTags(books: Array<BookAndAuthors>, additionalTags: Array<Any>? = emptyArray()): List<TagEntity> {
+    private suspend fun addTags(books: Array<BookAndAuthors>, additionalTagIds: Array<Any>? = emptyArray()): List<TagEntity> {
         val tags = listOf(*commonTags.map { it.copy() }.toTypedArray())
         val tagDao = db.getTagDao()
         val bookTagDao = db.getBookTagDao()
@@ -84,12 +84,12 @@ class BookTagDaoTest {
         // Add some tags and books
         var idx = 0
         for (t in tags) {
-            assertWithMessage("Add %s with additionalTags: %s", t.name, additionalTags).apply {
+            assertWithMessage("Add %s with additionalTags: %s", t.name, additionalTagIds).apply {
                 // Alternate tags between the two books
                 val book = books[idx]
                 idx = idx xor 1
                 // Add an tag
-                tagDao.addWithUndo(book.book.id, listOf(t), additionalTags)
+                tagDao.addWithUndo(book.book.id, listOf(t), additionalTagIds)
                 // Check the id
                 that(t.id).isNotEqualTo(0L)
                 // Look it up by name and check that
@@ -182,6 +182,31 @@ class BookTagDaoTest {
             tagList = tagDao.getLive().getLive()
             that(tagList?.size).isEqualTo(1)
             that(tagList!![0]).isEqualTo(tags[1])
+            // Delete the tags for books[0]. Check that one book-tag links are deleted
+            that(bookTagDao.deleteSelectedBooksWithUndo(arrayOf(books[1].book.id), true)).isEqualTo(1)
+            tagList = tagDao.getLive().getLive()
+            // Verify that the tags were deleted
+            that(tagList?.size).isEqualTo(0)
+        }
+
+        // Add the tags for the books, again
+        tags = addTags(books, emptyArray())
+        assertWithMessage("Delete delete selected tags").apply {
+            // Delete the selected tag
+            that(db.getTagDao().deleteSelectedWithUndo()).isEqualTo(1)
+            // Verify that the tags were deleted
+            tagList = tagDao.getLive().getLive()
+            that(tagList?.size).isEqualTo(2)
+            that(tagList!![0]).isEqualTo(tags[1])
+            that(tagList!![1]).isEqualTo(tags[2])
+            // Do it again and verify that nothing was deleted
+            that(db.getTagDao().deleteSelectedWithUndo()).isEqualTo(0)
+            // Verify that the tags were deleted
+            tagList = tagDao.getLive().getLive()
+            that(tagList?.size).isEqualTo(2)
+            that(tagList!![0]).isEqualTo(tags[1])
+            that(tagList!![1]).isEqualTo(tags[2])
+            //
             // Delete the tags for books[0]. Check that one book-tag links are deleted
             that(bookTagDao.deleteSelectedBooksWithUndo(arrayOf(books[1].book.id), true)).isEqualTo(1)
             tagList = tagDao.getLive().getLive()

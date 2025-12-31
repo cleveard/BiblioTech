@@ -5,6 +5,10 @@ import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.builtins.PairSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.protobuf.ProtoBuf
 import java.lang.IllegalStateException
 import java.nio.ByteBuffer
 
@@ -25,6 +29,10 @@ const val OPERATION_CUR_ID_COLUMN = "operation_cur_id"
 const val OPERATION_OLD_ID_COLUMN = "operation_old_id"
 const val OPERATION_MOD_TIME_COLUMN = "operation_mod_time"  // Deleted in version 9
 const val OPERATION_EXTRA_COLUMN = "operation_extra"
+
+private fun Any?.toStringPair(): Pair<String, String> = (this as Pair<*,*>).let {p ->
+    Pair(p.first as String, p.second as String)
+}
 
 /**
  * Holder for a WHERE clause with arguments
@@ -64,6 +72,7 @@ class EnumConverters {
 }
 
 /** UndoRedoOperationEntity for the operation table */
+@OptIn(ExperimentalSerializationApi::class)
 @TypeConverters(EnumConverters::class)
 @Entity(tableName = OPERATION_TABLE,
     indices = [
@@ -79,6 +88,16 @@ data class UndoRedoOperationEntity(
     @ColumnInfo(name = OPERATION_EXTRA_COLUMN, defaultValue = "NULL") var extraData: ByteArray? = null,
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = OPERATION_ID_COLUMN) var id: Long = 0L
 ) {
+    constructor(
+        undoId: Int,
+        operationId: Int,
+        type: UndoRedoDao.OperationType,
+        extraData: Any,
+        curId: Long,
+        oldId: Long = 0,
+        id: Long = 0L
+    ): this(undoId, operationId, type, curId, oldId, convertExtra(type, extraData), id)
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -113,24 +132,43 @@ data class UndoRedoOperationEntity(
                 when (type) {
                     UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK ->
                         ByteBuffer.wrap(bytes).getLong()
+                    UndoRedoDao.OperationType.ADD_VOLUME_SHELF_LINK,
+                    UndoRedoDao.OperationType.DELETE_VOLUME_SHELF_LINK ->
+                        ProtoBuf.decodeFromByteArray(stringSerializer, bytes)
+                    UndoRedoDao.OperationType.ADD_VOLUME_TAG_LINK,
+                    UndoRedoDao.OperationType.DELETE_VOLUME_TAG_LINK ->
+                        ProtoBuf.decodeFromByteArray(pairSerializer, bytes)
                     else -> null
                 }
             }
         }
         set(value) {
-            extraData = if (value == null)
+            extraData = convertExtra(type, value)
+        }
+    @OptIn(ExperimentalSerializationApi::class)
+    companion object {
+        private val stringSerializer = String.serializer()
+        private val pairSerializer = PairSerializer(stringSerializer, stringSerializer)
+        private fun convertExtra(type: UndoRedoDao.OperationType, value: Any?): ByteArray? {
+            return if (value == null)
                 null
             else {
-                when (operationId) {
-                    UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK.ordinal ->
+                when (type) {
+                    UndoRedoDao.OperationType.UPDATE_MOD_TIME_BOOK ->
                         ByteBuffer.allocate(Long.SIZE_BYTES)
                             .putLong(value as Long)
                             .array()
-
+                    UndoRedoDao.OperationType.ADD_VOLUME_SHELF_LINK,
+                    UndoRedoDao.OperationType.DELETE_VOLUME_SHELF_LINK ->
+                        ProtoBuf.encodeToByteArray(stringSerializer, value as String)
+                    UndoRedoDao.OperationType.ADD_VOLUME_TAG_LINK,
+                    UndoRedoDao.OperationType.DELETE_VOLUME_TAG_LINK ->
+                        ProtoBuf.encodeToByteArray(pairSerializer, value.toStringPair())
                     else -> null
                 }
             }
         }
+    }
 }
 
 /** UndoRedoTransactionEntity for the undo table */
@@ -407,6 +445,30 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                     return dao.recordUpdate(this, id, dao.copyForBookshelfUndo(id), update)
                 return update()
             }
+        },
+        /** Add a VolumeTagEntity operation */
+        ADD_VOLUME_TAG_LINK(AddLinkDescriptor(BookDatabase.volumeTagTable)) {
+            override suspend fun recordLink(dao: UndoRedoDao, sourceId: String, volumeId: String, tagId: Long) {
+                dao.record(this, sourceId, volumeId, tagId)
+            }
+        },
+        /** Delete VolumeTagEntities operation */
+        DELETE_VOLUME_TAG_LINK(DeleteLinkDescriptor(BookDatabase.volumeTagTable)) {
+            override suspend fun recordUnlink(dao: UndoRedoDao, sourceId: String, volumeId: String, tagId: Long) {
+                return dao.record(this, sourceId, volumeId, tagId)
+            }
+        },
+        /** Add a VolumeTagEntity operation */
+        ADD_VOLUME_SHELF_LINK(AddLinkDescriptor(BookDatabase.shelfVolumeTable)) {
+            override suspend fun recordLink(dao: UndoRedoDao, volumeId: String, shelfId: Long) {
+                dao.record(this, volumeId, shelfId)
+            }
+        },
+        /** Delete VolumeTagEntities operation */
+        DELETE_VOLUME_SHELF_LINK(DeleteLinkDescriptor(BookDatabase.shelfVolumeTable)) {
+            override suspend fun recordUnlink(dao: UndoRedoDao, volumeId: String, shelfId: Long) {
+                return dao.record(this, volumeId, shelfId)
+            }
         };
 
         /**
@@ -456,7 +518,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
          * @param linkId The id of the linked entity in the link entity
          */
         open suspend fun recordLink(dao: UndoRedoDao, bookId: Long, linkId: Long) {
-            throw IllegalRecordingException("RecordUpdate not implemented for ${desc.table.name}")
+            throw IllegalRecordingException("RecordLink not implemented for ${desc.table.name}")
         }
 
         /**
@@ -469,6 +531,48 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
          */
         open suspend fun recordModTimeUpdate(dao: UndoRedoDao, e: WhereExpression, t: Long, update: suspend (expression: WhereExpression, time: Long) -> Int): Int {
             throw IllegalRecordingException("RecordModTimeUpdate not implemented for ${desc.table.name}")
+        }
+
+        /**
+         * Record an add link entity operation
+         * @param dao The UndoRedoDao
+         * @param sourceId The source id of the volume in the link entity
+         * @param volumeId The volume id of the volume in the link entity
+         * @param tagId The id of the linked entity in the link entity
+         */
+        open suspend fun recordLink(dao: UndoRedoDao, sourceId: String, volumeId: String, tagId: Long) {
+            throw IllegalRecordingException("RecordLink not implemented for ${desc.table.name}")
+        }
+
+        /**
+         * Record an remove link entity operation
+         * @param dao The UndoRedoDao
+         * @param sourceId The source id of the volume in the link entity
+         * @param volumeId The volume id of the volume in the link entity
+         * @param tagId The id of the linked entity in the link entity
+         */
+        open suspend fun recordUnlink(dao: UndoRedoDao, sourceId: String, volumeId: String, tagId: Long) {
+            throw IllegalRecordingException("RecordUnlink not implemented for ${desc.table.name}")
+        }
+
+        /**
+         * Record an add link entity operation
+         * @param dao The UndoRedoDao
+         * @param volumeId The volume id of the volume in the link entity
+         * @param shelfId The id of the linked entity in the link entity
+         */
+        open suspend fun recordLink(dao: UndoRedoDao, volumeId: String, shelfId: Long) {
+            throw IllegalRecordingException("RecordLink not implemented for ${desc.table.name}")
+        }
+
+        /**
+         * Record an remove link entity operation
+         * @param dao The UndoRedoDao
+         * @param volumeId The volume id of the volume in the link entity
+         * @param shelfId The id of the linked entity in the link entity
+         */
+        open suspend fun recordUnlink(dao: UndoRedoDao, volumeId: String, shelfId: Long) {
+            throw IllegalRecordingException("RecordUnlink not implemented for ${desc.table.name}")
         }
     }
 
@@ -588,6 +692,59 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 type = type,
                 curId = curId,
                 oldId = oldId
+            )
+            // Add the operation to the database and update the operation count
+            addOperation(op).also {
+                if (it == 0L)
+                    throw IllegalRecordingException("Unexpected error recording an operation")
+                ++operationCount
+            }
+        }
+    }
+
+    /**
+     * Record an operation
+     * @param type The operation type
+     * @param sourceId The source id of the volume linked
+     * @param volumeId the volume id of the volume linked
+     * @param tagId The id of the tag linked
+     */
+    private suspend fun record(type: OperationType, sourceId: String, volumeId: String, tagId: Long = 0L) {
+        // Only record if recording is turned on
+        if (started > 0) {
+            val op = UndoRedoOperationEntity(
+                undoId = undoId,
+                operationId = operationCount,
+                type = type,
+                extraData = Pair(sourceId, volumeId),
+                curId = 0,
+                oldId = tagId
+            )
+            // Add the operation to the database and update the operation count
+            addOperation(op).also {
+                if (it == 0L)
+                    throw IllegalRecordingException("Unexpected error recording an operation")
+                ++operationCount
+            }
+        }
+    }
+
+    /**
+     * Record an operation
+     * @param type The operation type
+     * @param volumeId the volume id of the volume linked
+     * @param shelfId The id of the shelf linked
+     */
+    private suspend fun record(type: OperationType, volumeId: String, shelfId: Long = 0L) {
+        // Only record if recording is turned on
+        if (started > 0) {
+            val op = UndoRedoOperationEntity(
+                undoId = undoId,
+                operationId = operationCount,
+                type = type,
+                extraData = volumeId,
+                curId = 0,
+                oldId = shelfId
             )
             // Add the operation to the database and update the operation count
             addOperation(op).also {
@@ -1600,6 +1757,150 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             dao.transactionQuery(
                 "DELETE FROM ${table.name} WHERE ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
                 op.curId, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+    }
+
+    /**
+     * Descriptor for add link operations
+     * @param table The table the operation applies to
+     */
+    private class AddVolumeTagDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
+        override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val pair = op.extra.toStringPair()
+            // To undo adding a link, delete the link
+            dao.transactionQuery(
+                "DELETE FROM ${table.name} WHERE ${table.sourceIdColumn} = ? AND ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
+                pair.first, pair.second, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+
+        /** @inheritDoc */
+        override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val pair = op.extra.toStringPair()
+            // To redo adding a link, add the link
+            dao.transactionQuery(
+                "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.sourceIdColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ?, ? )",
+                pair.first, pair.second, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+    }
+
+    /**
+     * Descriptor for delete link operations
+     * @param table The table the operation applies to
+     */
+    private class DeleteVolumeTagDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
+        override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val pair = op.extra.toStringPair()
+            // To undo deleting a link, add the link
+            dao.transactionQuery(
+                "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.sourceIdColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ?, ? )",
+                pair.first, pair.second, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+
+        /** @inheritDoc */
+        override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val pair = op.extra.toStringPair()
+            // To redo deleting a link, delete the link
+            dao.transactionQuery(
+                "DELETE FROM ${table.name} WHERE ${table.sourceIdColumn} = ? AND ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
+                pair.first, pair.second, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+    }
+
+    /**
+     * Descriptor for add link operations
+     * @param table The table the operation applies to
+     */
+    private class AddVolumeShelfDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
+        override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val volumeId = op.extra as String
+            // To undo adding a link, delete the link
+            dao.transactionQuery(
+                "DELETE FROM ${table.name} WHERE ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
+                volumeId, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+
+        /** @inheritDoc */
+        override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val volumeId = op.extra as String
+            // To redo adding a link, add the link
+            dao.transactionQuery(
+                "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ?, ? )",
+                volumeId, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+    }
+
+    /**
+     * Descriptor for delete link operations
+     * @param table The table the operation applies to
+     */
+    private class DeleteVolumeShelfDescriptor(override val table: BookDatabase.TableDescription): OperationDescriptor {
+        /** @inheritDoc */
+        override suspend fun undo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val volumeId = op.extra as String
+            // To undo deleting a link, add the link
+            dao.transactionQuery(
+                "INSERT OR ABORT INTO ${table.name} ( ${table.idColumn}, ${table.bookIdColumn}, ${table.linkIdColumn} ) VALUES ( null, ?, ?, ? )",
+                volumeId, op.oldId
+            )
+        }
+
+        /** @inheritDoc */
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            // Nothing required
+        }
+
+        /** @inheritDoc */
+        override suspend fun redo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            val volumeId = op.extra as String
+            // To redo deleting a link, delete the link
+            dao.transactionQuery(
+                "DELETE FROM ${table.name} WHERE ${table.bookIdColumn} = ? AND ${table.linkIdColumn} = ?",
+                volumeId, op.oldId
             )
         }
 

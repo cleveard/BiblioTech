@@ -90,8 +90,8 @@ class BookshelvesFragment : Fragment() {
             shelvesViewModel.repo.getShelves()
         }
         val adapter = object: BookshelvesAdapter(shelvesViewModel.viewModelScope) {
-            override suspend fun toggleTagAndBookshelfLink(bookshelfId: Long) {
-                shelvesViewModel.toggleTagAndBookshelfLink(bookshelfId)
+            override suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
+                shelvesViewModel.toggleTagAndBookshelfLink(shelf)
             }
 
             override suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton) {

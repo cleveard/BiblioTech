@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import androidx.paging.PagingSource
 import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -398,6 +399,7 @@ class BookRepository private constructor(context: Context) {
     private val addView = context.resources.getString(R.string.addViewUndo)
     private val deleteView = context.resources.getString(R.string.deleteViewUndo)
     private val locale = context.resources.configuration.locales[0]
+    private val toggleBookshelfLink = context.resources.getString(R.string.toggle_bookshelf_link)
 
     private fun format(format: String, vararg args: Any): String {
         return Formatter(locale).format(format, *args).toString()
@@ -462,6 +464,10 @@ class BookRepository private constructor(context: Context) {
 
     suspend fun getBooksWithoutSeriesUpdate(): List<BookAndAuthors>? {
         return db.getBookDao().getBooksWithoutSeriesUpdate()
+    }
+
+    suspend fun getBookIdByVolumeId(sourceId: String, volumeId: String): Long? {
+        return db.getBookDao().getBookIdByVolumeId(sourceId, volumeId)
     }
 
     /**
@@ -707,5 +713,44 @@ class BookRepository private constructor(context: Context) {
 
     suspend fun removeBookshelf(bookshelf: BookshelfAndTag): Int {
         return db.getBookshelvesDao().deleteWithUndo(bookshelf)
+    }
+
+    suspend fun getTaggedBooks(id: Long): List<BookAndAuthors> {
+        return db.getBookDao().getTaggedBooks(id)
+    }
+
+    suspend fun getLastTagVolumeIds(id: Long): Set<String> {
+        return db.getVolumeTagDao().getTaggedVolumes(id)
+            .filter { it.sourceId == GoogleBookLookup.kSourceId }
+            .map { it.volumeId }
+            .toSet()
+    }
+
+    suspend fun getShelfVolumeIds(id: Long): Set<String> {
+        return db.getVolumeShelfDao().getShelfVolumes(id).toSet()
+    }
+
+    suspend fun addLastTagVolume(tagId: Long, sourceId: String, volumeId: String): Long {
+        return db.getVolumeTagDao().addTagVolume(tagId, sourceId, volumeId)
+    }
+
+    suspend fun removeLastTagVolume(tagId: Long, sourceId: String, volumeId: String): Int {
+        return db.getVolumeTagDao().removeTagVolume(tagId, sourceId, volumeId)
+    }
+
+    suspend fun addLastShelfVolume(shelfId: Long, volumeId: String): Long {
+        return db.getVolumeShelfDao().addShelfVolume(shelfId, volumeId)
+    }
+
+    suspend fun removeLastShelfVolume(shelfId: Long, volumeId: String): Int {
+        return db.getVolumeShelfDao().removeShelfVolume(shelfId, volumeId)
+    }
+
+    suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
+        // This operation is undoable
+        withUndo(toggleBookshelfLink) {
+            db.getBookshelvesDao().toggleTagAndBookshelfLink(shelf)
+        }
+
     }
 }

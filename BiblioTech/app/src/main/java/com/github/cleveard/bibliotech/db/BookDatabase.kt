@@ -14,8 +14,6 @@ import kotlinx.coroutines.*
 import java.io.*
 import java.lang.StringBuilder
 import kotlin.collections.ArrayList
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
 // Database column and table names.
 
@@ -59,7 +57,9 @@ const val kAsc = "ASC"
         IsbnEntity::class,
         BookAndIsbnEntity::class,
         SeriesEntity::class,
-        BookshelfEntity::class
+        BookshelfEntity::class,
+        VolumeAndTagEntity::class,
+        VolumeAndShelfEntity::class
     ],
     version = 9,
     exportSchema = true,
@@ -81,6 +81,8 @@ abstract class BookDatabase : RoomDatabase() {
     abstract fun getIsbnDao(): IsbnDao
     abstract fun getSeriesDao(): SeriesDao
     abstract fun getBookshelvesDao(): BookshelvesDao
+    abstract fun getVolumeTagDao(): VolumeTagDao
+    abstract fun getVolumeShelfDao(): VolumeShelfDao
 
     /**
      * Descriptor for tables in the book database
@@ -102,6 +104,7 @@ abstract class BookDatabase : RoomDatabase() {
         val selectedValue: Int,
         val flagPreserved: Int,
         val modTimeColumn: String?,
+        val sourceIdColumn: String?,
         val bookIdColumn: String?,
         val linkIdColumn: String?
     ) {
@@ -216,29 +219,33 @@ abstract class BookDatabase : RoomDatabase() {
 
     companion object {
         /** The book table descriptor */
-        val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, BookEntity.SELECTED, BookEntity.PRESERVE, DATE_MODIFIED_COLUMN, null, null)
+        val bookTable = TableDescription(BOOK_TABLE, BOOK_ID_COLUMN, BOOK_FLAGS, BookEntity.HIDDEN, BookEntity.SELECTED, BookEntity.PRESERVE, DATE_MODIFIED_COLUMN, null, null, null)
         /** The authors table descriptor */
-        val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, 0, AuthorEntity.PRESERVE, null, null, null)
+        val authorsTable = TableDescription(AUTHORS_TABLE, AUTHORS_ID_COLUMN, AUTHORS_FLAGS, AuthorEntity.HIDDEN, 0, AuthorEntity.PRESERVE, null, null, null, null)
         /** The categories table descriptor */
-        val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, 0, CategoryEntity.PRESERVE, null, null, null)
+        val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, 0, CategoryEntity.PRESERVE, null, null, null, null)
         /** The tags table descriptor */
-        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, TagEntity.SELECTED, TagEntity.PRESERVE, null, null, null)
+        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, TagEntity.SELECTED, TagEntity.PRESERVE, null, null, null, null)
         /** The series table descriptor */
-        val seriesTable = TableDescription(SERIES_TABLE, SERIES_ID_COLUMN, SERIES_FLAG_COLUMN, SeriesEntity.HIDDEN, 0, SeriesEntity.PRESERVE, null, null, null)
+        val seriesTable = TableDescription(SERIES_TABLE, SERIES_ID_COLUMN, SERIES_FLAG_COLUMN, SeriesEntity.HIDDEN, 0, SeriesEntity.PRESERVE, null, null, null, null)
         /** The views table descriptor */
-        val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, 0, ViewEntity.PRESERVE, null, null, null)
+        val viewsTable = TableDescription(VIEWS_TABLE, VIEWS_ID_COLUMN, VIEWS_FLAGS, ViewEntity.HIDDEN, 0, ViewEntity.PRESERVE, null, null, null, null)
         /** The book_authors link table descriptor */
-        val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, 0, 0, null, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
+        val bookAuthorsTable = TableDescription(BOOK_AUTHORS_TABLE, BOOK_AUTHORS_ID_COLUMN, null, 0, 0, 0, null, null, BOOK_AUTHORS_BOOK_ID_COLUMN, BOOK_AUTHORS_AUTHOR_ID_COLUMN)
         /** The book_categories link table descriptor */
-        val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, 0, 0, null, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
+        val bookCategoriesTable = TableDescription(BOOK_CATEGORIES_TABLE, BOOK_CATEGORIES_ID_COLUMN, null, 0, 0, 0, null, null, BOOK_CATEGORIES_BOOK_ID_COLUMN, BOOK_CATEGORIES_CATEGORY_ID_COLUMN)
         /** The book_tags link table descriptor */
-        val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, 0, 0, null, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
+        val bookTagsTable = TableDescription(BOOK_TAGS_TABLE, BOOK_TAGS_ID_COLUMN, null, 0, 0, 0, null, null, BOOK_TAGS_BOOK_ID_COLUMN, BOOK_TAGS_TAG_ID_COLUMN)
         /** The isbns table descriptor */
-        val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, 0, IsbnEntity.PRESERVE, null, null, null)
+        val isbnTable = TableDescription(ISBNS_TABLE, ISBNS_ID_COLUMN, ISBNS_FLAGS, IsbnEntity.HIDDEN, 0, IsbnEntity.PRESERVE, null, null, null, null)
         /** The book_isbns link table descriptor */
-        val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, 0, null, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
+        val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, 0, null, null, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
         /** The bookshelves table descriptor */
-        val bookshelvesTable = TableDescription(BOOKSHELVES_TABLE, BOOKSHELVES_ID_COLUMN, BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, 0, BookshelfEntity.PRESERVE, null, null, null)
+        val bookshelvesTable = TableDescription(BOOKSHELVES_TABLE, BOOKSHELVES_ID_COLUMN, BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, 0, BookshelfEntity.PRESERVE, null, null, null, null)
+        /** The tagged volumes table descriptor */
+        val volumeTagTable = TableDescription(VOLUME_TAGS_TABLE, VOLUME_TAGS_ID_COLUMN, null, 0, 0, 0, null, VOLUME_TAGS_SOURCE_ID_COLUMN, VOLUME_TAGS_VOLUME_ID_COLUMN, VOLUME_TAGS_TAG_ID_COLUMN)
+        /** The shelf volumes table descriptor */
+        val shelfVolumeTable = TableDescription(SHELF_VOLUMES_TABLE, SHELF_VOLUMES_ID_COLUMN, null, 0, 0, 0, null, null, SHELF_VOLUMES_VOLUME_ID_COLUMN, SHELF_VOLUMES_SHELF_ID_COLUMN)
 
         /** Undo levels preference key */
         const val UNDO_LEVEL_KEY = "undo_levels"

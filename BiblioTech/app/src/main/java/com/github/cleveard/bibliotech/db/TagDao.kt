@@ -29,6 +29,13 @@ const val BOOK_TAGS_ID_COLUMN = "book_tags_id"              // Incrementing id
 const val BOOK_TAGS_BOOK_ID_COLUMN = "book_tags_book_id"    // Book row incrementing id
 const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"      // Tag row incrementing id
 
+// Book last Tags table name and column names
+const val VOLUME_TAGS_TABLE = "volume_tags"                       // Volume tags table name
+const val VOLUME_TAGS_ID_COLUMN = "volume_tags_id"                // Incrementing id
+const val VOLUME_TAGS_SOURCE_ID_COLUMN = "volume_book_source_id"  // Book source id
+const val VOLUME_TAGS_VOLUME_ID_COLUMN = "volume_book_volume_id"  // Book volume id
+const val VOLUME_TAGS_TAG_ID_COLUMN = "volume_tags_tag_id"        // Tag row incrementing id
+
 /**
  * Room entity for the tags table
  */
@@ -92,6 +99,31 @@ data class BookAndTagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = BOOK_TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = BOOK_TAGS_TAG_ID_COLUMN) var tagId: Long,
     @ColumnInfo(name = BOOK_TAGS_BOOK_ID_COLUMN) var bookId: Long
+)
+
+/**
+ * Entity for the Volume Tags table
+ */
+@Entity(tableName = VOLUME_TAGS_TABLE,
+    /*foreignKeys = [
+        ForeignKey(entity = BookEntity::class,
+            parentColumns = [SOURCE_ID_COLUMN, VOLUME_ID_COLUMN],
+            childColumns = [VOLUME_TAGS_SOURCE_ID_COLUMN, VOLUME_TAGS_VOLUME_ID_COLUMN],
+            onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = TagEntity::class,
+            parentColumns = [TAGS_ID_COLUMN],
+            childColumns = [VOLUME_TAGS_TAG_ID_COLUMN],
+            onDelete = ForeignKey.CASCADE)
+    ],*/
+    indices = [
+        Index(value = [VOLUME_TAGS_ID_COLUMN],unique = true),
+        Index(value = [VOLUME_TAGS_SOURCE_ID_COLUMN, VOLUME_TAGS_VOLUME_ID_COLUMN, VOLUME_TAGS_TAG_ID_COLUMN],unique = true),
+    ])
+data class VolumeAndTagEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = VOLUME_TAGS_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = VOLUME_TAGS_TAG_ID_COLUMN) var tagId: Long,
+    @ColumnInfo(name = VOLUME_TAGS_SOURCE_ID_COLUMN) var sourceId: String,
+    @ColumnInfo(name = VOLUME_TAGS_VOLUME_ID_COLUMN) var volumeId: String
 )
 
 /**
@@ -305,6 +337,7 @@ abstract class TagDao(private val db: BookDatabase) {
     protected abstract suspend fun queryTagCount(query: SupportSQLiteQuery): Int?
 
     suspend fun deleteWithUndo(tagId: Long): Int {
+        db.getBookTagDao().deleteByIdWithUndo(arrayOf(tagId))
         return UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), tagId) {
             db.setHidden(BookDatabase.tagsTable, tagId)
         }
@@ -332,6 +365,19 @@ abstract class TagDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun deleteSelectedWithUndo(): Int {
         db.getBookshelvesDao().clearSelectedTagIds()
+        BookDatabase.buildWhereExpressionForIds(
+            null, 0, null, // Select visible tags
+            BOOK_TAGS_TAG_ID_COLUMN,      // Column to query
+            selectedIdSubQuery,                       // Selected tag ids sub-query
+            null,                                     // Ids to delete
+            false                                     // Delete ids or not ids
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(SimpleSQLiteQuery(
+                    """DELETE FROM $BOOK_TAGS_TABLE${e.expression}""", e.args
+                ))
+            }
+        }
         return BookDatabase.buildWhereExpressionForIds(
             TAGS_FLAGS, TagEntity.HIDDEN, null, // Select visible tags
             TAGS_ID_COLUMN,                           // Column to query
@@ -470,6 +516,8 @@ abstract class BookTagDao(private val db:BookDatabase) {
     /**
      * Add a tag to a book
      * @param bookAndTag The book and tag entity to add
+     * This method is not protected for testing. Should only
+     * be used by other methods in BookTagDao
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun add(bookAndTag: BookAndTagEntity): Long
@@ -730,4 +778,46 @@ abstract class BookTagDao(private val db:BookDatabase) {
      */
     @Query("SELECT * FROM $BOOK_TAGS_TABLE WHERE $BOOK_TAGS_TAG_ID_COLUMN = :tagId LIMIT :limit")
     abstract suspend fun findById(tagId: Long, limit: Int = -1): List<BookAndTagEntity>
+}
+
+/**
+ * Room data access object for the Book Tags table
+ */
+@Dao
+abstract class VolumeTagDao(private val db:BookDatabase) {
+    @Insert
+    protected abstract suspend fun add(volumeTag: VolumeAndTagEntity): Long
+
+    @Query("SELECT * FROM $VOLUME_TAGS_TABLE WHERE $VOLUME_TAGS_TAG_ID_COLUMN = :id")
+    abstract suspend fun getTaggedVolumes(id: Long): List<VolumeAndTagEntity>
+
+    @Query("DELETE FROM $VOLUME_TAGS_TABLE WHERE $VOLUME_TAGS_SOURCE_ID_COLUMN = :sourceId AND $VOLUME_TAGS_VOLUME_ID_COLUMN = :volumeId AND $VOLUME_TAGS_TAG_ID_COLUMN = :tagId")
+    abstract suspend fun delete(tagId: Long, sourceId: String, volumeId: String): Int
+
+    @Transaction
+    open suspend fun addTagVolume(tagId: Long, sourceId: String, volumeId: String): Long {
+        return add(VolumeAndTagEntity(0, tagId, sourceId, volumeId)).let {
+            if (it != 0L && it != -1L) {
+                UndoRedoDao.OperationType.ADD_VOLUME_TAG_LINK.recordLink(db.getUndoRedoDao(), sourceId, volumeId, tagId)
+                it
+            } else
+                0L
+        }
+    }
+
+    @Transaction
+    open suspend fun removeTagVolume(tagId: Long, sourceId: String, volumeId: String): Int {
+        return delete(tagId, sourceId, volumeId).also {
+            if (it == 1) {
+                UndoRedoDao.OperationType.ADD_VOLUME_TAG_LINK.recordUnlink(db.getUndoRedoDao(), sourceId, volumeId, tagId)
+            }
+        }
+    }
+
+    @Transaction
+    open suspend fun removeAllTagVolumes(id: Long): Int {
+        return getTaggedVolumes(id).count {
+            removeTagVolume(id, it.sourceId, it.volumeId) > 0
+        }
+    }
 }

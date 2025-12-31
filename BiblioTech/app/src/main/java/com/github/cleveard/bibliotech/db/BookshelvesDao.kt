@@ -5,6 +5,7 @@ import androidx.paging.PagingSource
 import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectByFlagBits
 import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectVisible
 import com.github.cleveard.bibliotech.db.TagDao.Companion.selectedIdSubQuery
@@ -19,8 +20,14 @@ const val BOOKSHELVES_SELF_LINK_COLUMN = "bookshelves_self_link"
 const val BOOKSHELVES_MODIFIED_COLUMN = "bookshelves_modified"
 const val BOOKSHELVES_BOOKS_MODIFIED_COLUMN = "bookshelves_books_modified"
 const val BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN = "bookshelves_books_last_update"
+const val BOOKSHELVES_BOOKS_DOWNLOAD_LAST_CHANGED_COLUMN = "bookshelves_books_download_last_changed"
 const val BOOKSHELVES_TAG_ID_COLUMN = "bookshelves_tag_id"
 const val BOOKSHELVES_FLAG_COLUMN = "bookshelves_flag"
+
+const val SHELF_VOLUMES_TABLE = "shelf_volumes"
+const val SHELF_VOLUMES_ID_COLUMN = "shelf_volumes_id"
+const val SHELF_VOLUMES_SHELF_ID_COLUMN = "shelf_volumes_shelf_id"
+const val SHELF_VOLUMES_VOLUME_ID_COLUMN = "shelf_volumes_volume_id"
 
 /**
  * Entity for a bookshelf
@@ -48,6 +55,7 @@ data class BookshelfEntity (
     @ColumnInfo(name = BOOKSHELVES_MODIFIED_COLUMN, defaultValue = "0") var modified: Long,
     @ColumnInfo(name = BOOKSHELVES_BOOKS_MODIFIED_COLUMN, defaultValue = "0") var booksModified: Long,
     @ColumnInfo(name = BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, defaultValue = "0") var booksLastUpdate: Long,
+    @ColumnInfo(name = BOOKSHELVES_BOOKS_DOWNLOAD_LAST_CHANGED_COLUMN, defaultValue = "NULL") var booksDownloadLastChanged: Long?,
     @ColumnInfo(name = BOOKSHELVES_TAG_ID_COLUMN, defaultValue = "NULL") var tagId: Long?,
     @ColumnInfo(name = BOOKSHELVES_FLAG_COLUMN, defaultValue = "0") var flags: Int
 ) {
@@ -56,6 +64,20 @@ data class BookshelfEntity (
         const val PRESERVE = 0
     }
 }
+
+/**
+ * Entity for the shelf volumes table
+ */
+@Entity(tableName = SHELF_VOLUMES_TABLE,
+    indices = [
+        Index(value = [SHELF_VOLUMES_ID_COLUMN],unique = true),
+        Index(value = [SHELF_VOLUMES_VOLUME_ID_COLUMN, SHELF_VOLUMES_SHELF_ID_COLUMN],unique = true),
+    ])
+data class VolumeAndShelfEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = SHELF_VOLUMES_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = SHELF_VOLUMES_SHELF_ID_COLUMN) var shelfId: Long,
+    @ColumnInfo(name = SHELF_VOLUMES_VOLUME_ID_COLUMN) var volumeId: String
+)
 
 /**
  * Bookshelf entity with associated tag entity
@@ -68,7 +90,14 @@ data class BookshelfAndTag(
         entityColumn = TAGS_ID_COLUMN
     )
     var tag: TagEntity?
-)
+) {
+    fun unlink() {
+        tag?.hasBookshelf = false
+        bookshelf.tagId = 0L
+        tag = null
+
+    }
+}
 
 @Dao
 abstract class BookshelvesDao(private val db: BookDatabase) {
@@ -115,7 +144,7 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
     }
 
     @RawQuery(observedEntities = [ BookshelfEntity::class ])
-    protected abstract suspend fun getShelves(query: SupportSQLiteQuery): List<BookshelfEntity>
+    protected abstract suspend fun getShelves(query: SupportSQLiteQuery): List<BookshelfAndTag>
 
     suspend fun clearSelectedTagIds() {
         BookDatabase.buildWhereExpressionForIds(
@@ -127,8 +156,8 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
         )?.let {e ->
             val query = SimpleSQLiteQuery("SELECT * FROM $BOOKSHELVES_TABLE ${e.expression}", e.args)
             getShelves(query).forEach { shelf ->
-                shelf.tagId = null
-                updateBookshelf(shelf)
+                if (shelf.tag != null)
+                    toggleTagAndBookshelfLink(shelf)
             }
         }
     }
@@ -165,6 +194,36 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
     }
 
     /**
+     * Toggle whether a bookshelf is linked to a tag
+     * @param shelf The bookshelf with its linked tag
+     */
+    @Transaction
+    open suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
+        // Get the bookshelf and tag
+        shelf.tag?.let { tag ->
+            // We have a tag, so unlink it
+            shelf.unlink()
+            // update the bookshelf
+            updateBookshelf(shelf.bookshelf)
+            // Delete volumes for shelf
+            db.getVolumeShelfDao().removeAllShelfVolumes(shelf.bookshelf.id)
+            // update the tag
+            db.getTagDao().addWithUndo(tag) { true }
+            // Delete tag volumes
+            db.getVolumeTagDao().removeAllTagVolumes(tag.id)
+        } ?: run {
+            // We don't have a tag, so link to a tag. Create the tag if needed
+            shelf.tag = TagEntity(0L, shelf.bookshelf.title, shelf.bookshelf.description?: "", TagEntity.HAS_BOOKSHELF).also {
+                // Update the tag
+                it.id = db.getTagDao().addWithUndo(it) { true }
+                shelf.bookshelf.tagId = it.id
+            }
+            // Update the bookshelf
+            updateBookshelf(shelf.bookshelf)
+        }
+    }
+
+    /**
      * Delete multiple tags
      */
     @Transaction
@@ -179,6 +238,8 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
             false                                     // Delete ids or not ids
         )?.let {e ->
             bookshelf.tag?.let {
+                db.getVolumeShelfDao().removeAllShelfVolumes(bookshelf.bookshelf.id)
+                db.getVolumeTagDao().removeAllTagVolumes(it.id)
                 it.hasBookshelf = false
                 db.getTagDao().addWithUndo(it) { false }
             }
@@ -275,3 +336,42 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
         return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOKSHELVES_TABLE $bits$condition"))
     }
 }
+
+ @Dao
+ abstract class VolumeShelfDao(private val db:BookDatabase) {
+     @Query("SELECT $SHELF_VOLUMES_VOLUME_ID_COLUMN FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_SHELF_ID_COLUMN = :id")
+     abstract suspend fun getShelfVolumes(id: Long): List<String>
+
+     @Insert
+     protected abstract suspend fun add(volumeShelf: VolumeAndShelfEntity): Long
+
+     @Query("DELETE FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_VOLUME_ID_COLUMN = :volumeId AND $SHELF_VOLUMES_SHELF_ID_COLUMN = :shelfId")
+     abstract suspend fun delete(shelfId: Long, volumeId: String): Int
+
+     @Transaction
+     open suspend fun addShelfVolume(shelfId: Long, volumeId: String): Long {
+         return add(VolumeAndShelfEntity(0, shelfId, volumeId)).let {
+             if (it != 0L && it != -1L) {
+                 UndoRedoDao.OperationType.ADD_VOLUME_SHELF_LINK.recordLink(db.getUndoRedoDao(), volumeId, shelfId)
+                 it
+             } else
+                 0L
+         }
+     }
+
+     @Transaction
+     open suspend fun removeShelfVolume(shelfId: Long, volumeId: String): Int {
+         return delete(shelfId, volumeId).also {
+             if (it == 1) {
+                 UndoRedoDao.OperationType.ADD_VOLUME_SHELF_LINK.recordUnlink(db.getUndoRedoDao(), volumeId, shelfId)
+             }
+         }
+     }
+
+     @Transaction
+     open suspend fun removeAllShelfVolumes(id: Long): Int {
+         return getShelfVolumes(id).count {
+             removeShelfVolume(id, it) > 0
+         }
+     }
+ }
