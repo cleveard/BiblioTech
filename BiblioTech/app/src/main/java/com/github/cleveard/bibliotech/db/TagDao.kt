@@ -295,6 +295,19 @@ abstract class TagDao(private val db: BookDatabase) {
     protected abstract suspend fun queryTagCount(query: SupportSQLiteQuery): Int?
 
     suspend fun deleteWithUndo(tagId: Long): Int {
+        BookDatabase.buildWhereExpressionForIds(
+            null, 0, null, // Select visible tags
+            BOOK_TAGS_TAG_ID_COLUMN,      // Column to query
+            null,                                     // Selected tag ids sub-query
+            arrayOf<Any>(tagId),                      // Ids to delete
+            false                                     // Delete ids or not ids
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(SimpleSQLiteQuery(
+                    """DELETE FROM $BOOK_TAGS_TABLE${e.expression}""", e.args
+                ))
+            }
+        }
         return UndoRedoDao.OperationType.DELETE_TAG.recordDelete(db.getUndoRedoDao(), tagId) {
             db.setHidden(BookDatabase.tagsTable, tagId)
         }
@@ -321,6 +334,19 @@ abstract class TagDao(private val db: BookDatabase) {
      */
     @Transaction
     open suspend fun deleteSelectedWithUndo(): Int {
+        BookDatabase.buildWhereExpressionForIds(
+            null, 0, null, // Select visible tags
+            BOOK_TAGS_TAG_ID_COLUMN,      // Column to query
+            selectedIdSubQuery,                       // Selected tag ids sub-query
+            null,                                     // Ids to delete
+            false                                     // Delete ids or not ids
+        )?.let {e ->
+            UndoRedoDao.OperationType.DELETE_BOOK_TAG_LINK.recordDelete(db.getUndoRedoDao(), e) {
+                db.execUpdateDelete(SimpleSQLiteQuery(
+                    """DELETE FROM $BOOK_TAGS_TABLE${e.expression}""", e.args
+                ))
+            }
+        }
         return BookDatabase.buildWhereExpressionForIds(
             TAGS_FLAGS, TagEntity.HIDDEN, null, // Select visible tags
             TAGS_ID_COLUMN,                           // Column to query
