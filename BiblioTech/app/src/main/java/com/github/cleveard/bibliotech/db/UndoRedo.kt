@@ -331,14 +331,20 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
                 return dao.recordModTimeUpdate(this, e, t, update)
             }
         },
-        /** Add a BookshelfEntity operation */
-        ADD_BOOKSHELF(AddDataDescriptor(BookDatabase.bookshelvesTable)) {
+        /**
+         * Add a BookshelfEntity operation
+         * The special descriptor deletes unused shelf volumes when a redo operation is discarded
+         */
+        ADD_BOOKSHELF(AddBookshelfDescriptor()) {
             override suspend fun recordAdd(dao: UndoRedoDao, id: Long) {
                 dao.record(this, id)
             }
         },
-        /** Delete a BookshelfEntity operation */
-        DELETE_BOOKSHELF(DeleteDataDescriptor(BookDatabase.bookshelvesTable)) {
+        /**
+         * Delete a BookshelfEntity operation
+         * The special descriptor deletes unused shelf volumes when an undo operation is discarded
+         */
+        DELETE_BOOKSHELF(DeleteBookshelfDescriptor()) {
             override suspend fun recordDelete(dao: UndoRedoDao, expression: WhereExpression, delete: suspend (WhereExpression) -> Int): Int {
                 return dao.recordDelete(this, expression, delete)
             }
@@ -983,7 +989,7 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
             // Function used to discard each operation
             val dis = if (redo) OperationDescriptor::discardRedo else OperationDescriptor::discardUndo
             // Get the operations
-            get(min, max)?.let {
+            get(min, max).let {
                 // And discard each one
                 for (op in it) {
                     dis.invoke(op.type.desc, this, op)
@@ -1417,6 +1423,20 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
     }
 
     /**
+     * Special undo descriptor for adding a bookshelf
+     * We clear unused entities from the shelf volumes table when the redo operation is discarded
+     */
+    private open class AddBookshelfDescriptor(): AddDataDescriptor(BookDatabase.bookshelvesTable) {
+        override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            super.discardRedo(dao, op)
+            // Delete unused shelf volume entities
+            dao.transactionQuery(
+                "DELETE FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_ID_COLUMN NOT IN ( (SELECT $BOOKSHELVES_VOLUMES_ID_COLUMN FROM ${table.name}) )"
+            )
+        }
+    }
+
+    /**
      * Descriptor for delete operations
      * @param table The table the operation applies to
      */
@@ -1451,6 +1471,20 @@ abstract class UndoRedoDao(private val db: BookDatabase) {
         /** @inheritDoc */
         override suspend fun discardRedo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
             // Nothing required
+        }
+    }
+
+    /**
+     * Special undo descriptor for deleting a bookshelf
+     * We clear unused entities from the shelf volumes table when the undo operation is discarded
+     */
+    private open class DeleteBookshelfDescriptor(): DeleteDataDescriptor(BookDatabase.bookshelvesTable) {
+        override suspend fun discardUndo(dao: UndoRedoDao, op: UndoRedoOperationEntity) {
+            super.discardUndo(dao, op)
+            // Delete unused shelf volume entities
+            dao.transactionQuery(
+                "DELETE FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_ID_COLUMN NOT IN ( (SELECT $BOOKSHELVES_VOLUMES_ID_COLUMN FROM ${table.name}) )"
+            )
         }
     }
 

@@ -55,7 +55,8 @@ const val kAsc = "ASC"
         IsbnEntity::class,
         BookAndIsbnEntity::class,
         SeriesEntity::class,
-        BookshelfEntity::class
+        BookshelfEntity::class,
+        ShelfVolumeIdsEntity::class
     ],
     version = 9,
     exportSchema = true,

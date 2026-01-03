@@ -1,28 +1,40 @@
 package com.github.cleveard.bibliotech.ui.bookshelves
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.core.view.MenuProvider
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.ManageNavigation
 import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookshelfAndTag
+import com.github.cleveard.bibliotech.db.BookshelfEntity
+import com.github.cleveard.bibliotech.ui.books.BooksAdapterData
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
+import com.github.cleveard.bibliotech.utils.ParentAccess
+import com.github.cleveard.bibliotech.utils.Thumbnails
+import com.github.cleveard.bibliotech.utils.coroutineAlert
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -42,7 +54,7 @@ class BookshelvesFragment : Fragment() {
     /**
      * Tag recycler adapter
      */
-    internal val adapter: BookshelvesAdapter? = null
+    internal var bookshelveAdapter: BookshelvesAdapter? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -90,12 +102,14 @@ class BookshelvesFragment : Fragment() {
             shelvesViewModel.repo.getShelves()
         }
         val adapter = object: BookshelvesAdapter(shelvesViewModel.viewModelScope) {
-            override suspend fun toggleTagAndBookshelfLink(bookshelfId: Long) {
-                shelvesViewModel.toggleTagAndBookshelfLink(bookshelfId)
+            override suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
+                shelvesViewModel.toggleTagAndBookshelfLink(shelf)
             }
 
             override suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton) {
-                shelvesViewModel.refreshShelfAndBooks(requireActivity() as BookCredentials, shelf, true)
+                shelvesViewModel.refreshShelfAndBooks(requireActivity() as BookCredentials, shelf, true) { conflicts, addedToShelfCount ->
+                    handleConflicts(this, conflicts, addedToShelfCount)
+                }
             }
         }
         // Setup the flow for the pager
@@ -108,6 +122,7 @@ class BookshelvesFragment : Fragment() {
         // Set the layout manager and adapter to the recycler view
         val shelves = content.findViewById<RecyclerView>(R.id.bookshelves)
         shelves.adapter = adapter
+        bookshelveAdapter = adapter
     }
 
 
@@ -120,7 +135,9 @@ class BookshelvesFragment : Fragment() {
             // Refresh bookshelves list
             R.id.action_refresh -> {
                 shelvesViewModel.viewModelScope.launch {
-                    shelvesViewModel.refreshBookshelves(requireActivity() as  BookCredentials)
+                    shelvesViewModel.refreshBookshelves(requireActivity() as  BookCredentials) { conflicts, addedToShelf ->
+                        handleConflicts(this, conflicts, addedToShelf)
+                    }
                 }
             }
             // Undo an action
@@ -209,5 +226,125 @@ class BookshelvesFragment : Fragment() {
             viewLifecycleOwner,
             Lifecycle.State.RESUMED
         )
+    }
+
+    /**
+     * Handle conflicts for when refreshing books in shelves
+     * @param conflictsArg The list of books conflicting
+     * @param addedToShelfCount The number of books in the list the were added to the shelf
+     */
+    suspend fun handleConflicts(shelf: BookshelfEntity, conflictsArg: List<BookAndAuthors>, addedToShelfCount: Int): Boolean {
+        return coroutineScope {
+            // Setup separate thumbnails for this query
+            val thumbnails = Thumbnails("conflicts")
+            val conflicts = conflictsArg.map { it.copy() }
+            for (i in conflicts.indices) {
+                conflicts[i].book.id = i.toLong()
+                conflicts[i].book.isSelected = i >= addedToShelfCount
+            }
+
+            try {
+                // Otherwise display a dialog to select the book
+                coroutineAlert(requireContext(), { false }) { alert ->
+
+                    // Get the content view for the dialog
+                    val content =
+                        requireParentFragment().layoutInflater.inflate(R.layout.resolve_shelf_conflicts, null)
+
+                    // Create an object the book adapter uses to get info
+                    val access = object : ParentAccess {
+                        // This is the adapter
+                        lateinit var adapter: ConflictsAdapter
+
+                        // Toggle the selection for an id
+                        override fun toggleSelection(id: Long, editable: Boolean, position: Int) {
+                            conflicts[position].book.isSelected = !conflicts[position].book.isSelected
+                            adapter.notifyItemRangeChanged(0, adapter.itemCount)
+                        }
+
+                        // Get the context
+                        override val context: Context
+                            get() = this@BookshelvesFragment.requireContext()
+
+                        // Get the coroutine scope
+                        override val scope: CoroutineScope
+                            get() = this@coroutineScope
+
+                        // Get a thumbnail
+                        override suspend fun getThumbnail(bookId: Long, large: Boolean): Bitmap? {
+                            // Use the thumbnails we constructed above
+                            return thumbnails.getThumbnail(bookId, large) { b, l ->
+                                // Get the book from the adapter and the url from the book
+                                conflicts[b.toInt()].let {
+                                    if (l)
+                                        it.book.largeThumb
+                                    else
+                                        it.book.smallThumb
+                                }
+                            }
+                        }
+                    }
+
+                    content.findViewById<TextView>(R.id.alert_title).text = access.context.resources.getString(R.string.resolve_conflict_refreshing, shelf.title)
+                    content.findViewById<MaterialButton>(R.id.keep_shelf).setOnClickListener {
+                        for (i in conflicts.indices) {
+                            val v = i < addedToShelfCount
+                            if (conflicts[i].book.isSelected != v) {
+                                conflicts[i].book.isSelected = v
+                                access.adapter.notifyItemChanged(i)
+                            }
+                        }
+                    }
+                    content.findViewById<MaterialButton>(R.id.keep_tagged).setOnClickListener {
+                        for (i in conflicts.indices) {
+                            val v = i >= addedToShelfCount
+                            if (conflicts[i].book.isSelected != v) {
+                                conflicts[i].book.isSelected = v
+                                access.adapter.notifyItemChanged(i)
+                            }
+                        }
+                    }
+
+                    // Find the recycler view and set the layout manager and adapter
+                    val titles = content.findViewById<RecyclerView>(R.id.title_buttons)
+                    access.adapter = ConflictsAdapter(access)
+                    access.adapter.submitList(conflicts)
+                    titles.adapter = access.adapter
+
+                    // Create an alert dialog with the content view
+                    alert.builder
+                        // Specify the list array, the items to be selected by default (null for none),
+                        // and the listener through which to receive callbacks when items are selected
+                        .setView(content)
+                        // Set the action buttons
+                        .setPositiveButton(R.string.ok, null)
+                        .setNegativeButton(R.string.cancel, null)
+                }.show().also {
+                    if (it) {
+                        for (i in conflicts.indices)
+                            conflictsArg[i].book.isSelected = conflicts[i].book.isSelected
+                    }
+                }
+            } finally {
+                thumbnails.deleteAllThumbFiles()
+            }
+        }
+    }
+
+    private class ConflictsAdapter(access: ParentAccess): ListAdapter<Any, BooksAdapterData.ViewHolder>(BooksAdapterData.DIFF_CALLBACK) {
+        val data = BooksAdapterData(this, access, R.layout.books_adapter_book_item_always, 0)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BooksAdapterData.ViewHolder {
+            return data.onCreateViewHolder(parent, viewType)
+        }
+
+        override fun onBindViewHolder(holder: BooksAdapterData.ViewHolder, position: Int) {
+            data.onBindViewHolder(getItem(position) ?: return, holder)
+        }
+
+        override fun onViewRecycled(holder: BooksAdapterData.ViewHolder) {
+            data.onViewRecycled(holder)
+            super.onViewRecycled(holder)
+        }
     }
 }

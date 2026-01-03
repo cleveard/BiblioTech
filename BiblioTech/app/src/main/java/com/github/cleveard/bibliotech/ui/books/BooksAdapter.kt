@@ -37,12 +37,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.DateFormat
 
-/**
- * Paging Adapter for the Books fragment book list
- */
-internal open class BooksAdapter(
-    private val access: ParentAccess, private val bookLayout: Int, private val detailLayout: Int
-): PagingDataAdapter<Any, BooksAdapter.ViewHolder>(DIFF_CALLBACK) {
+internal class BooksAdapterData(
+    private val adapter: RecyclerView.Adapter<ViewHolder>,
+    private val access: ParentAccess,
+    private val bookLayout: Int,
+    private val detailLayout: Int
+) {
 
     /**
      * Format to show dates
@@ -160,17 +160,6 @@ internal open class BooksAdapter(
     }
 
     /**
-     * Get the book at position or null
-     * @param position The position of the book
-     */
-    fun getBook(position: Int): BookAndAuthors? {
-        return if (position in 0 until itemCount)
-            getItem(position) as? BookAndAuthors
-        else
-            null
-    }
-
-    /**
      * ViewHolder for a book in the adapter - nothing is added
      */
     internal open inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -193,7 +182,7 @@ internal open class BooksAdapter(
                 val pos = layoutPosition
                 boundBook?.apply {
                     access.toggleSelection(book.id, false, pos)
-                    notifyItemChanged(pos)
+                    adapter.notifyItemChanged(pos)
                 }
             }
         }
@@ -301,8 +290,8 @@ internal open class BooksAdapter(
             val visible = view?.visibility != View.VISIBLE
             bindAdditionalViews(visible)
             (itemView.tag as? Long)?.let {
-                id -> access.toggleExpanded(id)
-                notifyItemChanged(layoutPosition)
+                    id -> access.toggleExpanded(id)
+                adapter.notifyItemChanged(layoutPosition)
             }
             return visible
         }
@@ -433,8 +422,7 @@ internal open class BooksAdapter(
      * We get two types of object from the stream BookAndAuthors objects
      * or string for the separators. Return the appropriate layout id for each
      */
-    override fun getItemViewType(position: Int): Int {
-        val item = getItem(position)
+    fun getItemViewType(item: Any?): Int {
         if (item == null || item is BookAndAuthors)
             return bookLayout
         return R.layout.books_adapter_header_item
@@ -448,7 +436,7 @@ internal open class BooksAdapter(
             try {
                 val intent = Intent(Intent.ACTION_VIEW, it.text.toString().toUri())
                 access.context.startActivity(intent)
-            } catch (e: ActivityNotFoundException) {
+            } catch (_: ActivityNotFoundException) {
                 Log.e("BiblioTech", "Failed to launch browser")
             }
         }
@@ -457,7 +445,7 @@ internal open class BooksAdapter(
     /**
      * !inheritDoc
      */
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+    fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val context = parent.context
         val inflater = LayoutInflater.from(context)
 
@@ -479,9 +467,8 @@ internal open class BooksAdapter(
     /**
      * @inheritDoc
      */
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+    fun onBindViewHolder(item: Any, holder: ViewHolder) {
         // Get the item
-        val item = getItem(position)?: return
         val book: BookAndAuthors? = item as? BookAndAuthors
 
         // If it isn't a book, it had better be a Spannable
@@ -533,8 +520,60 @@ internal open class BooksAdapter(
         holder.bindAdditionalViews(book.book.isExpanded)
     }
 
-    override fun onViewRecycled(holder: ViewHolder) {
+    fun onViewRecycled(holder: ViewHolder) {
         holder.thumbCancel()
+    }
+}
+
+/**
+ * Paging Adapter for the Books fragment book list
+ */
+internal open class BooksAdapter(
+    access: ParentAccess, bookLayout: Int, detailLayout: Int
+): PagingDataAdapter<Any, BooksAdapterData.ViewHolder>(BooksAdapterData.DIFF_CALLBACK) {
+    /**
+     * The guts of the view adapter independent of the adapter type
+     */
+    private val data = BooksAdapterData(this, access, bookLayout, detailLayout)
+
+    /**
+     * Get the book at position or null
+     * @param position The position of the book
+     */
+    fun getBook(position: Int): BookAndAuthors? {
+        return if (position in 0 until itemCount)
+            getItem(position) as? BookAndAuthors
+        else
+            null
+    }
+
+    /**
+     * !inheritDoc
+     * We get two types of object from the stream BookAndAuthors objects
+     * or string for the separators. Return the appropriate layout id for each
+     */
+    override fun getItemViewType(position: Int): Int {
+        return data.getItemViewType(getItem(position))
+    }
+
+    /**
+     * !inheritDoc
+     */
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BooksAdapterData.ViewHolder {
+        // Create the view holder
+        return data.onCreateViewHolder(parent, viewType)
+    }
+
+    /**
+     * @inheritDoc
+     */
+    override fun onBindViewHolder(holder: BooksAdapterData.ViewHolder, position: Int) {
+        // Bind the item
+        data.onBindViewHolder(getItem(position)?: return, holder)
+    }
+
+    override fun onViewRecycled(holder: BooksAdapterData.ViewHolder) {
+        data.onViewRecycled(holder)
         super.onViewRecycled(holder)
     }
 }

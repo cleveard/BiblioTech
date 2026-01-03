@@ -495,6 +495,8 @@ abstract class BookTagDao(private val db:BookDatabase) {
     /**
      * Add a tag to a book
      * @param bookAndTag The book and tag entity to add
+     * This method is not protected for testing. Should only
+     * be used by other methods in BookTagDao
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun add(bookAndTag: BookAndTagEntity): Long

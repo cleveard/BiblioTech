@@ -342,4 +342,8 @@
     <string name="refresh">Refresh</string>
     <string name="toggle_bookshelf_link">Toggle Shelf Link</string>
     <string name="refresh_one_book">Refresh Shelf %1$s</string>
+    <string name="resolve_conflict_refreshing">Resolve Conflicts Refreshing\nShelf %1$s</string>
+    <string name="conflict_alert_description">These books were added in the shelf and untagged in BiblioTech, or deleted in the shelf and tagged in BiblioTech.\n\nSelect the books that you want to keep in the shelf and tagged in BiblioTech. The unselected books will be removed from the shelf or untagged in BiblioTech.</string>
+    <string name="keep_shelf">Keep Shelf</string>
+    <string name="keep_tagged">Keep Tagged</string>
 </resources>

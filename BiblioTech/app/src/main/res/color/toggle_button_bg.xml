@@ -6,7 +6,7 @@
         android:state_checked="false"
         />
     <item
-        android:color="@color/toggleOn"
+        android:color="@color/toggleOff"
         android:state_enabled="true"
         android:state_checked="true"
         />

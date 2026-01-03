@@ -254,6 +254,65 @@ internal class GoogleBookLookup {
         }
     }
 
+    suspend fun getBookshelfBooksMap(auth: BookCredentials, bookshelfId: Int): Map<String, BookAndAuthors> {
+        // Make the return map
+        val map = mutableMapOf<String, BookAndAuthors>()
+        // Start at the beginning of the volumes
+        var startIndex = 0L
+        // Loop through all of the pages
+        while (true) {
+            // Get the next page
+            execute(auth) { token ->
+                service.Mylibrary().bookshelves().volumes().list(bookshelfId.toString()).apply {
+                    this.oauthToken = token
+                    this.startIndex = startIndex
+                    this.maxResults = 100L      // Get volumes 100 at a time
+                }
+            }?.let { volumes ->
+                // If google doesn't return anything or the right thing assume we are done
+                if (volumes.kind != kBooksVolumes)
+                    return@let null
+                volumes.items?.let { items ->
+                    // Convert each volume to BookAndAuthors and add it to the map
+                    items.forEach {
+                        // Convert the book
+                        mapVolume(it).let { book ->
+                            // Ignore volumes with null volumeId
+                            book.book.volumeId?.let { map[it] = book }
+                        }
+                    }
+                    // Skip to the next page
+                    startIndex += volumes.items.size
+                    // Are we at the end of the totalItems
+                    if (startIndex >= volumes.totalItems)
+                        return@let null   // Yes done
+                }
+            } ?: break
+        }
+        // Return the map
+        return map
+    }
+
+    suspend fun addVolumeToShelf(auth: BookCredentials, bookshelfId: Int, volumeId: String): Boolean {
+        return execute(auth) {token ->
+            service.Mylibrary().bookshelves().addVolume(bookshelfId.toString(), volumeId).apply {
+                this.oauthToken = token
+            }
+        }?.let {
+            true
+        } ?: false
+    }
+
+    suspend fun deleteVolumeFromShelf(auth: BookCredentials, bookshelfId: Int, volumeId: String): Boolean {
+        return execute(auth) {token ->
+            service.Mylibrary().bookshelves().removeVolume(bookshelfId.toString(), volumeId).apply {
+                this.oauthToken = token
+            }
+        }?.let {
+            true
+        } ?: false
+    }
+
     /**
      * Get a thumbnail link from a json object
      * @param info The volume info object
@@ -392,7 +451,9 @@ internal class GoogleBookLookup {
                 modified = shelf.updated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
                 booksModified = shelf.volumesLastUpdated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
                 booksLastUpdate = 0L,
+                booksDownloadLastChanged = null,
                 tagId = null,
+                volumesId = null,
                 flags = 0
 
             )
