@@ -14,7 +14,10 @@ import androidx.navigation.fragment.findNavController
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.MobileNavigationDirections
 import com.github.cleveard.bibliotech.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 /**
  * Fragment used to login to Google Books
@@ -94,34 +97,48 @@ class GoogleBookLoginFragment : DialogFragment() {
         /**
          * Login into google books for the fragment
          */
-        fun login(frag: Fragment) {
-            // Make sure initialization is finished
-            frag.requireView().post {
-                // Get the navigation controller
-                val nav = frag.findNavController()
-                // Make sure we can login
-                (frag.requireActivity() as? BookCredentials)?.let {
-                    // If we aren't authorized, then navigate to the login fragment
-                    if (!it.isAuthorized) {
+        suspend fun login(frag: Fragment) {
+            return suspendCoroutine {continuation ->
+                // Make sure initialization is finished
+                frag.requireView().post {
+                    // Get the navigation controller
+                    val nav = frag.findNavController()
+                    // Make sure we can login
+                    (frag.requireActivity() as? BookCredentials)?.let {
+                        // If we are authorized, then return success
+                        if (it.isAuthorized) {
+                            continuation.resume(Unit)
+                            return@let
+                        }
+
+                        // If we aren't authorized, then navigate to the login fragment
                         nav.currentBackStackEntry?.let { backStack ->
                             val stateHandle = backStack.savedStateHandle
                             stateHandle.getLiveData<LoginResult>(kLoginResult)
-                                .observe(backStack) {result ->
+                                .observe(backStack) { result ->
                                     when (result) {
                                         // Succeed doesn't need to do anything, the login fragment will return to this one
-                                        LoginResult.SUCCEEDED -> {}
+                                        LoginResult.SUCCEEDED -> { continuation.resume(Unit) }
+
                                         else -> {
                                             // Pop off including the current destination
                                             if (!nav.popBackStack(backStack.destination.id, true))
                                                 nav.navigate(MobileNavigationDirections.filterBooks())
+                                            throw CancellationException("Google book login failed")
                                         }
                                     }
                                 }
-                        } ?: nav.navigate(MobileNavigationDirections.filterBooks())
+                        } ?: run {
+                            nav.navigate(MobileNavigationDirections.filterBooks())
+                            throw CancellationException("Google book login failed")
+                        }
                         // Navigate to the login fragment
                         nav.navigate(R.id.googleBookLoginFragment)
+                    } ?: run {
+                        nav.popBackStack()
+                        throw CancellationException("Google book login failed")
                     }
-                } ?: nav.popBackStack()
+                }
             }
         }
     }

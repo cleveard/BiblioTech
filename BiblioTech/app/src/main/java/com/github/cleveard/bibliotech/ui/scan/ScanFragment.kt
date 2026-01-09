@@ -198,13 +198,13 @@ class ScanFragment : Fragment() {
     private val closeListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.removeView(chip)
-        tagViewModel.selection.selectAsync(chip.tag.id, chip.tag.hasBookshelf, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, !chip.tag.hasBookshelf, false)
     }
 
     private val clickListener: View.OnClickListener = View.OnClickListener {chip ->
         chip as TagChip
         chipBox?.editChip(chip)
-        tagViewModel.selection.selectAsync(chip.tag.id, chip.tag.hasBookshelf, false)
+        tagViewModel.selection.selectAsync(chip.tag.id, !chip.tag.hasBookshelf, false)
     }
 
     private inner class TagChip(val tag: TagEntity, context: Context): Chip(context) {
@@ -424,8 +424,10 @@ class ScanFragment : Fragment() {
             }
         }
 
-        // Make sure we are logged in
-        GoogleBookLoginFragment.login(this)
+        scanViewModel.viewModelScope.launch {
+            // Make sure we are logged in
+            GoogleBookLoginFragment.login(this@ScanFragment)
+        }
     }
 
     /** @inheritDoc */
@@ -514,7 +516,7 @@ class ScanFragment : Fragment() {
             }
 
             override suspend fun onChipAdded(chipBox: ChipBox, chip: View, scope: CoroutineScope) {
-                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, true)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, !chip.tag.hasBookshelf, true)
             }
 
             override suspend fun onChipRemoved(
@@ -522,7 +524,7 @@ class ScanFragment : Fragment() {
                 chip: View,
                 scope: CoroutineScope
             ) {
-                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, chip.tag.hasBookshelf, false)
+                tagViewModel.selection.selectAsync((chip as TagChip).tag.id, !chip.tag.hasBookshelf, false)
             }
 
             override fun onEditorFocusChange(chipBox: ChipBox, edit: View, hasFocus: Boolean) { }

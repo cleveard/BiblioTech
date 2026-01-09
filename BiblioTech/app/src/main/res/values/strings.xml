@@ -62,10 +62,6 @@
         <item quantity="one">Delete %d tag?</item>
         <item quantity="other">Delete %d tags?</item>
     </plurals>
-    <plurals name="ask_delete_shelves">
-        <item quantity="one">Delete %d shelf?</item>
-        <item quantity="other">Delete %d shelves?</item>
-    </plurals>
     <string name="add_title">Add New Tag</string>
     <string name="add_message">Enter the name and description for the new tag</string>
     <string name="edit_title">Edit Tag</string>
@@ -134,7 +130,6 @@
     <string name="date_changed">Date Changed</string>
     <string name="series">Series</string>
     <string name="selected">Selected</string>
-    <string name="selected_true">true</string>
     <string name="small_thumb">Icon</string>
     <string name="large_thumb">Cover</string>
     <string name="filter_by">Filter</string>
@@ -177,9 +172,6 @@
     <string name="bad_format_import">The selected content was not the correct format.</string>
     <string name="io_error_export">There was an IO Error writing the data.</string>
     <string name="io_error_import">There was an IO Error reading the data.</string>
-    <string name="canceled_import">The import was canceled.</string>
-    <string name="replace_all">Replace All</string>
-    <string name="replace_none">Replace None</string>
     <string name="name_and_desc">%1$s: %2$s</string>
     <string name="ask_replace_message_books">Select Existing Books to Import</string>
     <string name="ask_replace_message_filters">Select Existing Views to Import</string>
@@ -198,32 +190,17 @@
     <string name="undoName">Undo: %1$s</string>
     <string name="redo">Redo</string>
     <string name="redoName">Redo: %1$s</string>
-    <!-- Preference Titles -->
-    <string name="messages_header">Messages</string>
-    <string name="sync_header">Sync</string>
-
-    <!-- Messages Preferences -->
-    <string name="signature_title">Your signature</string>
-    <string name="reply_title">Default reply action</string>
-
     <!-- Sync Preferences -->
-    <string name="sync_title">Sync email periodically</string>
-    <string name="attachment_title">Download incoming attachments</string>
-    <string name="attachment_summary_on">Automatically download attachments for incoming emails</string>
-    <string name="attachment_summary_off">Only download attachments when manually requested</string>
     <string name="undo_levels">Undo Levels</string>
     <string name="undo_level_summary">Current Levels: %1$d</string>
     <string name="undo_clear">Clear Undo</string>
     <string name="import_undo_desc">Import</string>
     <string name="can_clear_undo">\nIs it OK to clear all undo information?</string>
     <string name="undo_clear_summary">Press to clear all undo information.</string>
-    <string name="save_pdf">Save PDF</string>
     <string name="print">Print</string>
-    <string name="select_layout">Select Layout:</string>
     <string name="columns">Columns:</string>
     <string name="separator">Separator:</string>
     <string name="orphans">Orphan Lines:</string>
-    <string name="size">Size:</string>
     <string name="include_fields">Include Fields:</string>
     <string name="preview_page">Page %1$d/%2$d</string>
     <string name="page_size">Paper Size</string>
@@ -318,10 +295,6 @@
         If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.
         \n\nDo you want to allow access to Google Books?
     </string>
-    <string name="login_retry">The login failed.\n\nBiblioTech requires access to Google Books to search for your books.
-        If you do not allow access, then BiblioTech will be unable to find your books and enter them in your database.
-        \n\nDo you want to try again?
-    </string>
 
     <string name="start">Start</string>
     <string name="stop">Stop</string>
@@ -334,16 +307,16 @@
     <string name="localFalse">False</string>
     <string name="bookshelf_title">Bookshelf Title</string>
     <string name="bookshelf_description">Bookshelf Description</string>
-    <string name="commit">Commit</string>
-    <string name="revert">Revert</string>
     <string name="self_link">Self link</string>
-    <string name="linked_to_tag">Linked to tag</string>
-    <string name="new_shelf">New Shelf</string>
     <string name="refresh">Refresh</string>
     <string name="toggle_bookshelf_link">Toggle Shelf Link</string>
     <string name="refresh_one_book">Refresh Shelf %1$s</string>
     <string name="resolve_conflict_refreshing">Resolve Conflicts Refreshing\nShelf %1$s</string>
     <string name="conflict_alert_description">These books were added in the shelf and untagged in BiblioTech, or deleted in the shelf and tagged in BiblioTech.\n\nSelect the books that you want to keep in the shelf and tagged in BiblioTech. The unselected books will be removed from the shelf or untagged in BiblioTech.</string>
-    <string name="keep_shelf">Keep Shelf</string>
-    <string name="keep_tagged">Keep Tagged</string>
+    <string name="added_to_shelf">Added to Shelf and\nNewly Untagged:</string>
+    <string name="newly_tagged">Newly Tagged and\nRemoved From Shelf:</string>
+    <string name="retag">Retag</string>
+    <string name="remove">Remove</string>
+    <string name="untag">Untag</string>
+    <string name="keep">Readd</string>
 </resources>

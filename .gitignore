@@ -36,3 +36,4 @@ proguard/
 !.idea/AndroidProjectSystem.xml
 /db/
 /Test Images/
+.kotlin/

@@ -85,7 +85,9 @@ internal class UpdateSeriesFragment : Fragment() {
             active = false
         }
 
-        GoogleBookLoginFragment.login(this)
+        viewModel.viewModelScope.launch {
+            GoogleBookLoginFragment.login(this@UpdateSeriesFragment)
+        }
     }
 
     /**

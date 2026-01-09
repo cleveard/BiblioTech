@@ -28,26 +28,49 @@
         app:layout_constraintTop_toBottomOf="@+id/alert_title" />
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/keep_shelf"
+        android:id="@+id/delete_from_shelf"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/keep_shelf"
+        android:text="@string/remove"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/retag_in_db"
+        app:layout_constraintTop_toBottomOf="@+id/alert_desc" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/retag_in_db"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/retag"
+        app:layout_constraintBottom_toBottomOf="@+id/delete_from_shelf"
+        app:layout_constraintEnd_toStartOf="@+id/delete_from_shelf"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/added_shelf_label"
+        app:layout_constraintTop_toTopOf="@+id/delete_from_shelf" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/untag_in_db"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/untag"
         app:layout_constraintEnd_toStartOf="@+id/keep_tagged"
         app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/alert_desc" />
+        app:layout_constraintStart_toEndOf="@+id/tagged_label"
+        app:layout_constraintTop_toBottomOf="@+id/delete_from_shelf" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/keep_tagged"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/keep_tagged"
+        android:text="@string/keep"
+        app:layout_constraintBottom_toBottomOf="@+id/untag_in_db"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/keep_shelf"
-        app:layout_constraintTop_toBottomOf="@+id/alert_desc" />
+        app:layout_constraintStart_toEndOf="@+id/untag_in_db"
+        app:layout_constraintTop_toTopOf="@+id/untag_in_db"
+        app:layout_constraintVertical_bias="1.0" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/title_buttons"
@@ -56,5 +79,25 @@
         android:layout_marginTop="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/keep_shelf" />
+        app:layout_constraintTop_toBottomOf="@+id/untag_in_db" />
+
+    <TextView
+        android:id="@+id/added_shelf_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/added_to_shelf"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="@+id/delete_from_shelf"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/delete_from_shelf" />
+
+    <TextView
+        android:id="@+id/tagged_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/newly_tagged"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="@+id/untag_in_db"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/untag_in_db" />
 </androidx.constraintlayout.widget.ConstraintLayout>
