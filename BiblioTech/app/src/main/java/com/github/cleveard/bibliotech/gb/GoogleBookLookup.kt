@@ -470,8 +470,8 @@ internal class GoogleBookLookup {
     private fun mapResponse(shelves: Bookshelves): List<com.github.cleveard.bibliotech.db.Bookshelf>? {
         // Do we have a list of books
         if (shelves.kind == kBooksBookshelves) {
-            // Get the array of books from the object
-            val items = shelves.items?: return null
+            // Get the array of books from the object. Only handle custom shelves
+            val items = shelves.items?.filter { it.id?.let { it >= 1000 } == true } ?: return null
             val count = items.size
             // If count is 0, then nothing left to do
             if (count == 0)

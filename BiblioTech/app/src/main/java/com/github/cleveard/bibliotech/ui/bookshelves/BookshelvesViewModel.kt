@@ -165,7 +165,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                         }
 
                         // New shelf from google
-                        lbs == null || lbs.bookshelf.bookshelfId < gbs!!.bookshelfId -> {
+                        lbs == null || (gbs != null && lbs.bookshelf.bookshelfId < gbs.bookshelfId) -> {
                             progress?.nextShelf(gbs!!.title)
                             // Add google bookshelf to database
                             repo.addBookshelf(gbs!!)
