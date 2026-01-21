@@ -198,9 +198,9 @@ class UndoRedoDaoTest {
         apply {
             // Add a couple of tags
             val tags = listOf(
-                TagEntity(0L, "tag1", "desc1", 0b01101),
-                TagEntity(0L, "tag2", "desc2", 0b10001),
-                TagEntity(0L, "tag3", "desc3", 0b11100),
+                TagEntity(0L, "tag1", "desc1", 0b01101, null),
+                TagEntity(0L, "tag2", "desc2", 0b10001, 8),
+                TagEntity(0L, "tag3", "desc3", 0b11100, 11),
             )
 
             // Check Add
@@ -643,9 +643,9 @@ class UndoRedoDaoTest {
 
         // Add a couple of tags
         val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0),
-            TagEntity(0L, "tag\\", "desc\\", TagEntity.SELECTED),
-            TagEntity(0L, "tag_", "desc_", 0),
+            TagEntity(0L, "tag1", "desc1", 0, 6),
+            TagEntity(0L, "tag\\", "desc\\", TagEntity.SELECTED, 2),
+            TagEntity(0L, "tag_", "desc_", 0, 55),
         )
 
         // Check Add
@@ -717,9 +717,9 @@ class UndoRedoDaoTest {
 
         // Add a couple of tags
         val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0),
-            TagEntity(0L, "tag\\", "desc\\", 0),
-            TagEntity(0L, "tag_", "desc_", 0),
+            TagEntity(0L, "tag1", "desc1", 0, null),
+            TagEntity(0L, "tag\\", "desc\\", 0, 66),
+            TagEntity(0L, "tag_", "desc_", 0, 4),
         )
 
         // Check Add

@@ -54,9 +54,9 @@ class BookTagDaoTest {
     }
 
     private val commonTags = listOf(
-        TagEntity(id = 0L, name = "tag1", desc = "desc1", flags = TagEntity.SELECTED),
-        TagEntity(id = 0L, name = "tag\\", desc = "desc\\", flags = 0),
-        TagEntity(id = 0L, name = "tag_", desc = "desc_", flags = 0),
+        TagEntity(id = 0L, name = "tag1", desc = "desc1", flags = TagEntity.SELECTED, null),
+        TagEntity(id = 0L, name = "tag\\", desc = "desc\\", flags = 0, 4),
+        TagEntity(id = 0L, name = "tag_", desc = "desc_", flags = 0, 6),
     )
 
     // Add tags without books

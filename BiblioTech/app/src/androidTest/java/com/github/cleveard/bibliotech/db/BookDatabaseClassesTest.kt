@@ -229,6 +229,7 @@ class BookDatabaseClassesTest {
             name = "tag",
             desc = "description",
             flags = 0,
+            bookshelf = 3
         )
     }
 
@@ -371,13 +372,22 @@ class BookDatabaseClassesTest {
        assertThat(book1.hashCode()).isEqualTo(book2.hashCode())
 
        val bundle = Bundle()
-       bundle.putParcelable("book", book1)
+       bundle.putParcelable("book1", book1)
+       book2.tags[0].bookshelf = null
+       bundle.putParcelable("book2", book2)
        @Suppress("DEPRECATION")
        val book3 = if (android.os.Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU)
-           bundle.getParcelable("book", BookAndAuthors::class.java)
+           bundle.getParcelable("book1", BookAndAuthors::class.java)
        else
-           bundle.getParcelable("book")
+           bundle.getParcelable("book1")
        assertThat(book3 == book1).isTrue()
        assertThat(book3.hashCode()).isEqualTo(book1.hashCode())
+       @Suppress("DEPRECATION")
+       val book4 = if (android.os.Build.VERSION.SDK_INT >= VERSION_CODES.TIRAMISU)
+           bundle.getParcelable("book2", BookAndAuthors::class.java)
+       else
+           bundle.getParcelable("book2")
+       assertThat(book4 == book2).isTrue()
+       assertThat(book4.hashCode()).isEqualTo(book2.hashCode())
    }
 }

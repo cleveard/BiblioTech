@@ -53,9 +53,9 @@ class TagDaoTest {
     {
         // Add a couple of tags
         val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0),
-            TagEntity(0L, "tag\\", "desc\\", 0),
-            TagEntity(0L, "tag_", "desc_", 0),
+            TagEntity(0L, "tag1", "desc1", 0, null),
+            TagEntity(0L, "tag\\", "desc\\", 0, 2),
+            TagEntity(0L, "tag_", "desc_", 0, 3),
         )
 
         // Check Add
@@ -139,9 +139,9 @@ class TagDaoTest {
     private suspend fun doTestQueries() {
         // Add a couple of tags
         val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0),
-            TagEntity(0L, "tag\\", "desc\\", TagEntity.SELECTED),
-            TagEntity(0L, "tag_", "desc_", 0),
+            TagEntity(0L, "tag1", "desc1", 0, 1),
+            TagEntity(0L, "tag\\", "desc\\", TagEntity.SELECTED, null),
+            TagEntity(0L, "tag_", "desc_", 0, null),
         )
 
         // Check Add
@@ -219,9 +219,9 @@ class TagDaoTest {
     private suspend fun doTestBitChanges() {
         // Add a couple of tags
         val tags = listOf(
-            TagEntity(0L, "tag1", "desc1", 0b01101),
-            TagEntity(0L, "tag2", "desc2", 0b10001),
-            TagEntity(0L, "tag3", "desc3", 0b11100),
+            TagEntity(0L, "tag1", "desc1", 0b01101, null),
+            TagEntity(0L, "tag2", "desc2", 0b10001, 5),
+            TagEntity(0L, "tag3", "desc3", 0b11100, 6),
         )
 
         // Check Add

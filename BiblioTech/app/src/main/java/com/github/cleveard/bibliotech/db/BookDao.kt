@@ -290,6 +290,7 @@ data class BookAndAuthors(
         dest.writeString(tag.name)
         dest.writeString(tag.desc)
         dest.writeInt(tag.flags)
+        dest.writeValue(tag.bookshelf)
     }
 
     private fun writeIsbn(dest: Parcel, isbn: IsbnEntity) {
@@ -412,11 +413,13 @@ data class BookAndAuthors(
             val name = src.readString()
             val desc = src.readString()
             val flags = src.readInt()
+            val bookshelf = src.readValue(TagEntity::class.java.classLoader)?.let { it as Long }
             return TagEntity(
                 id = id,
                 name = name?:"",
                 desc = desc?:"",
-                flags = flags
+                flags = flags,
+                bookshelf = bookshelf
             )
         }
 
