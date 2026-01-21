@@ -131,7 +131,7 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
     @Transaction
     @RewriteQueriesToDropUnusedColumns
     @Query(value = "SELECT * FROM $BOOKSHELVES_TAGS_JOIN ORDER BY $BOOKSHELVES_TITLE_COLUMN")
-    protected abstract fun getShelvesAndTagsLive(): LiveData<List<BookshelfAndTag>>
+    abstract fun getShelvesAndTagsLive(): LiveData<List<BookshelfAndTag>>
 
     /**
      * Get the complete list of bookshelves
@@ -147,7 +147,7 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
      * @return The id for the added bookshelf
      */
     @Insert(entity = BookshelfEntity::class)
-    protected abstract suspend fun add(bookshelfEntity: Bookshelf): Long
+    protected abstract suspend fun internalAdd(bookshelfEntity: Bookshelf): Long
 
     /**
      * Update a bookshelf
@@ -169,18 +169,10 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
     abstract suspend fun findBookshelfByBookshelfId(bookshelfId: Int): Bookshelf?
 
     @Transaction
-    open suspend fun addOrUpdate(bookshelfEntity: Bookshelf): Long {
-        // If the bookshelf is already in the database, then use it
-        (findBookshelfByBookshelfId(bookshelfEntity.bookshelfId)?.also {
-            bookshelfEntity.id = it.id
-            if (update(bookshelfEntity) <= 0) {
-                bookshelfEntity.id = 0L
-            }
-        })?: run {
-            // Add the new bookshelf entity
-            bookshelfEntity.id = 0L
-            bookshelfEntity.id = add(bookshelfEntity)
-        }
+    open suspend fun add(bookshelfEntity: Bookshelf): Long {
+        // Add the new bookshelf entity
+        bookshelfEntity.id = 0L
+        bookshelfEntity.id = internalAdd(bookshelfEntity)
         return bookshelfEntity.id
     }
 
@@ -194,6 +186,7 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
         shelf.tag?.let { tag ->
             // We have a tag, so unlink it
             tag.bookshelf = null
+            shelf.tag = null
             db.getTagDao().addWithUndo(tag) { true }
         } ?: run {
             // We don't have a tag, so link to a tag. Create the tag if needed

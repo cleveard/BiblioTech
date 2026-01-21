@@ -707,7 +707,7 @@ class BookRepository private constructor(context: Context) {
     }
 
     suspend fun addBookshelf(bookshelf: Bookshelf): Long {
-        return db.getBookshelvesDao().addOrUpdate(bookshelf)
+        return db.getBookshelvesDao().add(bookshelf)
     }
 
     suspend fun removeBookshelf(bookshelf: BookshelfAndTag): Int {
