@@ -3,17 +3,10 @@ package com.github.cleveard.bibliotech.db
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.*
-import androidx.sqlite.db.SimpleSQLiteQuery
-import androidx.sqlite.db.SupportSQLiteQuery
-import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectByFlagBits
-import com.github.cleveard.bibliotech.db.BookDatabase.Companion.selectVisible
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.descriptors.setSerialDescriptor
 import kotlinx.serialization.protobuf.ProtoBuf
-import java.lang.StringBuilder
-import java.util.Date
 
 const val BOOKSHELVES_TABLE = "bookshelves"
 const val BOOKSHELVES_ID_COLUMN = "bookshelves_id"
@@ -24,53 +17,26 @@ const val BOOKSHELVES_SELF_LINK_COLUMN = "bookshelves_self_link"
 const val BOOKSHELVES_MODIFIED_COLUMN = "bookshelves_modified"
 const val BOOKSHELVES_BOOKS_MODIFIED_COLUMN = "bookshelves_books_modified"
 const val BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN = "bookshelves_books_last_update"
-const val BOOKSHELVES_BOOKS_DOWNLOAD_LAST_CHANGED_COLUMN = "bookshelves_books_download_last_changed"
-const val BOOKSHELVES_TAG_ID_COLUMN = "bookshelves_tag_id"
-const val BOOKSHELVES_VOLUMES_ID_COLUMN = "bookshelves_volumes_id"
+const val BOOKSHELVES_LAST_SYNC_VOLUMES_COLUMN = "bookshelves_volumes_last_sync"
 const val BOOKSHELVES_FLAG_COLUMN = "bookshelves_flag"
 
-const val SHELF_VOLUMES_TABLE = "shelf_volumes_table"
-const val SHELF_VOLUMES_ID_COLUMN = "shelf_volumes_id"
-const val SHELF_VOLUMES_COMMON_COLUMN = "shelf_volumes_column"
-const val SHELF_VOLUMES_SHELF_COLUMN = "shelf_volumes_shelf"
-const val SHELF_VOLUMES_TAGGED_COLUMN = "shelf_volumes_tagged"
+// This join of the bookshelves and tags tables will associate the bookshelf and tag and exclude tag versions hidden for undo/redo
+const val BOOKSHELVES_TAGS_JOIN = "$BOOKSHELVES_TABLE LEFT JOIN $TAGS_TABLE ON $BOOKSHELVES_ID_COLUMN = $TAGS_BOOKSHELF_COLUMN AND ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0"
 
 val serializer = SetSerializer(String.serializer())
 
-// Type convert to convert between dates in the data base, which are longs, and Date objects
-@OptIn(ExperimentalSerializationApi::class)
-class StringSetConverters {
-    @TypeConverter
-    fun fromStringSet(value: ByteArray?): Set<String>? {
-        return value?.let {
-            ProtoBuf.decodeFromByteArray(serializer, value)
-        }
-    }
-
-    @TypeConverter
-    fun toStringSet(value: Set<String>?): ByteArray? {
-        return if (value.isNullOrEmpty())
-                null
-            else
-                ProtoBuf.encodeToByteArray(serializer, value)
-    }
-}
-
 /**
  * Entity for a bookshelf
+ * This entity is used only for defining the table in the database.
+ * The class we use for bookshelves in the app is Bookshelf, which doesn't
+ * include the last synced volumes, to reduce access to a possibly large blob
+ * Bookshelves to not participate in undo/redo, but the tagging/untagging
+ * when refreshing bookshelves can be undone/redone.
  */
 @Entity(tableName = BOOKSHELVES_TABLE,
     indices = [
         Index(value = [BOOKSHELVES_ID_COLUMN], unique = true),
         Index(value = [BOOKSHELVES_BOOKSHELF_ID_COLUMN]),
-        Index(value = [BOOKSHELVES_TAG_ID_COLUMN])
-    ],
-    foreignKeys = [
-        ForeignKey(entity = TagEntity::class,
-            parentColumns = [TAGS_ID_COLUMN],
-            childColumns = [BOOKSHELVES_TAG_ID_COLUMN],
-            onDelete = ForeignKey.RESTRICT
-        )
     ]
 )
 data class BookshelfEntity(
@@ -82,48 +48,64 @@ data class BookshelfEntity(
     @ColumnInfo(name = BOOKSHELVES_MODIFIED_COLUMN, defaultValue = "0") var modified: Long,
     @ColumnInfo(name = BOOKSHELVES_BOOKS_MODIFIED_COLUMN, defaultValue = "0") var booksModified: Long,
     @ColumnInfo(name = BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, defaultValue = "0") var booksLastUpdate: Long,
-    @ColumnInfo(name = BOOKSHELVES_BOOKS_DOWNLOAD_LAST_CHANGED_COLUMN, defaultValue = "NULL") var booksDownloadLastChanged: Long?,
-    @ColumnInfo(name = BOOKSHELVES_TAG_ID_COLUMN, defaultValue = "NULL") var tagId: Long?,
-    @ColumnInfo(name = BOOKSHELVES_VOLUMES_ID_COLUMN, defaultValue = "NULL") var volumesId: Long?,
-    @ColumnInfo(name = BOOKSHELVES_FLAG_COLUMN, defaultValue = "0") var flags: Int
+    @ColumnInfo(name = BOOKSHELVES_LAST_SYNC_VOLUMES_COLUMN) var lastSyncVolumes: ByteArray? = null
 ) {
-    companion object {
-        const val HIDDEN = 1
-        const val PRESERVE = 0
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as BookshelfEntity
+
+        if (id != other.id) return false
+        if (bookshelfId != other.bookshelfId) return false
+        if (modified != other.modified) return false
+        if (booksModified != other.booksModified) return false
+        if (booksLastUpdate != other.booksLastUpdate) return false
+        if (title != other.title) return false
+        if (description != other.description) return false
+        if (selfLink != other.selfLink) return false
+        if (!lastSyncVolumes.contentEquals(other.lastSyncVolumes)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + bookshelfId
+        result = 31 * result + modified.hashCode()
+        result = 31 * result + booksModified.hashCode()
+        result = 31 * result + booksLastUpdate.hashCode()
+        result = 31 * result + title.hashCode()
+        result = 31 * result + (description?.hashCode() ?: 0)
+        result = 31 * result + (selfLink?.hashCode() ?: 0)
+        result = 31 * result + (lastSyncVolumes?.contentHashCode() ?: 0)
+        return result
     }
 }
 
-@TypeConverters(StringSetConverters::class)
-@Entity(tableName = SHELF_VOLUMES_TABLE,
-    indices = [
-        Index(value = [SHELF_VOLUMES_ID_COLUMN], unique = true)
-    ])
-data class ShelfVolumeIdsEntity(
-    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = SHELF_VOLUMES_ID_COLUMN) var id: Long = 0L,
-    @ColumnInfo(name = SHELF_VOLUMES_COMMON_COLUMN, defaultValue = "NULL") var commonVolumes: Set<String>? = null,
-    @ColumnInfo(name = SHELF_VOLUMES_SHELF_COLUMN, defaultValue = "NULL") var volumesOnlyOnShelf: Set<String>? = null,
-    @ColumnInfo(name = SHELF_VOLUMES_TAGGED_COLUMN, defaultValue = "NULL") var volumesOnlyTagged: Set<String>? = null
+/**
+ * Class for dealing with bookshelves
+ * This class is missing the last synced volumes field.
+ * Get and update the last synced volumes field via the specific methods for it.
+ */
+data class Bookshelf(
+    @ColumnInfo(name = BOOKSHELVES_ID_COLUMN) var id: Long,
+    @ColumnInfo(name = BOOKSHELVES_BOOKSHELF_ID_COLUMN, defaultValue = "0") var bookshelfId: Int,
+    @ColumnInfo(name = BOOKSHELVES_TITLE_COLUMN, defaultValue = "") var title: String,
+    @ColumnInfo(name = BOOKSHELVES_DESCRIPTION_COLUMN, defaultValue = "NULL") var description: String?,
+    @ColumnInfo(name = BOOKSHELVES_SELF_LINK_COLUMN, defaultValue = "NULL") var selfLink: String?,
+    @ColumnInfo(name = BOOKSHELVES_MODIFIED_COLUMN, defaultValue = "0") var modified: Long,
+    @ColumnInfo(name = BOOKSHELVES_BOOKS_MODIFIED_COLUMN, defaultValue = "0") var booksModified: Long,
+    @ColumnInfo(name = BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, defaultValue = "0") var booksLastUpdate: Long,
 )
 
 /**
  * Bookshelf entity with associated tag entity
  */
 data class BookshelfAndTag(
-    @Embedded val bookshelf: BookshelfEntity,
-    @Relation(
-        entity = TagEntity::class,
-        parentColumn = BOOKSHELVES_TAG_ID_COLUMN,
-        entityColumn = TAGS_ID_COLUMN
-    )
-    var tag: TagEntity?
-) {
-    fun unlink() {
-        tag?.hasBookshelf = false
-        bookshelf.tagId = null
-        tag = null
-
-    }
-}
+    @Embedded val bookshelf: Bookshelf,
+    @Embedded var tag: TagEntity?
+)
 
 @Dao
 abstract class BookshelvesDao(private val db: BookDatabase) {
@@ -131,25 +113,32 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
      * Get the paging source for all bookshelves
      */
     @Transaction
-    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) ORDER BY $BOOKSHELVES_TITLE_COLUMN")
+    @RewriteQueriesToDropUnusedColumns
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TAGS_JOIN ORDER BY $BOOKSHELVES_TITLE_COLUMN")
     abstract fun getShelvesAndTags(): PagingSource<Int, BookshelfAndTag>
 
     /**
      * Get the paging source for all bookshelves
      */
     @Transaction
-    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 AND $BOOKSHELVES_ID_COLUMN == :bookshelfId ) LIMIT 1")
+    @RewriteQueriesToDropUnusedColumns
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TAGS_JOIN WHERE $BOOKSHELVES_ID_COLUMN == :bookshelfId LIMIT 1")
     abstract suspend fun getShelfAndTag(bookshelfId: Long): BookshelfAndTag?
 
     /**
      * Get a LiveData of the list of bookshelves ordered by name
      */
     @Transaction
-    @Query(value = "SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) ORDER BY $BOOKSHELVES_TITLE_COLUMN")
+    @RewriteQueriesToDropUnusedColumns
+    @Query(value = "SELECT * FROM $BOOKSHELVES_TAGS_JOIN ORDER BY $BOOKSHELVES_TITLE_COLUMN")
     protected abstract fun getShelvesAndTagsLive(): LiveData<List<BookshelfAndTag>>
 
+    /**
+     * Get the complete list of bookshelves
+     */
     @Transaction
-    @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 )")
+    @RewriteQueriesToDropUnusedColumns
+    @Query("SELECT * FROM $BOOKSHELVES_TAGS_JOIN ORDER BY $BOOKSHELVES_TITLE_COLUMN")
     abstract suspend fun getShelves(): List<BookshelfAndTag>
 
     /**
@@ -157,16 +146,17 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
      * @param bookshelfEntity The bookshelf
      * @return The id for the added bookshelf
      */
-    @Insert
-    protected abstract suspend fun add(bookshelfEntity: BookshelfEntity): Long
+    @Insert(entity = BookshelfEntity::class)
+    protected abstract suspend fun add(bookshelfEntity: Bookshelf): Long
 
-    @Update
-    protected abstract suspend fun internalUpdate(bookshelfEntity: BookshelfEntity): Int
+    /**
+     * Update a bookshelf
+     */
+    @Update(entity = BookshelfEntity::class)
+    protected abstract suspend fun update(bookshelfEntity: Bookshelf): Int
 
-    suspend fun updateBookshelf(bookshelf: BookshelfEntity): Boolean {
-        return UndoRedoDao.OperationType.CHANGE_TAG.recordUpdate(db.getUndoRedoDao(), bookshelf.id) {
-            internalUpdate(bookshelf) > 0
-        }
+    suspend fun updateBookshelf(bookshelf: Bookshelf): Boolean {
+        return update(bookshelf) > 0
     }
 
     /**
@@ -174,28 +164,22 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
      * @param bookshelfId The bookshelf id
      * @return The BookshelfEntity or null if not found
      */
-    @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE ( $BOOKSHELVES_BOOKSHELF_ID_COLUMN = :bookshelfId ) AND ( ( $BOOKSHELVES_FLAG_COLUMN & ${BookshelfEntity.HIDDEN} ) = 0 ) LIMIT 1")
-    abstract suspend fun findBookshelfByBookshelfId(bookshelfId: Int): BookshelfEntity?
+    @RewriteQueriesToDropUnusedColumns
+    @Query("SELECT * FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_BOOKSHELF_ID_COLUMN = :bookshelfId LIMIT 1")
+    abstract suspend fun findBookshelfByBookshelfId(bookshelfId: Int): Bookshelf?
 
     @Transaction
-    open suspend fun addWithUndo(bookshelfEntity: BookshelfEntity): Long {
+    open suspend fun addOrUpdate(bookshelfEntity: Bookshelf): Long {
         // If the bookshelf is already in the database, then use it
         (findBookshelfByBookshelfId(bookshelfEntity.bookshelfId)?.also {
             bookshelfEntity.id = it.id
-            if (it.title != bookshelfEntity.title
-                && !UndoRedoDao.OperationType.CHANGE_BOOKSHELF.recordUpdate(db.getUndoRedoDao(), it.id) {
-                    internalUpdate(bookshelfEntity) > 0
-                }
-            ) {
+            if (update(bookshelfEntity) <= 0) {
                 bookshelfEntity.id = 0L
             }
         })?: run {
             // Add the new bookshelf entity
             bookshelfEntity.id = 0L
-            bookshelfEntity.id = add(bookshelfEntity).also {
-                if (it != 0L)
-                    UndoRedoDao.OperationType.ADD_BOOKSHELF.recordAdd(db.getUndoRedoDao(), it)
-            }
+            bookshelfEntity.id = add(bookshelfEntity)
         }
         return bookshelfEntity.id
     }
@@ -209,145 +193,119 @@ abstract class BookshelvesDao(private val db: BookDatabase) {
         // Get the bookshelf and tag
         shelf.tag?.let { tag ->
             // We have a tag, so unlink it
-            shelf.unlink()
-            // update the bookshelf
-            updateBookshelf(shelf.bookshelf).also {
-                // Delete unused shelf volumes
-                deleteUnusedShelfVolumes()
-            }
+            tag.bookshelf = null
+            db.getTagDao().addWithUndo(tag) { true }
         } ?: run {
             // We don't have a tag, so link to a tag. Create the tag if needed
-            shelf.tag = TagEntity(0L, shelf.bookshelf.title, shelf.bookshelf.description?: "", TagEntity.HAS_BOOKSHELF).also {
+            shelf.tag = TagEntity(0L, shelf.bookshelf.title, shelf.bookshelf.description?: "", 0, shelf.bookshelf.id).also {
                 // Update the tag
                 it.id = db.getTagDao().addWithUndo(it) { true }
-                shelf.bookshelf.tagId = it.id
             }
-            // Update the bookshelf
-            updateBookshelf(shelf.bookshelf)
         }
+        // Set the last sync volumes to null and the last update time to 0
+        updateLastShelfVolumes(shelf.bookshelf.id, 0, null)
     }
 
     /**
-     * Delete multiple tags
+     * Delete a bookshelf from the database
+     */
+    @Query("DELETE FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN = :id")
+    protected abstract suspend fun delete(id: Long): Int
+
+    /**
+     * Delete bookshelf and unlink tag if needed.
      */
     @Transaction
-    open suspend fun deleteWithUndo(bookshelf: BookshelfAndTag): Int {
+    open suspend fun delete(bookshelf: BookshelfAndTag): Int {
+        // If the bookshelf doesn't have and id, then return
         if (bookshelf.bookshelf.id == 0L)
             return 0
-        return BookDatabase.buildWhereExpressionForIds(
-            BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, null, // Select visible tags
-            BOOKSHELVES_ID_COLUMN,                           // Column to query
-            null,                                     // Selected tag ids sub-query
-            arrayOf<Any>(bookshelf.bookshelf.id),                // Ids to delete
-            false                                     // Delete ids or not ids
-        )?.let {e ->
-            bookshelf.tag?.let {
-                it.hasBookshelf = false
-                db.getTagDao().addWithUndo(it) { false }
-            }
+        // If the bookshelf is linked to a tag, unlink it.
+        bookshelf.tag?.let {
+            toggleTagAndBookshelfLink(bookshelf)
+        }
 
-            UndoRedoDao.OperationType.DELETE_BOOKSHELF.recordDelete(db.getUndoRedoDao(), e) {
-                db.setHidden(BookDatabase.bookshelvesTable, e)
-            }.also {
-                // Delete unused shelf volumes
-                deleteUnusedShelfVolumes()
-            }
-        }?: 0
-    }
-
-    @Query("SELECT * FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_ID_COLUMN = :id")
-    abstract suspend fun getShelfVolumes(id: Long): ShelfVolumeIdsEntity?
-
-    @Insert()
-    abstract suspend fun addShelfVolumeIds(volumes: ShelfVolumeIdsEntity): Long
-
-    @Transaction
-    @Query("DELETE FROM $SHELF_VOLUMES_TABLE WHERE $SHELF_VOLUMES_ID_COLUMN NOT IN ( (SELECT IFNULL($BOOKSHELVES_VOLUMES_ID_COLUMN, -1) FROM $BOOKSHELVES_TABLE) )")
-    abstract suspend fun deleteUnusedShelfVolumes()
-
-    /**
-     * Query to count bits in the flags column
-     */
-    @RawQuery(observedEntities = [BookshelfEntity::class])
-    protected abstract suspend fun countBits(query: SupportSQLiteQuery): Int
-
-    /**
-     * Query to count bits in the flags column
-     */
-    @RawQuery(observedEntities = [BookshelfEntity::class])
-    protected abstract fun countBitsLive(query: SupportSQLiteQuery): LiveData<Int>
-
-    /**
-     * Query to count bits in the flags column
-     * @param bits The bits we are checking
-     * @param value The value we are checking
-     * @param include True to include values that match. False to exclude values that match.
-     * @param id A tag id to count
-     * @return The count in a LiveData
-     */
-    open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int {
-        // Build the selection from the bits
-        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
-            .selectByFlagBits(bits, value, include, BOOKSHELVES_FLAG_COLUMN)
-            .toString()
-        // Return the query
-        return countBits(SimpleSQLiteQuery(
-            "SELECT COUNT($BOOKSHELVES_ID_COLUMN) FROM $BOOKSHELVES_TABLE$condition"
-        ))
+        // Delete the shelf.
+        return delete(bookshelf.bookshelf.id)
     }
 
     /**
-     * Query to count bits in the flags column
-     * @param bits The bits we are checking
-     * @param value The value we are checking
-     * @param include True to include values that match. False to exclude values that match.
-     * @param id A tag id to count
-     * @return The count in a LiveData
+     * Get the blob holding the last synced volumes
      */
-    open fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
-        // Build the selection from the bits
-        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
-            .selectByFlagBits(bits, value, include, BOOKSHELVES_FLAG_COLUMN)
-            .toString()
-        // Return the query
-        return countBitsLive(
-            SimpleSQLiteQuery(
-                "SELECT COUNT($BOOKSHELVES_ID_COLUMN) FROM $BOOKSHELVES_TABLE$condition"
+    @Query("SELECT $BOOKSHELVES_LAST_SYNC_VOLUMES_COLUMN FROM $BOOKSHELVES_TABLE WHERE $BOOKSHELVES_ID_COLUMN = :id")
+    abstract suspend fun internalGetLastShelfVolumes(id: Long): ByteArray?
+
+    /**
+     * Get the set of last synced volumes
+     */
+    suspend fun getLastShelfVolumes(id: Long): Set<String> {
+        // Get the blob and convert to a set
+        return internalGetLastShelfVolumes(id).toStringSet()
+    }
+
+    /**
+     * Update the last synced volumes blob and last update time
+     */
+    @Update(entity = BookshelfEntity::class)
+    protected abstract suspend fun updateLastShelfVolumes(volumes: LastShelfVolumes): Int
+
+    /**
+     * Update the last synced volumes set and the last update time
+     */
+    suspend fun updateLastShelfVolumes(id: Long, booksLastUpdate: Long, volumes: Set<String>?): Int {
+        // Convert set to blob and update the database
+        return updateLastShelfVolumes(
+            LastShelfVolumes(
+                id = id,
+                booksLastUpdate = booksLastUpdate,
+                lastSyncVolumes = volumes.fromStringSet()
             )
         )
     }
 
     /**
-     * Change bits in the flags column
-     * @param mask The bits to change
-     * @param value The value to set
-     * @param id The id of the tag to change. Null to change all
-     * @return The number of rows changed
+     * Class used to get and update the last synced volumes of a bookshelf
      */
-    @Transaction
-    open suspend fun changeBits(mask: Int, value: Int, id: Long?): Int? {
-        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
-        // Only select the rows where the change will make a difference
-        condition.selectByFlagBits(mask, value, false, BOOKSHELVES_FLAG_COLUMN)
-        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOKSHELVES_TABLE SET $BOOKSHELVES_FLAG_COLUMN = ( $BOOKSHELVES_FLAG_COLUMN & ${mask.inv()} ) | $value$condition"))
+    protected data class LastShelfVolumes(
+        @ColumnInfo(name = BOOKSHELVES_ID_COLUMN) var id: Long,
+        @ColumnInfo(name = BOOKSHELVES_BOOKS_LAST_UPDATE_COLUMN, defaultValue = "0") var booksLastUpdate: Long,
+        @ColumnInfo(name = BOOKSHELVES_LAST_SYNC_VOLUMES_COLUMN) var lastSyncVolumes: ByteArray? = null
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as LastShelfVolumes
+
+            if (id != other.id) return false
+            if (!lastSyncVolumes.contentEquals(other.lastSyncVolumes)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = id.hashCode()
+            result = 31 * result + (lastSyncVolumes?.contentHashCode() ?: 0)
+            return result
+        }
     }
 
-    /**
-     * Change bits in the flags column
-     * @param operation The operation to perform. True to set, false to clear, null to toggle
-     * @param mask The bits to change
-     * @param id The id of the tag to change. Null to change all
-     * @return The number of rows changed
-     */
-    @Transaction
-    open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int {
-        val condition = StringBuilder().selectVisible(BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN)
-        // Only select the rows where the change will make a difference
-        if (operation == true)
-            condition.selectByFlagBits(mask, mask, false, BOOKSHELVES_FLAG_COLUMN)
-        else if (operation == false)
-            condition.selectByFlagBits(mask, 0, false, BOOKSHELVES_FLAG_COLUMN)
-        val bits = BookDatabase.changeBits(operation, BOOKSHELVES_FLAG_COLUMN, mask)
-        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $BOOKSHELVES_TABLE $bits$condition"))
+    companion object {
+        // Type convert to convert between dates in the data base, which are longs, and Date objects
+        @OptIn(ExperimentalSerializationApi::class)
+        fun ByteArray?.toStringSet(): Set<String> {
+            return if (this == null || isEmpty())
+                emptySet()
+            else
+                ProtoBuf.decodeFromByteArray(serializer, this)
+        }
+
+        @OptIn(ExperimentalSerializationApi::class)
+        fun Set<String>?.fromStringSet(): ByteArray? {
+            return if (this == null || isEmpty())
+                null
+            else
+                ProtoBuf.encodeToByteArray(serializer, this)
+        }
     }
 }

@@ -55,8 +55,7 @@ const val kAsc = "ASC"
         IsbnEntity::class,
         BookAndIsbnEntity::class,
         SeriesEntity::class,
-        BookshelfEntity::class,
-        ShelfVolumeIdsEntity::class
+        BookshelfEntity::class
     ],
     version = 9,
     exportSchema = true,
@@ -216,7 +215,7 @@ abstract class BookDatabase : RoomDatabase() {
         /** The categories table descriptor */
         val categoriesTable = TableDescription(CATEGORIES_TABLE, CATEGORIES_ID_COLUMN, CATEGORIES_FLAGS, CategoryEntity.HIDDEN, 0, CategoryEntity.PRESERVE, null, null, null)
         /** The tags table descriptor */
-        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS, TagEntity.HIDDEN, TagEntity.SELECTED, TagEntity.PRESERVE, null, null, null)
+        val tagsTable = TableDescription(TAGS_TABLE, TAGS_ID_COLUMN, TAGS_FLAGS_COLUMN, TagEntity.HIDDEN, TagEntity.SELECTED, TagEntity.PRESERVE, null, null, null)
         /** The series table descriptor */
         val seriesTable = TableDescription(SERIES_TABLE, SERIES_ID_COLUMN, SERIES_FLAG_COLUMN, SeriesEntity.HIDDEN, 0, SeriesEntity.PRESERVE, null, null, null)
         /** The views table descriptor */
@@ -232,7 +231,7 @@ abstract class BookDatabase : RoomDatabase() {
         /** The book_isbns link table descriptor */
         val bookIsbnsTable = TableDescription(BOOK_ISBNS_TABLE, BOOK_ISBNS_ID_COLUMN, null, 0, 0, 0, null, BOOK_ISBNS_BOOK_ID_COLUMN, BOOK_ISBNS_ISBN_ID_COLUMN)
         /** The bookshelves table descriptor */
-        val bookshelvesTable = TableDescription(BOOKSHELVES_TABLE, BOOKSHELVES_ID_COLUMN, BOOKSHELVES_FLAG_COLUMN, BookshelfEntity.HIDDEN, 0, BookshelfEntity.PRESERVE, null, null, null)
+        val bookshelvesTable = TableDescription(BOOKSHELVES_TABLE, BOOKSHELVES_ID_COLUMN, BOOKSHELVES_FLAG_COLUMN, 0, 0, 0, null, null, null)
 
         /** Undo levels preference key */
         const val UNDO_LEVEL_KEY = "undo_levels"
@@ -576,7 +575,7 @@ abstract class BookDatabase : RoomDatabase() {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     // This SQL is take from the BookDatabase_Impl file
                     db.execSQL("ALTER TABLE $BOOK_TABLE ADD COLUMN `$BOOK_FLAGS` INTEGER NOT NULL DEFAULT 0")
-                    db.execSQL("ALTER TABLE $TAGS_TABLE ADD COLUMN `$TAGS_FLAGS` INTEGER NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE $TAGS_TABLE ADD COLUMN `$TAGS_FLAGS_COLUMN` INTEGER NOT NULL DEFAULT 0")
                 }
             },
             object: Migration(3, 4) {

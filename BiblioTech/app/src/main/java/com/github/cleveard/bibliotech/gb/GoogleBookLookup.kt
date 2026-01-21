@@ -17,6 +17,7 @@ import com.google.api.services.books.v1.model.Bookshelves
 import com.google.api.services.books.v1.model.Bookshelf
 import kotlinx.coroutines.*
 import java.net.MalformedURLException
+import java.net.SocketTimeoutException
 import java.time.Instant
 import java.util.*
 import kotlin.collections.ArrayDeque
@@ -110,6 +111,8 @@ internal class GoogleBookLookup {
             return withContext(Dispatchers.IO) {
                 var result: T
                 delayRequest()
+                // If we are debugging, breakpoints may interfere with socket timeouts
+                var timeouts = if (!android.os.Debug.isDebuggerConnected()) 0 else 3
                 while (true) {
                     ensureActive()
                     try {
@@ -121,6 +124,10 @@ internal class GoogleBookLookup {
                             request.execute()
                         }
                         break
+                    } catch (e: SocketTimeoutException) {
+                        // Allow for a couple of timeouts while debugging
+                        if (--timeouts < 0)
+                            throw e
                     } catch (e: HttpResponseException) {
                         // If this isn't a too many requests exception then rethrow it
                         if (e.statusCode != 429)
@@ -233,7 +240,7 @@ internal class GoogleBookLookup {
         }
     }
 
-    suspend fun getBookShelves(auth: BookCredentials): List<BookshelfEntity>? {
+    suspend fun getBookShelves(auth: BookCredentials): List<com.github.cleveard.bibliotech.db.Bookshelf>? {
         val shelves = execute(auth) {
             service.Mylibrary().bookshelves().list().apply {
                 this.prettyPrint = true
@@ -244,7 +251,7 @@ internal class GoogleBookLookup {
 
     }
 
-    suspend fun getBookShelf(auth: BookCredentials, bookshelfId: Int): BookshelfEntity? {
+    suspend fun getBookShelf(auth: BookCredentials, bookshelfId: Int): com.github.cleveard.bibliotech.db.Bookshelf? {
         return execute(auth) {token ->
             service.Mylibrary().bookshelves().get(bookshelfId.toString()).apply {
                 this.oauthToken = token
@@ -274,9 +281,9 @@ internal class GoogleBookLookup {
                     return@let null
                 volumes.items?.let { items ->
                     // Convert each volume to BookAndAuthors and add it to the map
-                    items.forEach {
+                    items.forEach {volume ->
                         // Convert the book
-                        mapVolume(it).let { book ->
+                        mapVolume(volume).let { book ->
                             // Ignore volumes with null volumeId
                             book.book.volumeId?.let { map[it] = book }
                         }
@@ -438,11 +445,11 @@ internal class GoogleBookLookup {
         throw LookupException("Invalid Response")
     }
 
-    private fun mapShelf(shelf: Bookshelf): BookshelfEntity? {
+    private fun mapShelf(shelf: Bookshelf): com.github.cleveard.bibliotech.db.Bookshelf? {
         return if (shelf.kind != kBooksBookshelf)
             null
         else
-            BookshelfEntity(
+            Bookshelf(
                 id = 0L,
                 bookshelfId = shelf.id?: return null,
                 title = shelf.title?: return null,
@@ -450,12 +457,7 @@ internal class GoogleBookLookup {
                 selfLink = shelf.selfLink,
                 modified = shelf.updated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
                 booksModified = shelf.volumesLastUpdated?.let { Instant.parse(it).toEpochMilli() }?: -1L,
-                booksLastUpdate = 0L,
-                booksDownloadLastChanged = null,
-                tagId = null,
-                volumesId = null,
-                flags = 0
-
+                booksLastUpdate = 0L
             )
     }
 
@@ -465,7 +467,7 @@ internal class GoogleBookLookup {
      * @return List of BookshelfEntity or null if the list is empty
      */
     @Throws(LookupException::class)
-    private fun mapResponse(shelves: Bookshelves): List<BookshelfEntity>? {
+    private fun mapResponse(shelves: Bookshelves): List<com.github.cleveard.bibliotech.db.Bookshelf>? {
         // Do we have a list of books
         if (shelves.kind == kBooksBookshelves) {
             // Get the array of books from the object

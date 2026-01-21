@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "a05c4b4a297de540656fdd8deb562553",
+    "identityHash": "6e21d452050267cb54ceb998bbc47aa1",
     "entities": [
       {
         "tableName": "books",
@@ -313,7 +313,7 @@
       },
       {
         "tableName": "tags",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tags_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tags_name` TEXT NOT NULL COLLATE NOCASE, `tags_desc` TEXT NOT NULL DEFAULT '', `tags_flags` INTEGER NOT NULL DEFAULT 0)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tags_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tags_name` TEXT NOT NULL COLLATE NOCASE, `tags_desc` TEXT NOT NULL DEFAULT '', `tags_flags` INTEGER NOT NULL DEFAULT 0, `tags_bookshelf` INTEGER DEFAULT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -340,6 +340,12 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "bookshelf",
+            "columnName": "tags_bookshelf",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
           }
         ],
         "primaryKey": {
@@ -366,6 +372,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_tags_tags_name` ON `${TABLE_NAME}` (`tags_name`)"
+          },
+          {
+            "name": "index_tags_tags_bookshelf",
+            "unique": false,
+            "columnNames": [
+              "tags_bookshelf"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tags_tags_bookshelf` ON `${TABLE_NAME}` (`tags_bookshelf`)"
           }
         ]
       },
@@ -978,7 +993,7 @@
       },
       {
         "tableName": "bookshelves",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT DEFAULT NULL, `bookshelves_self_link` TEXT DEFAULT NULL, `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_last_update` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_download_last_changed` INTEGER DEFAULT NULL, `bookshelves_tag_id` INTEGER DEFAULT NULL, `bookshelves_volumes_id` INTEGER DEFAULT NULL, `bookshelves_flag` INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(`bookshelves_tag_id`) REFERENCES `tags`(`tags_id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookshelves_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookshelves_bookshelf_id` INTEGER NOT NULL DEFAULT 0, `bookshelves_title` TEXT NOT NULL DEFAULT '', `bookshelves_description` TEXT DEFAULT NULL, `bookshelves_self_link` TEXT DEFAULT NULL, `bookshelves_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_modified` INTEGER NOT NULL DEFAULT 0, `bookshelves_books_last_update` INTEGER NOT NULL DEFAULT 0, `bookshelves_volumes_last_sync` BLOB)",
         "fields": [
           {
             "fieldPath": "id",
@@ -1034,29 +1049,9 @@
             "defaultValue": "0"
           },
           {
-            "fieldPath": "booksDownloadLastChanged",
-            "columnName": "bookshelves_books_download_last_changed",
-            "affinity": "INTEGER",
-            "defaultValue": "NULL"
-          },
-          {
-            "fieldPath": "tagId",
-            "columnName": "bookshelves_tag_id",
-            "affinity": "INTEGER",
-            "defaultValue": "NULL"
-          },
-          {
-            "fieldPath": "volumesId",
-            "columnName": "bookshelves_volumes_id",
-            "affinity": "INTEGER",
-            "defaultValue": "NULL"
-          },
-          {
-            "fieldPath": "flags",
-            "columnName": "bookshelves_flag",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
+            "fieldPath": "lastSyncVolumes",
+            "columnName": "bookshelves_volumes_last_sync",
+            "affinity": "BLOB"
           }
         ],
         "primaryKey": {
@@ -1083,82 +1078,13 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_bookshelf_id` ON `${TABLE_NAME}` (`bookshelves_bookshelf_id`)"
-          },
-          {
-            "name": "index_bookshelves_bookshelves_tag_id",
-            "unique": false,
-            "columnNames": [
-              "bookshelves_tag_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_bookshelves_bookshelves_tag_id` ON `${TABLE_NAME}` (`bookshelves_tag_id`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "tags",
-            "onDelete": "RESTRICT",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "bookshelves_tag_id"
-            ],
-            "referencedColumns": [
-              "tags_id"
-            ]
-          }
-        ]
-      },
-      {
-        "tableName": "shelf_volumes_table",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`shelf_volumes_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `shelf_volumes_column` BLOB DEFAULT NULL, `shelf_volumes_shelf` BLOB DEFAULT NULL, `shelf_volumes_tagged` BLOB DEFAULT NULL)",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "shelf_volumes_id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "commonVolumes",
-            "columnName": "shelf_volumes_column",
-            "affinity": "BLOB",
-            "defaultValue": "NULL"
-          },
-          {
-            "fieldPath": "volumesOnlyOnShelf",
-            "columnName": "shelf_volumes_shelf",
-            "affinity": "BLOB",
-            "defaultValue": "NULL"
-          },
-          {
-            "fieldPath": "volumesOnlyTagged",
-            "columnName": "shelf_volumes_tagged",
-            "affinity": "BLOB",
-            "defaultValue": "NULL"
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "shelf_volumes_id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_shelf_volumes_table_shelf_volumes_id",
-            "unique": true,
-            "columnNames": [
-              "shelf_volumes_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_shelf_volumes_table_shelf_volumes_id` ON `${TABLE_NAME}` (`shelf_volumes_id`)"
           }
         ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a05c4b4a297de540656fdd8deb562553')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e21d452050267cb54ceb998bbc47aa1')"
     ]
   }
 }

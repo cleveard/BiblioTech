@@ -29,7 +29,7 @@ import com.github.cleveard.bibliotech.ManageNavigation
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookshelfAndTag
-import com.github.cleveard.bibliotech.db.BookshelfEntity
+import com.github.cleveard.bibliotech.db.Bookshelf
 import com.github.cleveard.bibliotech.ui.books.BooksAdapterData
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
 import com.github.cleveard.bibliotech.utils.ParentAccess
@@ -37,12 +37,12 @@ import com.github.cleveard.bibliotech.utils.Thumbnails
 import com.github.cleveard.bibliotech.utils.coroutineAlert
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 class BookshelvesFragment : Fragment() {
@@ -54,6 +54,7 @@ class BookshelvesFragment : Fragment() {
         const val BOOK_INTERVAL = 1024.0
     }
 
+    /** The viewmodel for the fragment */
     private val shelvesViewModel: BookshelvesViewModel by activityViewModels()
 
     /**
@@ -91,6 +92,7 @@ class BookshelvesFragment : Fragment() {
             // Make sure we are logged in, cancels coroutine if login fails
             GoogleBookLoginFragment.login(this@BookshelvesFragment)
 
+            // Update the bookshelf list, but no books within the shelf.
             shelvesViewModel.viewModelScope.launch {
                 shelvesViewModel.refreshBookshelves(
                     requireActivity() as BookCredentials,
@@ -192,17 +194,6 @@ class BookshelvesFragment : Fragment() {
                     BookshelvesFragmentDirections.actionBookshelvesFragmentToSettingsFragment()
                 )
             }
-            // Login/Logout
-            R.id.action_logout -> {
-                (activity as? BookCredentials)?.let {credentials ->
-                    shelvesViewModel.viewModelScope.launch {
-                        if (credentials.isAuthorized)
-                            credentials.logout()
-                        else
-                            credentials.login()
-                    }
-                }
-            }
             else -> return false
         }
         return true
@@ -241,15 +232,6 @@ class BookshelvesFragment : Fragment() {
                     // Enable/Disable Redo item and set the string
                     update(R.id.action_redo, shelvesViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
                         R.string.redo, R.string.redoName)
-                    // Set the Login/Logout string
-                    update(
-                        R.id.action_logout,
-                        "",
-                        if ((requireActivity() as? BookCredentials)?.isAuthorized == true)
-                            R.string.logout
-                        else
-                            R.string.login,
-                        0)
                 }
 
                 override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
@@ -267,7 +249,7 @@ class BookshelvesFragment : Fragment() {
      * @param conflictsArg The list of books conflicting
      * @param addedToShelfCount The number of books in the list the were added to the shelf
      */
-    suspend fun handleConflicts(shelf: BookshelfEntity, conflictsArg: List<BookAndAuthors>, addedToShelfCount: Int): Boolean {
+    suspend fun handleConflicts(shelf: Bookshelf, conflictsArg: List<BookAndAuthors>, addedToShelfCount: Int): Boolean {
         return coroutineScope {
             // Setup separate thumbnails for this query
             val thumbnails = Thumbnails("conflicts")
@@ -338,7 +320,7 @@ class BookshelvesFragment : Fragment() {
                         .setup(addedToShelfCount > 0, 0 until addedToShelfCount, true)
                     content.findViewById<MaterialButton>(R.id.untag_in_db)
                         .setup(addedToShelfCount < conflicts.size, addedToShelfCount until conflicts.size, false)
-                    content.findViewById<MaterialButton>(R.id.untag_in_db)
+                    content.findViewById<MaterialButton>(R.id.keep_tagged)
                         .setup(addedToShelfCount < conflicts.size, addedToShelfCount until conflicts.size, true)
 
                     // Find the recycler view and set the layout manager and adapter
@@ -355,6 +337,9 @@ class BookshelvesFragment : Fragment() {
                         // Set the action buttons
                         .setPositiveButton(R.string.ok, null)
                         .setNegativeButton(R.string.cancel, null)
+                }.setPosListener { alert, _, _ ->
+                    alert.result = true
+                    true
                 }.show().also {
                     if (it) {
                         for (i in conflicts.indices)
@@ -370,6 +355,10 @@ class BookshelvesFragment : Fragment() {
     private class ConflictsAdapter(access: ParentAccess): ListAdapter<Any, BooksAdapterData.ViewHolder>(BooksAdapterData.DIFF_CALLBACK) {
         val data = BooksAdapterData(this, access, R.layout.books_adapter_book_item_always, 0)
 
+        override fun getItemViewType(position: Int): Int {
+            return R.layout.books_adapter_book_item_always
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BooksAdapterData.ViewHolder {
             return data.onCreateViewHolder(parent, viewType)
         }
@@ -384,20 +373,45 @@ class BookshelvesFragment : Fragment() {
         }
     }
 
+    /**
+     * Dialog to show refresh progress
+     */
     private inner class ProgressDialog: BookshelvesViewModel.Progress {
-        lateinit var dialog: DialogInterface
-        var job: Job? = null
-        lateinit var contentView: View
-        lateinit var shelfText: TextView
-        lateinit var progress: ProgressBar
-        var curBookCount: Int = 0
-        var curShelfCount: Int = 0
-        var bookInterval: Double = 0.0
+        /** Interface used to control the dialog */
+        private lateinit var dialog: DialogInterface
+        /** Flag indicating whether the dialog was canceled */
+        override var canceled: Boolean = false
+            // Thread safe get and set
+            get() = synchronized(this) { field }
+            set(v) {
+                synchronized(this) {
+                    field = v
+                }
+            }
+        /** Progress content view */
+        private lateinit var contentView: View
+        /** The current shelf title */
+        private lateinit var shelfText: TextView
+        /** The progress bar */
+        private lateinit var progress: ProgressBar
+        /** The count of books that have been updated */
+        private var curBookCount: Int = 0
+        /** The count of shelves that have been updated */
+        private var curShelfCount: Int = 0
+        /** The delta for on book in the progress bar */
+        private var bookInterval: Double = 0.0
 
+        /**
+         * Set the progress from the curBookCount, curShelfCount and bookInterval
+         */
         private fun setProgress() {
             progress.setProgress((curShelfCount.coerceAtLeast(0) shl SHELF_SHIFT)
                 + (curBookCount.coerceAtLeast(0) * bookInterval).roundToInt(), true)
         }
+
+        /**
+         * Show the progress bar while running a code block
+         */
         suspend fun run(block: suspend (progress: BookshelvesViewModel.Progress) -> Unit) {
             try {
                 show()
@@ -408,40 +422,51 @@ class BookshelvesFragment : Fragment() {
 
         }
 
+        /** The number of books in the current shelf */
         override var bookCount: Int = 0
             set(value) {
                 field = value
+                // Set the bookInterval and reset the current book count
                 bookInterval = if (value <= 0) BOOK_INTERVAL else BOOK_INTERVAL / value
                 curBookCount = -1
                 contentView.post {
+                    // Update the progress bar
                     setProgress()
                 }
             }
 
+        /** The number of shelves being updated */
         override var shelfCount: Int = 0
             set(value) {
                 field = value
+                // Reset the current shelf
                 curShelfCount = -1
                 contentView.post {
+                    // Set the max value for the progress bar
                     progress.max = shelfCount shl SHELF_SHIFT
+                    // Update the progress bar
                     setProgress()
                 }
             }
 
+        /**
+         * Show the progress dialog
+         */
         override suspend fun show() {
-            job = currentCoroutineContext().job
+            // Inflate the progress content and get the views for
+            // the shelf name and progress bar
             @SuppressLint("InflateParams")
             contentView = layoutInflater.inflate(R.layout.shelf_progress, null)
             shelfText = contentView.findViewById(R.id.shelf_title)
             progress = contentView.findViewById(R.id.progress_bar)
 
-
+            // Build the dialog, and show it
             AlertDialog.Builder(requireContext())
                 .setView(contentView)
                 .setCancelable(false)
                 .setPositiveButton(R.string.cancel) { dialog, which -> cancel() }
                 .setOnCancelListener {
-                    job?.cancel()
+                    canceled = true
                 }
                 .create().apply {
                     dialog = this
@@ -449,26 +474,52 @@ class BookshelvesFragment : Fragment() {
                 }
         }
 
+        /**
+         * Dismiss the dialog
+         */
         override fun dismiss() {
             dialog.dismiss()
         }
 
+        /**
+         * Cancel the dialog
+         */
         override fun cancel() {
             dialog.cancel()
         }
 
+        /**
+         * Start processing the next shelf
+         * @param shelf The name of the shelf
+         */
         override fun nextShelf(shelf: String) {
+            // Bump the updated shelf count
             ++curShelfCount
             contentView.post {
+                // Update the dialog
                 shelfText.text = shelf
                 setProgress()
             }
         }
 
+        /**
+         * Start processing the next book
+         */
         override fun nextBook() {
+            // Bump the updated book count
             ++curBookCount
             contentView.post {
+                // Update the dialog
                 setProgress()
+            }
+        }
+
+        /**
+         * Run code on the main thread with a context
+         */
+        override suspend fun runForUI(block: (Context) -> Unit) {
+            withContext(Dispatchers.Main) {
+                block(contentView.context)
             }
         }
     }

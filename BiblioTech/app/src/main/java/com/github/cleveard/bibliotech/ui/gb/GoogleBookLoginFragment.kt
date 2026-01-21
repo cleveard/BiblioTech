@@ -118,7 +118,10 @@ class GoogleBookLoginFragment : DialogFragment() {
                                 .observe(backStack) { result ->
                                     when (result) {
                                         // Succeed doesn't need to do anything, the login fragment will return to this one
-                                        LoginResult.SUCCEEDED -> { continuation.resume(Unit) }
+                                        LoginResult.SUCCEEDED -> {
+                                            if (it.isAuthorized)
+                                                continuation.resume(Unit)
+                                        }
 
                                         else -> {
                                             // Pop off including the current destination

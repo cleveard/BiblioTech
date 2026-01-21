@@ -8,7 +8,6 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import androidx.paging.PagingSource
 import com.github.cleveard.bibliotech.R
-import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -699,7 +698,7 @@ class BookRepository private constructor(context: Context) {
         return db.getBookshelvesDao().getShelfAndTag(id)
     }
 
-    suspend fun updateBookshelf(bookshelf: BookshelfEntity): Boolean {
+    suspend fun updateBookshelf(bookshelf: Bookshelf): Boolean {
         return db.getBookshelvesDao().updateBookshelf(bookshelf)
     }
 
@@ -707,24 +706,24 @@ class BookRepository private constructor(context: Context) {
         return db.getBookshelvesDao().getShelves()
     }
 
-    suspend fun addBookshelf(bookshelf: BookshelfEntity): Long {
-        return db.getBookshelvesDao().addWithUndo(bookshelf)
+    suspend fun addBookshelf(bookshelf: Bookshelf): Long {
+        return db.getBookshelvesDao().addOrUpdate(bookshelf)
     }
 
     suspend fun removeBookshelf(bookshelf: BookshelfAndTag): Int {
-        return db.getBookshelvesDao().deleteWithUndo(bookshelf)
+        return db.getBookshelvesDao().delete(bookshelf)
     }
 
     suspend fun getTaggedBooks(id: Long): List<BookAndAuthors> {
         return db.getBookDao().getTaggedBooks(id)
     }
 
-    suspend fun getShelfVolumeIds(id: Long): ShelfVolumeIdsEntity? {
-        return db.getBookshelvesDao().getShelfVolumes(id)
+    suspend fun getLastShelfVolumes(id: Long): Set<String> {
+        return db.getBookshelvesDao().getLastShelfVolumes(id)
     }
 
-    suspend fun addShelfVolumeIds(volumes: ShelfVolumeIdsEntity): Long {
-        return db.getBookshelvesDao().addShelfVolumeIds(volumes)
+    suspend fun updateLastShelfVolumes(id: Long, booksLastUpdate: Long, volumes: Set<String>): Int {
+        return db.getBookshelvesDao().updateLastShelfVolumes(id, booksLastUpdate, volumes)
     }
 
     suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {

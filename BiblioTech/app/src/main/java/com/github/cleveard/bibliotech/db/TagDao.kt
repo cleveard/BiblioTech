@@ -21,7 +21,8 @@ const val TAGS_TABLE = "tags"                               // Tags table name
 const val TAGS_ID_COLUMN = "tags_id"                        // Incrementing id
 const val TAGS_NAME_COLUMN = "tags_name"                    // Tag name
 const val TAGS_DESC_COLUMN = "tags_desc"                    // Tag description
-const val TAGS_FLAGS = "tags_flags"                         // Flags for a tag
+const val TAGS_FLAGS_COLUMN = "tags_flags"                  // Flags for a tag
+const val TAGS_BOOKSHELF_COLUMN = "tags_bookshelf"          // Bookshelf linked to tag
 
 // Book Tags table name and column names
 const val BOOK_TAGS_TABLE = "book_tags"                     // Book tags table name
@@ -35,13 +36,15 @@ const val BOOK_TAGS_TAG_ID_COLUMN = "book_tags_tag_id"      // Tag row increment
 @Entity(tableName = TAGS_TABLE,
     indices = [
         Index(value = [TAGS_ID_COLUMN],unique = true),
-        Index(value = [TAGS_NAME_COLUMN])
+        Index(value = [TAGS_NAME_COLUMN]),
+        Index(value = [TAGS_BOOKSHELF_COLUMN])
     ])
 data class TagEntity(
     @PrimaryKey(autoGenerate = true) @ColumnInfo(name = TAGS_ID_COLUMN) var id: Long,
     @ColumnInfo(name = TAGS_NAME_COLUMN,collate = ColumnInfo.NOCASE) var name: String,
     @ColumnInfo(name = TAGS_DESC_COLUMN,defaultValue = "") var desc: String,
-    @ColumnInfo(name = TAGS_FLAGS,defaultValue = "0") var flags: Int
+    @ColumnInfo(name = TAGS_FLAGS_COLUMN,defaultValue = "0") var flags: Int,
+    @ColumnInfo(name = TAGS_BOOKSHELF_COLUMN, defaultValue = "NULL") var bookshelf: Long? = null
 ) {
     var isSelected: Boolean
         get() = ((flags and SELECTED) != 0)
@@ -52,19 +55,12 @@ data class TagEntity(
                 flags and SELECTED.inv()
         }
 
-    var hasBookshelf
-        get() = ((flags and HAS_BOOKSHELF) != 0)
-        set(v) {
-            flags = if (v)
-                flags or HAS_BOOKSHELF
-            else
-                flags and HAS_BOOKSHELF.inv()
-        }
+    val hasBookshelf
+        get() = bookshelf != null
 
     companion object {
         const val SELECTED = 1
         const val HIDDEN = 2
-        const val HAS_BOOKSHELF = 4
         const val PRESERVE = 0
     }
 }
@@ -103,25 +99,25 @@ abstract class TagDao(private val db: BookDatabase) {
      * Get a tag using its incrementing id
      * @param tagId The id of the tag to retrieve
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE $TAGS_ID_COLUMN = :tagId AND ( ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
     abstract suspend fun get(tagId: Long): TagEntity?
 
     /**
      * Get the paging source for all tags
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
     abstract fun get(): PagingSource<Int, TagEntity>
 
     /**
      * Get a LiveData of the list of tags ordered by name
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0 ) ORDER BY $TAGS_NAME_COLUMN")
     protected abstract fun doGetLive(): LiveData<List<TagEntity>>
 
     /**
      * Get a LiveData of the list of tags ordered by name
      */
-    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( $TAGS_FLAGS & ${TagEntity.SELECTED or TagEntity.HIDDEN} ) == ${TagEntity.SELECTED} ORDER BY $TAGS_NAME_COLUMN")
+    @Query(value = "SELECT * FROM $TAGS_TABLE WHERE ( $TAGS_FLAGS_COLUMN & ${TagEntity.SELECTED or TagEntity.HIDDEN} ) == ${TagEntity.SELECTED} ORDER BY $TAGS_NAME_COLUMN")
     protected abstract fun doGetSelectedLive(): LiveData<List<TagEntity>>
 
     /**
@@ -289,7 +285,7 @@ abstract class TagDao(private val db: BookDatabase) {
     suspend fun queryTagIds(tagIds: Array<Any>?): List<Long>? {
         return BookDatabase.buildQueryForIds(
             "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE",  // SQLite command
-            TAGS_FLAGS, TagEntity.HIDDEN,                         // Select visible tags
+            TAGS_FLAGS_COLUMN, TagEntity.HIDDEN,                         // Select visible tags
             TAGS_ID_COLUMN,                                       // Column to query
             selectedIdSubQuery,                                   // Selected tag ids sub-query
             tagIds,                                               // Ids to query
@@ -331,7 +327,7 @@ abstract class TagDao(private val db: BookDatabase) {
     open suspend fun querySelectedTagCount(): Int {
         return BookDatabase.buildQueryForIds(
             "SELECT COUNT($TAGS_ID_COLUMN) FROM $TAGS_TABLE",      // SQLite Command
-            TAGS_FLAGS, TagEntity.HIDDEN,             // Select visible tags
+            TAGS_FLAGS_COLUMN, TagEntity.HIDDEN,             // Select visible tags
             TAGS_ID_COLUMN,                           // Column to query
             selectedIdSubQuery,                       // Selected tag ids sub-query
             null,                                     // Ids to delete
@@ -358,7 +354,7 @@ abstract class TagDao(private val db: BookDatabase) {
             }
         }
         return BookDatabase.buildWhereExpressionForIds(
-            TAGS_FLAGS, TagEntity.HIDDEN, null, // Select visible tags
+            TAGS_FLAGS_COLUMN, TagEntity.HIDDEN, null, // Select visible tags
             TAGS_ID_COLUMN,                           // Column to query
             selectedIdSubQuery,                       // Selected tag ids sub-query
             null,                                     // Ids to delete
@@ -376,7 +372,7 @@ abstract class TagDao(private val db: BookDatabase) {
      * This uses a case insensitive compare
      */
     @Query(value = "SELECT * FROM $TAGS_TABLE"
-            + " WHERE $TAGS_NAME_COLUMN LIKE :name ESCAPE '\\' AND ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
+            + " WHERE $TAGS_NAME_COLUMN LIKE :name ESCAPE '\\' AND ( ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0 ) LIMIT 1")
     protected abstract suspend fun doFindByName(name: String): TagEntity?
 
     /**
@@ -411,8 +407,8 @@ abstract class TagDao(private val db: BookDatabase) {
     open suspend fun countBits(bits: Int, value: Int, include: Boolean, id: Long?): Int {
         // Build the selection from the bits
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
-            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
-            .selectByFlagBits(bits, value, include, TAGS_FLAGS)
+            .selectVisible(TAGS_FLAGS_COLUMN, TagEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, TAGS_FLAGS_COLUMN)
             .toString()
         // Return the query
         return countBits(SimpleSQLiteQuery(
@@ -431,8 +427,8 @@ abstract class TagDao(private val db: BookDatabase) {
     open fun countBitsLive(bits: Int, value: Int, include: Boolean, id: Long?): LiveData<Int> {
         // Build the selection from the bits
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
-            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
-            .selectByFlagBits(bits, value, include, TAGS_FLAGS)
+            .selectVisible(TAGS_FLAGS_COLUMN, TagEntity.HIDDEN)
+            .selectByFlagBits(bits, value, include, TAGS_FLAGS_COLUMN)
             .toString()
         // Return the query
         return countBitsLive(
@@ -452,10 +448,10 @@ abstract class TagDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun changeBits(mask: Int, value: Int, id: Long?): Int? {
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
-            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
+            .selectVisible(TAGS_FLAGS_COLUMN, TagEntity.HIDDEN)
         // Only select the rows where the change will make a difference
-        condition.selectByFlagBits(mask, value, false, TAGS_FLAGS)
-        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $TAGS_TABLE SET $TAGS_FLAGS = ( $TAGS_FLAGS & ${mask.inv()} ) | $value$condition"))
+        condition.selectByFlagBits(mask, value, false, TAGS_FLAGS_COLUMN)
+        return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $TAGS_TABLE SET $TAGS_FLAGS_COLUMN = ( $TAGS_FLAGS_COLUMN & ${mask.inv()} ) | $value$condition"))
     }
 
     /**
@@ -468,21 +464,21 @@ abstract class TagDao(private val db: BookDatabase) {
     @Transaction
     open suspend fun changeBits(operation: Boolean?, mask: Int, id: Long?): Int {
         val condition = StringBuilder().idWithFilter(id, null, TAGS_ID_COLUMN)
-            .selectVisible(TAGS_FLAGS, TagEntity.HIDDEN)
+            .selectVisible(TAGS_FLAGS_COLUMN, TagEntity.HIDDEN)
         // Only select the rows where the change will make a difference
         if (operation == true)
-            condition.selectByFlagBits(mask, mask, false, TAGS_FLAGS)
+            condition.selectByFlagBits(mask, mask, false, TAGS_FLAGS_COLUMN)
         else if (operation == false)
-            condition.selectByFlagBits(mask, 0, false, TAGS_FLAGS)
-        val bits = BookDatabase.changeBits(operation, TAGS_FLAGS, mask)
+            condition.selectByFlagBits(mask, 0, false, TAGS_FLAGS_COLUMN)
+        val bits = BookDatabase.changeBits(operation, TAGS_FLAGS_COLUMN, mask)
         return db.execUpdateDelete(SimpleSQLiteQuery("UPDATE $TAGS_TABLE $bits$condition"))
     }
 
     companion object {
         /** Sub-query that returns the selected tag ids **/
         val selectedIdSubQuery: (invert: Boolean) -> String = {
-            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS & ${TagEntity.HIDDEN} ) = 0 " +
-            "AND ( $TAGS_FLAGS & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
+            "SELECT $TAGS_ID_COLUMN FROM $TAGS_TABLE WHERE ( ( $TAGS_FLAGS_COLUMN & ${TagEntity.HIDDEN} ) = 0 " +
+            "AND ( $TAGS_FLAGS_COLUMN & ${TagEntity.SELECTED} ) ${if (it) "==" else "!="} 0 )"
         }
     }
 }

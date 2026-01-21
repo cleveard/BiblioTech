@@ -3,7 +3,6 @@ package com.github.cleveard.bibliotech.ui.bookshelves
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
 import android.widget.TextView
 import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.DiffUtil
@@ -39,14 +38,21 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
             }
     }
 
+    /**
+     * Toggle the tag link for a bookshelf
+     */
     abstract suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag)
 
+    /**
+     * Process a refresh clicked button press
+     */
     abstract suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton)
 
     /**
-     * ViewHolder for the adapter. Just the same as the Recycler ViewHolder
+     * ViewHolder for the adapter.
      */
     internal class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        /** The bookshelf displayed in the view */
         var shelf: BookshelfAndTag? = null
     }
 
@@ -95,7 +101,7 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
                     scope.launch {
                         toggleTagAndBookshelfLink(shelf)
                         button.isChecked = shelf.tag != null
-                        notifyItemChanged(holder.layoutPosition)
+                        notifyItemChanged(holder.bindingAdapterPosition)
                     }
                 }
             }
@@ -106,7 +112,7 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
                 holder.shelf?.let { shelf ->
                     scope.launch {
                         onRefreshClicked(shelf, button)
-                        notifyItemChanged(holder.layoutPosition)
+                        notifyItemChanged(holder.bindingAdapterPosition)
                     }
                 }
             }
@@ -114,6 +120,7 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
+        // When view is recycled, clear the click listeners.
         holder.itemView.findViewById<MaterialButton>(R.id.refresh_shelf).setOnClickListener(null)
         holder.itemView.findViewById<MaterialButton>(R.id.linked).setOnClickListener(null)
     }

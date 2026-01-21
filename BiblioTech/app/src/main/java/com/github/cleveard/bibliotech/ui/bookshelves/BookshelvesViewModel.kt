@@ -1,7 +1,8 @@
 package com.github.cleveard.bibliotech.ui.bookshelves
 
 import android.app.Application
-import android.icu.util.Calendar
+import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.room.withTransaction
@@ -11,36 +12,70 @@ import com.github.cleveard.bibliotech.db.BookAndAuthors
 import com.github.cleveard.bibliotech.db.BookDatabase
 import com.github.cleveard.bibliotech.db.BookRepository
 import com.github.cleveard.bibliotech.db.BookshelfAndTag
-import com.github.cleveard.bibliotech.db.BookshelfEntity
-import com.github.cleveard.bibliotech.db.ShelfVolumeIdsEntity
+import com.github.cleveard.bibliotech.db.Bookshelf
 import com.github.cleveard.bibliotech.db.TagEntity
 import com.github.cleveard.bibliotech.db.UndoTransactionEntity
 import com.github.cleveard.bibliotech.gb.GoogleBookLookup
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * View model for the BookshelvesFragment
+ */
 internal class BookshelvesViewModel(private val app: Application) : AndroidViewModel(app) {
+    /**
+     * Interface for progress dialog when refreshing shelves
+     */
     interface Progress {
+        /** Number of books being updated on a shelf. Update at the start of each shelf. */
         var bookCount: Int
+        /** Number of shelves being updated. Update at the start of the refresh */
         var shelfCount: Int
+        /** Flag indicating whether the refresh has been canceled. */
+        val canceled: Boolean
+
+        /**
+         * Show the progress dialog
+         */
         suspend fun show()
+        /**
+         * Dismiss the progress dialog
+         */
         fun dismiss()
+        /**
+         * Cancel the progress dialog
+         */
         fun cancel()
+        /**
+         * Start processing next shelf
+         */
         fun nextShelf(shelf: String)
+        /**
+         * Start processing next book
+         */
         fun nextBook()
+        /**
+         * Run code in the main thread with a context
+         */
+        suspend fun runForUI(block: (context: Context) -> Unit)
     }
 
+    /** Flag for refreshing books on a shelf, when refreshing shelves */
     enum class RefreshBooks {
+        // Don't update the books
         NEVER,
+        // Always update the books
         ALWAYS,
+        // Only update if the google reports the books have changed.
         IF_OUT_OF_DATE
     }
 
     /**
-     * Repository with the tag data
+     * Repository with the bookshelf data
      */
     val repo: BookRepository = BookRepository.repo
 
@@ -49,6 +84,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
     /**
      * Undo list
+     * Used to maintain undo/redo menu items.
      */
     val undoList: LiveData<List<UndoTransactionEntity>> = repo.getUndoList()
 
@@ -63,15 +99,18 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
     /**
      * Refresh the bookshelves table from google books
      * @param auth The credentials to access google books
+     * @param refreshBooks Flag to indicate when to refresh the books on the shelf
+     * @param progress Interface for the progress dialog
+     * @param handleConflicts Callback to handle conflicting book updates
      */
     suspend fun refreshBookshelves(
         auth: BookCredentials,
         refreshBooks: RefreshBooks = RefreshBooks.IF_OUT_OF_DATE,
         progress: Progress? = null,
-        handleConflicts: suspend BookshelfEntity.(conflicts: List<BookAndAuthors>, addedToShelf: Int) -> Boolean
+        handleConflicts: suspend Bookshelf.(conflicts: List<BookAndAuthors>, addedToShelf: Int) -> Boolean
     ) {
         // List of shelves from google books sorted by title
-        val googleShelfList: MutableList<BookshelfEntity>?
+        val googleShelfList: MutableList<Bookshelf>?
         // List of shelves from the database sorted by title
         val localShelfList: MutableList<BookshelfAndTag>
 
@@ -99,18 +138,24 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
             }.size
         }
 
+        // Process all of the updates as a trasaction
         BookDatabase.db.withTransaction {
             // This operation is undoable
             repo.withUndo(app.applicationContext.getString(R.string.refresh)) {
                 // Current shelf from google. Remove it from the list
-                var gbs: BookshelfEntity? = googleShelfList?.removeLastOrNull()
+                var gbs: Bookshelf? = googleShelfList?.removeLastOrNull()
                 // Current shelf from the database. Remove it from the list
                 var lbs: BookshelfAndTag? = localShelfList.removeLastOrNull()
 
                 // Loop until the end of the list
                 while (lbs != null || gbs != null) {
+                    // Stop if the progress dialog is canceled
+                    if (progress?.canceled == true)
+                        return@withUndo
+
                     // compare the current book shelf ids
                     when {
+                        // If the google book shelf ids are the same
                         lbs?.bookshelf?.bookshelfId == gbs?.bookshelfId -> {
                             // Update local bookshelf with data from google
                             refreshShelfAndBooks(auth, lbs!!, gbs!!, refreshBooks, progress, handleConflicts)
@@ -119,6 +164,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             lbs = localShelfList.removeLastOrNull()
                         }
 
+                        // New shelf from google
                         lbs == null || lbs.bookshelf.bookshelfId < gbs!!.bookshelfId -> {
                             progress?.nextShelf(gbs!!.title)
                             // Add google bookshelf to database
@@ -127,6 +173,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             gbs = googleShelfList?.removeLastOrNull()
                         }
 
+                        // Missing shelf from google
                         else -> {
                             progress?.nextShelf(lbs.bookshelf.title)
                             // Update the shelf
@@ -140,12 +187,20 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         }
     }
 
+    /**
+     * Refresh the books on a single shelf
+     * @param auth The credentials to access google books
+     * @param shelf The bookshelf to update
+     * @param tag The tag linked to the bookshelf
+     * @param progress Interface for the progress dialog
+     * @param handleConflicts Callback to handle conflicting book updates
+     */
     private suspend fun refreshBooksOnShelves(
         auth: BookCredentials,
-        shelf: BookshelfEntity,
+        shelf: Bookshelf,
         tag: TagEntity,
         progress: Progress? = null,
-        handleConflicts: suspend BookshelfEntity.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
+        handleConflicts: suspend Bookshelf.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
     ): Boolean {
         // When we refresh books on shelves we perform a 3-way merge of the books currently on the shelf
         // and the books tagged by the linked tag. But, we also need to account for the fact google books
@@ -158,19 +213,21 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
         // Collect the data we need for the 3 way merge
         // The current volumes on the shelf in google books. The map maps volume id to the book
-        val currentShelfMap: Map<String, BookAndAuthors> = lookup.getBookshelfBooksMap(auth, shelf.bookshelfId)
+        val currentShelfMap: Map<String, BookAndAuthors>
+        try {
+            currentShelfMap = lookup.getBookshelfBooksMap(auth, shelf.bookshelfId)
+        } catch(_: GoogleJsonResponseException){
+            progress?.runForUI {
+                Toast(it).apply {
+                    duration = Toast.LENGTH_LONG
+                    setText(it.resources.getString(R.string.books_not_available, shelf.title))
+                    show()
+                }
+            }
+            return true
+        }
         // Get the set of volumes ids when we last update the books on the shelf
-        val lastShelfVolumes = shelf.volumesId?.let { repo.getShelfVolumeIds(it) }
-        // Get the set of volume id from google on the shelf
-        val lastShelfSet = mutableSetOf<String>().apply {
-            lastShelfVolumes?.commonVolumes?.let { addAll(it) }
-            lastShelfVolumes?.volumesOnlyOnShelf?.let { addAll(it) }
-        }
-        // The volume ids of the books tagged by the linked tag the last time we merged
-        val lastDbSet = mutableSetOf<String>().apply {
-            lastShelfVolumes?.commonVolumes?.let { addAll(it) }
-            lastShelfVolumes?.volumesOnlyTagged?.let { addAll(it) }
-        }
+        val lastShelfSet = repo.getLastShelfVolumes(shelf.id)
         // The current books tagged by the linked tag. The map maps volume id to the book
         // Filter out books that aren't from google books and don't have a volume id
         val curDbMap: Map<String, BookAndAuthors> = repo.getTaggedBooks(tag.id)
@@ -179,40 +236,21 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
         // Figure out what changed
         // Map of books currently on the shelf that were not supposed to be there the last time we merged
-        val tagInDb = (currentShelfMap - lastDbSet).toMutableMap()
+        val tagInDb = ((currentShelfMap - lastShelfSet) - curDbMap.keys).toMutableMap()
         // Volume ids of books not on the shelf that were the last time we merged
-        val untagInDb = (lastShelfSet - currentShelfMap.keys).toMutableSet()
+        val untagInDb = (lastShelfSet - currentShelfMap.keys).intersect(curDbMap.keys).toMutableSet()
         // Map of books tagged by the linked tag since the last merge
-        val addToShelf = (curDbMap - lastDbSet).toMutableMap()
+        val addToShelf = ((curDbMap - lastShelfSet) - currentShelfMap.keys).toMutableMap()
         // Volume ids of books tagged when we merged last that are no longer tagged
-        val deleteFromShelf = (lastDbSet - curDbMap.keys).toMutableSet()
-
-        // If the books downloaded from haven't changed in a while, then we will
-        // assume that google has finished any updates it was working on
-        val now = Calendar.getInstance().timeInMillis
-        if (currentShelfMap == lastShelfSet) {
-            val time = shelf.booksDownloadLastChanged ?: now.also { shelf.booksDownloadLastChanged = it }
-            if (now - time >= UNCHANGED_TIME_LIMIT) {
-                currentShelfMap.values.forEach { book ->
-                    if (!curDbMap.containsKey(book.book.volumeId!!))
-                        tagInDb[book.book.volumeId!!] = book
-                }
-                curDbMap.values.forEach {book ->
-                    if (!currentShelfMap.containsKey(book.book.volumeId!!))
-                        untagInDb.add(book.book.volumeId!!)
-                }
-            }
-        } else
-            shelf.booksDownloadLastChanged = now
-
+        val deleteFromShelf = (lastShelfSet - curDbMap.keys).intersect(currentShelfMap.keys).toMutableSet()
 
         // Conflicts arise when books added in the shelf were untagged in the db
         // or books tagged in the db were removed from the shelf. The books currently
         // in the shelf are not selected by default and We select all the
         // books tagged in the db, which will make the conflict resolution favor
         // the db changes over the changed on google books.
-        val newForShelf = addToShelf.filterKeys { it in untagInDb }.values.toList()
-        val conflicts = newForShelf + tagInDb.filterKeys { it in deleteFromShelf }.values.toList()
+        val newForShelf = tagInDb.filterKeys { it in deleteFromShelf }.values.toList()
+        val conflicts = newForShelf + addToShelf.filterKeys { it in untagInDb }.values.toList()
         // If we have some conflicts, then show them to the user and let
         // them decide which ones to keep.
         if (conflicts.isNotEmpty()) {
@@ -236,88 +274,107 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
             }
         }
 
-        progress?.bookCount = tagInDb.size + untagInDb.size + addToShelf.size + deleteFromShelf.size
+        // The number of books being updated
+        val totalCount = tagInDb.size + untagInDb.size + addToShelf.size + deleteFromShelf.size
+        var finished = true
+        val nextShelfSet = lastShelfSet.toMutableSet()
+        // Nothing to do if no books changed
+        if (totalCount != 0) {
+            progress?.bookCount = totalCount
 
-        // Temp storage for book and tag id
-        val bookId = arrayOf<Any>(0)
-        val tagId = arrayOf<Any>(tag.id)
+            // Temp storage for book and tag id
+            val bookId = arrayOf<Any>(0)
+            val tagId = arrayOf<Any>(tag.id)
 
-        coroutineScope {
-            // Run db updates and google shelf updates in parallel
-            launch {
-                // Tag new volumes from the bookshelf
-                tagInDb.values.forEach { book ->
-                    progress?.nextBook()
-                    // If we do have the book, then tag it
-                    repo.getBookIdByVolumeId(book.book.sourceId!!, book.book.volumeId!!)?.let {
-                        // Make sure it isn't already tagged
-                        if (!curDbMap.containsKey(book.book.volumeId)) {
-                            bookId[0] = it
-                            repo.addTagsToBooks(bookId, tagId, null)
+            coroutineScope {
+                // Run db updates and google shelf updates in parallel
+                launch {
+                    // Tag new volumes from the bookshelf
+                    finished = tagInDb.values.firstOrNull { book ->
+                        (progress?.canceled == true).apply {
+                            progress?.nextBook()
+                            // If we do have the book, then tag it
+                            repo.getBookIdByVolumeId(book.book.sourceId!!, book.book.volumeId!!)?.let {
+                                // Make sure it isn't already tagged
+                                if (!curDbMap.containsKey(book.book.volumeId)) {
+                                    bookId[0] = it
+                                    repo.addTagsToBooks(bookId, tagId, null)
+                                }
+                            } ?: run {
+                                // We don't have the book, so add it with the book already tagged
+                                book.tags = listOf(tag)
+                                repo.addOrUpdateBook(book) { true }
+                            }
+                            // Add the book to the last set of tagged books
+                            nextShelfSet.add(book.book.volumeId!!)
                         }
-                    } ?: run {
-                        // We don't have the book, so add it with the book already tagged
-                        book.tags = listOf(tag)
-                        repo.addOrUpdateBook(book) { true }
-                    }
-                }
+                    } != null && finished
 
-                // Untag volumes removed from the bookshelf
-                untagInDb.forEach { volumeId ->
-                    progress?.nextBook()
-                    // Make sure the volume came from google books, we don't mess with
-                    // books not in google books
-                    repo.getBookIdByVolumeId(GoogleBookLookup.kSourceId, volumeId)?.let {
-                        // Ok we got the id. If it is tagged, then remove the tag
-                        if (curDbMap.containsKey(volumeId)) {
-                            bookId[0] = it
-                            repo.removeTagsFromBooks(bookId, tagId, null)
+                    // Untag volumes removed from the bookshelf
+                    finished = untagInDb.firstOrNull { volumeId ->
+                        (progress?.canceled == true).apply {
+                            progress?.nextBook()
+                            // Make sure the volume came from google books, we don't mess with
+                            // books not in google books
+                            repo.getBookIdByVolumeId(GoogleBookLookup.kSourceId, volumeId)?.let {
+                                // Ok we got the id. If it is tagged, then remove the tag
+                                if (curDbMap.containsKey(volumeId)) {
+                                    bookId[0] = it
+                                    repo.removeTagsFromBooks(bookId, tagId, null)
+                                }
+                            }
+                            // remove volume from the last set of tagged books
+                            nextShelfSet.remove(volumeId)
                         }
-                    }
-                }
-            }
-
-            launch {
-                // Remove volumes from the shelf
-                deleteFromShelf.forEach {
-                    progress?.nextBook()
-                    lookup.deleteVolumeFromShelf(auth, shelf.bookshelfId, it)
+                    } != null && finished
                 }
 
-                addToShelf.values.forEach {
-                    progress?.nextBook()
-                    lookup.addVolumeToShelf(auth, shelf.bookshelfId, it.book.volumeId!!)
+                launch {
+                    // Remove volumes from the shelf that were untagged
+                    finished = deleteFromShelf.firstOrNull {
+                        (progress?.canceled == true).apply {
+                            progress?.nextBook()
+                            lookup.deleteVolumeFromShelf(auth, shelf.bookshelfId, it)
+                            nextShelfSet.remove(it)
+                        }
+                    } != null && finished
+
+                    // Add volumes to the shelf that were tagged
+                    finished = addToShelf.values.firstOrNull {
+                        (progress?.canceled == true).apply {
+                            progress?.nextBook()
+                            lookup.addVolumeToShelf(auth, shelf.bookshelfId, it.book.volumeId!!)
+                            nextShelfSet.add(it.book.volumeId!!)
+                        }
+                    } != null && finished
                 }
             }
         }
 
-        // If the set of volumes changes, then we will update them
-        if (lastDbSet != curDbMap.keys || lastShelfSet != currentShelfMap.keys) {
-            // Both current sets are empty, just make the volumes Id null
-            if (curDbMap.isEmpty() && currentShelfMap.isEmpty())
-                shelf.volumesId = null
-            else {
-                val common = currentShelfMap.keys.intersect(curDbMap.keys)
-                shelf.volumesId = repo.addShelfVolumeIds(
-                    ShelfVolumeIdsEntity(
-                        id = 0L,
-                        commonVolumes = common,
-                        volumesOnlyOnShelf = currentShelfMap.keys - common,
-                        volumesOnlyTagged = curDbMap.keys - common
-                    )
-                )
-            }
-        }
+        // Only update the last update time, if we finished the update
+        if (finished)
+            shelf.booksLastUpdate = shelf.booksModified
 
-        return true
+        // Update the last shelf volumes - needed to resume the refresh if canceled
+        repo.updateLastShelfVolumes(shelf.id, shelf.booksLastUpdate, nextShelfSet)
+
+        return finished
     }
 
+    /**
+     * Refresh the shelf and books for a single shelf
+     * @param auth The credentials to access google books
+     * @param shelf The bookshelf and linked tag for the shelf
+     * @param refreshBooks Flag to indicate when to refresh the books on the shelf
+     * @param progress Interface for the progress dialog
+     * @param handleConflicts Callback to handle conflicting book updates
+     */
     suspend fun refreshShelfAndBooks(
         auth: BookCredentials,
         shelf: BookshelfAndTag,
         refreshBooks: RefreshBooks,
         progress: Progress? = null,
-        handleConflicts: suspend BookshelfEntity.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
+        handleConflicts: suspend Bookshelf.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
     ) {
         // Get the list from google. Run this on an IO thread
         withContext(Dispatchers.IO) {
@@ -332,18 +389,22 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
     /**
      * Refresh a single book shelf
-     * @param shelf The bookshelf to refresh
+     * @param auth The credentials to access google books
+     * @param shelf The bookshelf and linked tag for the shelf
      * @param from The bookshelf from google books
-     * @param refreshBooks Condition to use to refresh books on the shelf
+     * @param refreshBooks Flag to indicate when to refresh the books on the shelf
+     * @param progress Interface for the progress dialog
+     * @param handleConflicts Callback to handle conflicting book updates
      */
     private suspend fun refreshShelfAndBooks(
         auth: BookCredentials,
         shelf: BookshelfAndTag,
-        from: BookshelfEntity,
+        from: Bookshelf,
         refreshBooks: RefreshBooks = RefreshBooks.IF_OUT_OF_DATE,
         progress: Progress? = null,
-        handleConflicts: suspend BookshelfEntity.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
+        handleConflicts: suspend Bookshelf.(conflicts: List<BookAndAuthors>, addedToShelfCount: Int) -> Boolean
     ) {
+        // Let progress know we are starting the next shelf
         progress?.nextShelf(shelf.bookshelf.title)
 
         // Something change update the local shelf
@@ -363,28 +424,26 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         // and tags for the shelf.
         shelf.tag?.let {tag ->
             if (refreshBooks == RefreshBooks.ALWAYS || (refreshBooks == RefreshBooks.IF_OUT_OF_DATE  && from.booksModified > shelf.bookshelf.booksLastUpdate)) {
-                refreshBooksOnShelves(auth, shelf.bookshelf, tag, progress, handleConflicts)
-                shelf.bookshelf.booksLastUpdate = from.booksModified
+                if (refreshBooksOnShelves(auth, shelf.bookshelf, tag, progress, handleConflicts))
+                    shelf.bookshelf.booksLastUpdate = from.booksModified
             }
         }
 
         // Update the database
         // If the name of the bookshelf changes, then unlink the tag
         // which updates the database, or just update it
-        shelf.tag?.let {tag ->
-            if (shelf.bookshelf.title != from.title) {
-                repo.toggleTagAndBookshelfLink(shelf)
-            } else
-                null
-        } ?: repo.updateBookshelf(shelf.bookshelf)
+        if (shelf.bookshelf.title != from.title && shelf.tag != null)
+            toggleTagAndBookshelfLink(shelf)
+
+        // Update the shelf
+        repo.updateBookshelf(shelf.bookshelf)
     }
 
     companion object {
-        private const val UNCHANGED_TIME_LIMIT = 600000    // If google doesn't change for a minute
         // Check for changes. Don't use == because the tag id and
         // some flag bits don't matter, and the modified and booksModified
         // times are not reliable
-        fun BookshelfEntity.changed(from: BookshelfEntity): Boolean {
+        fun Bookshelf.changed(from: Bookshelf): Boolean {
             return this.title != from.title
                 || this.description != from.description
                 || this.selfLink != from.selfLink
