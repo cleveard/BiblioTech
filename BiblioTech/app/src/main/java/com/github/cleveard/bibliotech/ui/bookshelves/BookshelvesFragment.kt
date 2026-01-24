@@ -125,8 +125,31 @@ class BookshelvesFragment : Fragment() {
             shelvesViewModel.repo.getShelves()
         }
         val adapter = object: BookshelvesAdapter(shelvesViewModel.viewModelScope) {
-            override suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
-                shelvesViewModel.toggleTagAndBookshelfLink(shelf)
+            override suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag): Boolean {
+                val clearShelf = if (shelf.tag != null) {
+                    shelvesViewModel.viewModelScope.coroutineAlert(requireContext(), { 0 }) { alert ->
+                        alert.builder
+                            .setPositiveButton(R.string.yes, null)
+                            .setNegativeButton(R.string.no, null)
+                            .setTitle(R.string.unlink_shelf)
+                            .setMessage(R.string.clear_shelf_question)
+                    }.setPosListener { alert, _, _ ->
+                        alert.result = 2
+                        true
+                    }.setNegListener { alert, _, _ ->
+                        alert.result = 1
+                        true
+                    }.show()
+                } else
+                    1
+                return if (clearShelf > 0)
+                    shelvesViewModel.toggleTagAndBookshelfLink(
+                        requireActivity() as BookCredentials,
+                        shelf,
+                        clearShelf > 1,
+                        if (clearShelf > 1) ProgressDialog() else null)
+                else
+                    false
             }
 
             override suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton) {
@@ -412,7 +435,7 @@ class BookshelvesFragment : Fragment() {
         /**
          * Show the progress bar while running a code block
          */
-        suspend fun run(block: suspend (progress: BookshelvesViewModel.Progress) -> Unit) {
+        override suspend fun run(block: suspend (progress: BookshelvesViewModel.Progress) -> Unit) {
             try {
                 show()
                 block(this)

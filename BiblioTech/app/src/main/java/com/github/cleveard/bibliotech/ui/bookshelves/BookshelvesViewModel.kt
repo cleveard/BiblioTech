@@ -39,6 +39,10 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         val canceled: Boolean
 
         /**
+         * Show the progress bar while running a code block
+         */
+        suspend fun run(block: suspend (progress: Progress) -> Unit)
+        /**
          * Show the progress dialog
          */
         suspend fun show()
@@ -90,10 +94,55 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
     /**
      * Toggle whether a bookshelf is linked to a tag
+     * @param auth The credentials to access google books
      * @param shelf The the bookshelf amd tag to be updated
+     * @param clearShelf Set to true to clear the bookshelf when we unlink
+     * @return True if the toggle completed. False if it was canceled.
      */
-    suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag) {
-        repo.toggleTagAndBookshelfLink(shelf)
+    suspend fun toggleTagAndBookshelfLink(
+        auth: BookCredentials,
+        shelf: BookshelfAndTag,
+        clearShelf: Boolean,
+        progress: Progress?
+    ): Boolean {
+        // Keep track of whether we finish the clearing the shelf
+        var finished = true
+        // Don't try to clear the shelf, if we are making the link
+        if (shelf.tag != null && clearShelf) {
+            // Get the books on the shelf - we only need the volume id
+            val books = lookup.getBookshelfBooksMap(auth, shelf.bookshelf.bookshelfId).values.mapNotNull { it.book.volumeId }
+            val lastVolumes = repo.getLastShelfVolumes(shelf.bookshelf.id).toMutableSet()
+            if (books.isNotEmpty()) {
+                // We have some books to clear
+                try {
+                    // Show the progress dialog and set it up
+                    progress?.show()
+                    progress?.shelfCount = 1
+                    progress?.nextShelf(shelf.bookshelf.title)
+                    progress?.bookCount = books.size
+                    // Delete books until we are canceled, or finished
+                    // We are finished when firstOrNull returns null
+                    finished = books.firstOrNull { volume ->
+                        (progress?.canceled == true).apply {
+                            // Delete the next book
+                            progress?.nextBook()
+                            lookup.deleteVolumeFromShelf(auth, shelf.bookshelf.bookshelfId, volume)
+                            lastVolumes.remove(volume)
+                        }
+
+                    } == null
+                } finally {
+                    // Dismiss the progress dialog
+                    progress?.dismiss()
+                }
+                // Update the lastShelfVolumes
+                repo.updateLastShelfVolumes(shelf.bookshelf.id, shelf.bookshelf.booksLastUpdate, lastVolumes)
+            }
+        }
+        // If we finished unlink the shelf
+        if (finished)
+            repo.toggleTagAndBookshelfLink(shelf)
+        return finished
     }
 
     /**
@@ -138,7 +187,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
             }.size
         }
 
-        // Process all of the updates as a trasaction
+        // Process all of the updates as a transaction
         BookDatabase.db.withTransaction {
             // This operation is undoable
             repo.withUndo(app.applicationContext.getString(R.string.refresh)) {
@@ -236,13 +285,25 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
 
         // Figure out what changed
         // Map of books currently on the shelf that were not supposed to be there the last time we merged
-        val tagInDb = ((currentShelfMap - lastShelfSet) - curDbMap.keys).toMutableMap()
+        val tagInDb = (currentShelfMap - lastShelfSet).toMutableMap()
         // Volume ids of books not on the shelf that were the last time we merged
         val untagInDb = (lastShelfSet - currentShelfMap.keys).intersect(curDbMap.keys).toMutableSet()
         // Map of books tagged by the linked tag since the last merge
-        val addToShelf = ((curDbMap - lastShelfSet) - currentShelfMap.keys).toMutableMap()
+        val addToShelf = (curDbMap - lastShelfSet).toMutableMap()
         // Volume ids of books tagged when we merged last that are no longer tagged
         val deleteFromShelf = (lastShelfSet - curDbMap.keys).intersect(currentShelfMap.keys).toMutableSet()
+
+        // Remove the volumes already tagged or on the shelf that we want to tag or add
+        // Put those volumes in the nextShelfSet, because they already agree
+        val nextShelfSet = lastShelfSet.toMutableSet()
+        // Add already tagged volumes to nextShelfSet, and remove them from the
+        // books we want to tag
+        nextShelfSet.addAll(tagInDb.keys.intersect(curDbMap.keys))
+        curDbMap.keys.forEach { tagInDb.remove(it) }
+        // Add books already on the shelf to the nextShelfSet and remove them from
+        // the volumes we want to add to the shelf
+        nextShelfSet.addAll(addToShelf.keys.intersect(currentShelfMap.keys))
+        currentShelfMap.keys.forEach { addToShelf.remove(it) }
 
         // Conflicts arise when books added in the shelf were untagged in the db
         // or books tagged in the db were removed from the shelf. The books currently
@@ -277,7 +338,6 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         // The number of books being updated
         val totalCount = tagInDb.size + untagInDb.size + addToShelf.size + deleteFromShelf.size
         var finished = true
-        val nextShelfSet = lastShelfSet.toMutableSet()
         // Nothing to do if no books changed
         if (totalCount != 0) {
             progress?.bookCount = totalCount
@@ -433,7 +493,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
         // If the name of the bookshelf changes, then unlink the tag
         // which updates the database, or just update it
         if (shelf.bookshelf.title != from.title && shelf.tag != null)
-            toggleTagAndBookshelfLink(shelf)
+            repo.toggleTagAndBookshelfLink(shelf)
 
         // Update the shelf
         repo.updateBookshelf(shelf.bookshelf)

@@ -41,7 +41,7 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
     /**
      * Toggle the tag link for a bookshelf
      */
-    abstract suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag)
+    abstract suspend fun toggleTagAndBookshelfLink(shelf: BookshelfAndTag): Boolean
 
     /**
      * Process a refresh clicked button press
@@ -99,9 +99,10 @@ internal abstract class BookshelvesAdapter(private val scope: CoroutineScope) :
             button.setOnClickListener {
                 holder.shelf?.let {shelf ->
                     scope.launch {
-                        toggleTagAndBookshelfLink(shelf)
-                        button.isChecked = shelf.tag != null
-                        notifyItemChanged(holder.bindingAdapterPosition)
+                        if (toggleTagAndBookshelfLink(shelf)) {
+                            button.isChecked = shelf.tag != null
+                            notifyItemChanged(holder.bindingAdapterPosition)
+                        }
                     }
                 }
             }
