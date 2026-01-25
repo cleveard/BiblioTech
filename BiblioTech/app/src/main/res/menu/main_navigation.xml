@@ -15,7 +15,7 @@
             android:title="@string/menu_scan" />
         <item
             android:id= "@+id/action_nav_to_bookshelvesFragment"
-            android:icon="@android:drawable/ic_menu_help"
+            android:icon="@drawable/ic_menu_bookshelves"
             android:title="@string/menu_bookshelves" />
         <item
             android:id="@+id/action_nav_books_to_exportImportFragment"
