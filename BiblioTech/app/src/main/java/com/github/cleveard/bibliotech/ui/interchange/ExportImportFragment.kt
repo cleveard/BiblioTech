@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Spinner
+import android.widget.Switch
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -119,9 +120,14 @@ class ExportImportFragment : Fragment() {
         /**
          * Quote a string for CSV output
          */
-        private fun String?.quoteForCSV(): String {
-            return if (this?.contains(quote) == true)
+        private fun String?.quoteForCSV(addTab: Boolean): String {
+            // If the string has any quote, comma or newline characters then quote it
+            return if (this?.any { it == '"' || it == ',' || it == '\n' } == true)
                 "\"${replace("\"", "\"\"")}\""
+            // If the string is all digits, then prepend a tab which makes excel treat it as text
+            else if (addTab && this?.isNotEmpty() == true && this.all { it.isDigit() } == true)
+                "\t$this"
+            // Otherwise use the string as is
             else
                 this?: ""
         }
@@ -428,6 +434,8 @@ class ExportImportFragment : Fragment() {
      */
     private fun exportBooks(path: Uri) {
         viewModel.viewModelScope.launch {
+            // Remember whether to add tabs or not
+            val addTab = view?.findViewById<Switch>(R.id.add_tabs)?.isChecked() == true
             // Get the book filter for the export
             val bookFilter = viewModel.exportCount.awaitForResult(viewModel.exportCount.generationFlow)
             // Get the PageSource for the books
@@ -459,7 +467,7 @@ class ExportImportFragment : Fragment() {
                         for (i in exportBookColumns.indices) {
                             if (i > 0)
                                 stream.write(",")
-                            val s = exportBookColumns[i].getValue.invoke(b, j).quoteForCSV()
+                            val s = exportBookColumns[i].getValue.invoke(b, j).quoteForCSV(addTab)
                             stream.write(s)
                         }
                         stream.write("\n")
@@ -480,6 +488,8 @@ class ExportImportFragment : Fragment() {
      */
     private fun exportFilters(path: Uri) {
         viewModel.viewModelScope.launch {
+            // Remember whether to add tabs or not
+            val addTab = view?.findViewById<Switch>(R.id.add_tabs)?.isChecked() == true
             doExport(path) {stream ->
                 // Get the list of filters
                 viewModel.repo.getViewNames().getLive()?.let {viewList ->
@@ -502,7 +512,7 @@ class ExportImportFragment : Fragment() {
                             for (i in exportViewColumns.indices) {
                                 if (i > 0)
                                     stream.write(",")
-                                val s = exportViewColumns[i].getValue.invoke(v, 0).quoteForCSV()
+                                val s = exportViewColumns[i].getValue.invoke(v, 0).quoteForCSV(addTab)
                                 stream.write(s)
                             }
                             stream.write("\n")
@@ -631,7 +641,7 @@ class ExportImportFragment : Fragment() {
             // Read each field and add it to the list
             val builder = StringBuilder()
             while (nextField(builder)) {
-                list.add(builder.toString())
+                list.add(builder.toString().trim())
             }
             // return true if we are not at end of file or something was read
             return !eof || list.isNotEmpty()

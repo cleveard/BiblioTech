@@ -322,4 +322,5 @@
     <string name="books_not_available">The books on shelf \"%1$s\" are not available.</string>
     <string name="unlink_shelf">Unlink Shelf</string>
     <string name="clear_shelf_question">Do you also want to clear all books from this shelf?</string>
+    <string name="add_tab">Safely edit in spreadsheet</string>
 </resources>
