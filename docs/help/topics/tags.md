@@ -9,11 +9,11 @@ Tags are the main organizing method used by BiblioTech. You create tags and assi
 
 - Touch the green band at the bottom of the display and slide your finger toward the top of the display
 
-     ![Slide Up](../images/slide-up.png)
+     <img src=../images/slide-up.png alt="Slide Up" width="288">
 
 - Touch inside the tags windows and slide your finger down to close the slide-up
 
-     ![Slide Down](../images/slide-down.png)
+     <img src=../images/slide-down.png alt="Slide Down" width="288">
 </details>
 
 <a id="tags-toolbar"></a>
@@ -29,7 +29,7 @@ Tags are the main organizing method used by BiblioTech. You create tags and assi
 
 - ![Remove from Book](../images/remove-tags-from-books.png)<br>Remove the selected tags from the selected books
 
-- ![Set to Book](../images/replace-tags-in-books.png)<br>Set the tags for the selected books to be selected tags
+- ![Set to Book](../images/replace-tags-in-books.png)<br>Make the tags for the selected books the same as the selected tags
 
 - ![Deselect All](../images/deselect-all-tags.png)<br>Deselect all tags
 

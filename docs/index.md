@@ -4,11 +4,11 @@ description: A book tracking application
 ---
 # Welcome to BiblioTech
 
-BiblioTech is an application for keeping track of your books. It keeps a list of books you enter and allows you to organize, filter, sort and print the list.
+BiblioTech is an application for keeping track of your books. It keeps a list of books you enter and allows you to organize, filter, sort, export, import and print the list.
 
 ## Tags
 
-Tags are labels that you create and assign to your books. They are a way to organize your book list by giving books labels that are important to you. Tags can be assigned when you add books to you list. They can also be added to and removed from books already in you list.
+Tags are labels that you create and assign to your books. They are a way to organize your book list by giving books labels that are important to you. Tags can be assigned when you add books to your list. They can also be added to and removed from books already in your list.
 
 ## Filters
 
@@ -18,7 +18,7 @@ Filters can be named and saved, which will add them to your navigation pane to q
 
 ## Export and Import
 
-BiblioTech can export and import CSV files containing books or saved filters. You can filter the books exported using any of your saved filters.
+BiblioTech can export and import CSV files containing books or saved filters. You can filter the books exported using any of your saved filters. You can also limit the books exported to the currently selected books.
 
 ## Print
 

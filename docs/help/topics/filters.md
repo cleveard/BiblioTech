@@ -9,19 +9,21 @@ Filters are used to change the list of books currently displayed. You can change
 - Filter settings are in a pane on the right side of the display.
 - You can open the pane by swiping left on the right side of the display or touching the right side pane button in the toolbar
 
-     ![Right Side](../images/right-side-open.png)
+     <img src=../images/right-side-open.png alt="Right Side" width="288">
 
 - You can cllose the pane by touching the right side pane button or swiping the pane off the right side of the display
 
-     ![Right Side](../images/right-side-close.png)
+     <img src=../images/right-side-close.png alt="Right Side" width="288">
 </details>
-<details><summary><li>Add, remove and save filters</li></summary>
+<details><summary><li>Add, remove and save filters in the navigation pane</li></summary>
 <p><a id="add-filter"></a>
 
+You can keep filters that you use often in the navigation pane for easy access.
+
 - ![Remove Filter](../images/remove-filter.png)<br>
-Remove the current filter from the navigation pane<p>
+Remove the current filter from the navigation pane. When the filter is removed the **Books** activity is loaded.<p>
 - ![Add Filter](../images/add-filter.png)<br>
-Add a new filter to the navigation pane<p>
+Add a new filter to the navigation pane. The original filter you modified is not changed.<p>
 - ![Save Filter](../images/save-filter.png)<br>
 Save the current filter settings and update the display. This button also closes the filter pane.<p>
 </details>
@@ -37,11 +39,11 @@ Save the current filter settings and update the display. This button also closes
   - Category: Order by the book category
   - Tag: Order by the book tag
   - Added: Order by the date the book was added to your book list
-  - Modified: Order by the date the booko was last modified in your book list<p>
+  - Modified: Order by the date the book was last modified in your book list<p>
 
 - Touch the header switch to insert a header when the sort property changes in the list.
 
-     ![List Order](../images/list-order.png)
+     <img src=../images/list-order.png alt="List Order" width="288">
 
 - You can order by multiple properties. Use the **+** button to add additional properties
 - Remove order properties using the **-** button on the row for the property you want to remove
@@ -50,6 +52,7 @@ Save the current filter settings and update the display. This button also closes
 <details><summary><li>Select books to include</li></summary>
 <p><a id=""></a>
 
+- Use the **Selected Only** switch at the top of the list to either include all books or only selected books. This switch also works when printing and exporting the book list. **Selected Only** is not saved when you save a filter as a view.
 - Add a selection criteria by touching the **+** button in the **Filter Criteria** section of the pane
 - Select the property you want to use for selcting books
   - Any: Any property of the book
@@ -79,7 +82,7 @@ Save the current filter settings and update the display. This button also closes
 
 - Add the values used to select the books. Multiple values can be used.
 
-     ![Add Criterium](../images/set-filter.png)
+     <img src=../images/set-filter.png alt="Add Criterium" width="288">
 
 - Use the **+** button to add multiple criteria. All of the criteria need to be met to select a book.
 - Use the **-** button to remove a criterium
