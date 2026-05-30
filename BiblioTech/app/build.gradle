@@ -34,8 +34,8 @@ android {
         applicationId "com.github.cleveard.BiblioTech"
         minSdkVersion 26
         targetSdkVersion 36
-        versionCode 15
-        versionName "1.0.alpha16"
+        versionCode 16
+        versionName "1.0.alpha17"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
