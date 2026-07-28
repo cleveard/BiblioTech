@@ -8,6 +8,7 @@ import com.github.cleveard.bibliotech.BuildConfig
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.services.books.v1.Books as BooksService
 import com.google.api.client.extensions.android.json.AndroidJsonFactory
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
 import com.google.api.services.books.v1.BooksRequestInitializer
@@ -23,6 +24,7 @@ import java.util.*
 import kotlin.collections.ArrayDeque
 import kotlin.collections.ArrayList
 import kotlin.math.roundToInt
+import kotlin.random.Random
 
 /**
  * Class used to query books on books.google.com
@@ -43,7 +45,12 @@ internal class GoogleBookLookup {
      * @param list The list of item in the first page of the query. We immediately return these
      *             the first time we ask for the first page.
      */
-    private inner class BookQueryPagingSource(private val auth: BookCredentials, private val query: String, private var itemCount: Int = 0, private val list: List<BookAndAuthors>? = null):
+    private inner class BookQueryPagingSource(
+        private val auth: BookCredentials,
+        private val query: String,
+        private var itemCount: Int = 0,
+        private val list: List<BookAndAuthors>? = null,
+        private val backoff: ExponentialBackoffWithJitter):
         GoogleQueryPagingSource<BookAndAuthors, Any>(itemCount)
     {
         /**
@@ -52,12 +59,15 @@ internal class GoogleBookLookup {
          * @param loadSize The number of items to return
          * @return The result of the load
          */
-        override suspend fun runQuery(index: Long, loadSize: Long): LookupResult<BookAndAuthors>? {
+        override suspend fun runQuery(
+            index: Long,
+            loadSize: Long
+        ): LookupResult<BookAndAuthors>? {
             val result = if (index == 0L && list != null && itemCount != 0) {
                 // The first time we asl for page 0, return the list we already loaded
                 LookupResult(list, itemCount)
             } else {
-                generalLookup(auth, query, index, loadSize)
+                generalLookup(auth, query, index, loadSize, backoff = backoff)
             }
 
             // Set a temporary id for the books to be their position in the stream
@@ -144,8 +154,8 @@ internal class GoogleBookLookup {
     companion object {
         const val kSourceId = "books.google.com"
         private const val kISBNParameter = "isbn:%s"
-        private const val kTitleParameter = "title:\"%s\""
-        private const val kAuthorParameter = "author:\"%s\""
+        private const val kTitleParameter = "intitle:\"%s\""
+        private const val kAuthorParameter = "inauthor:\"%s\""
         private const val kBooksVolumes = "books#volumes"
         private const val kBooksVolume = "books#volume"
         private const val kBooksBookshelves = "books#bookshelves"
@@ -183,24 +193,30 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun lookupISBN(auth: BookCredentials, isbn: String): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        return queryBooks(auth, String.format(kISBNParameter, isbn))
+    suspend fun lookupISBN(
+        auth: BookCredentials,
+        isbn: String,
+        backoff: ExponentialBackoffWithJitter = ExponentialBackoffWithJitter()
+    ): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+        return queryBooks(auth, String.format(kISBNParameter, isbn), backoff = backoff)
     }
 
     /**
      * Get search terms for title and author lookup
-     * @param title The title to search for
-     * @param author The author to search for
+     * @param trimTitle The title to search for
+     * @param trimAuthor The author to search for
      * @return The query search terms
      */
     fun getTitleAuthorQuery(title: String, author: String): String {
-        return if (title.isNotEmpty()) {
-            if (author.isNotEmpty())
-                "${String.format(kTitleParameter, title)} ${String.format(kAuthorParameter, author)}"
+        val trimTitle = title.trim()
+        val trimAuthor = author.trim()
+        return if (trimTitle.isNotEmpty()) {
+            if (trimAuthor.isNotEmpty())
+                "${String.format(kTitleParameter, trimTitle)} ${String.format(kAuthorParameter, trimAuthor)}"
             else
-                String.format(kTitleParameter, title)
-        } else if (author.isNotEmpty())
-            String.format(kAuthorParameter, author)
+                String.format(kTitleParameter, trimTitle)
+        } else if (trimAuthor.isNotEmpty())
+            String.format(kAuthorParameter, trimAuthor)
         else
             ""
     }
@@ -213,8 +229,14 @@ internal class GoogleBookLookup {
      * @return The LookupResult for the query, or null
      */
     @Throws(LookupException::class)
-    suspend fun generalLookup(auth: BookCredentials, query: String, index: Long = 0, pageCount: Long = 10): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        return queryBooks(auth, query, index, pageCount.coerceAtMost(40L))
+    suspend fun generalLookup(
+        auth: BookCredentials,
+        query: String,
+        index: Long = 0,
+        pageCount: Long = 10,
+        backoff: ExponentialBackoffWithJitter = ExponentialBackoffWithJitter()
+    ): GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+        return queryBooks(auth, query, index, pageCount.coerceAtMost(40L), backoff = backoff)
     }
 
     /**
@@ -224,8 +246,14 @@ internal class GoogleBookLookup {
      * @param list The books in the first page of the query, if available
      * @return The PagingSource for the book in the query
      */
-    fun generalLookupPaging(auth: BookCredentials, search: String, itemCount: Int = 0, list: List<BookAndAuthors>? = null): PagingSource<Long, Any> {
-        return BookQueryPagingSource(auth, search, itemCount, list)
+    fun generalLookupPaging(
+        auth: BookCredentials,
+        search: String,
+        itemCount: Int = 0,
+        list: List<BookAndAuthors>? = null,
+        backoff: ExponentialBackoffWithJitter = ExponentialBackoffWithJitter()
+    ): PagingSource<Long, Any> {
+        return BookQueryPagingSource(auth, search, itemCount, list, backoff)
     }
 
     suspend fun getSeries(auth: BookCredentials, seriesId: String): SeriesEntity? {
@@ -496,24 +524,85 @@ internal class GoogleBookLookup {
      * Run a query and return a result
      */
     @Throws(LookupException::class)
-    private suspend fun queryBooks(auth: BookCredentials, query: String?, page: Long = 0, itemCount: Long = 10) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
-        return try {
-            val volumes: Volumes = execute(auth) {
-                service.volumes().list(query ?: "").apply {
-                    prettyPrint = true
-                    startIndex = page
-                    maxResults = itemCount
-                    oauthToken = it
+    private suspend fun queryBooks(
+        auth: BookCredentials,
+        query: String?,
+        page: Long = 0,
+        itemCount: Long = 10,
+        backoff: ExponentialBackoffWithJitter
+    ) : GoogleQueryPagingSource.LookupResult<BookAndAuthors>? {
+        backoff.reset()
+
+        while (true) {
+            try {
+                val volumes: Volumes = execute(auth) {
+                    service.volumes().list(query ?: "").apply {
+                        prettyPrint = true
+                        startIndex = page
+                        maxResults = (itemCount * (backoff.maxRetries - backoff.attempts) + backoff.maxRetries - 1) / backoff.maxRetries
+                        oauthToken = it
+                    }
                 }
+                // Parse the json object
+                return mapResponse(volumes)
+            } catch (e: GoogleJsonResponseException) {
+                if (e.statusCode != 503 || !backoff.backoff())
+                    throw LookupException("Unknown Error $e", e)
+            } catch (e: MalformedURLException) {
+                // Throw an exception if we formed a bad URL
+                throw LookupException("Bad URL: $query: $e", e)
+            } catch (e: Exception) {
+                // Pass on other exceptions
+                throw LookupException("Unknown Error $e", e)
             }
-            // Parse the json object
-            mapResponse(volumes)
-        } catch (e: MalformedURLException) {
-            // Throw an exception if we formed a bad URL
-            throw LookupException("Bad URL: $query: $e", e)
-        } catch (e: Exception) {
-            // Pass on other exceptions
-            throw LookupException("Unknown Error $e", e)
+        }
+    }
+
+    /**
+     * Class to handle backoff for queries
+     * @param baseBackoff The backoff for the first retry
+     * @param exponent The exponential factor for second and subsequent retries
+     * @param maxRetries The maximum number of retries
+     * @param maxDelay The maximum total delay for retries
+     */
+    class ExponentialBackoffWithJitter(
+        val baseBackoff: Int = 1000,
+        val exponent: Int = 2,
+        val maxRetries: Int = 5,
+        val maxDelay: Int = 30000
+    ) {
+        /** Number of attempts we have made */
+        var attempts = 0
+            private set
+        /** The total we have delaed */
+        var totalDelay = 0
+            private set
+        // The current max backoff
+        private var maxBackoff: Int = baseBackoff
+
+        fun reset() {
+            attempts = 0
+            totalDelay = 0
+            maxBackoff = baseBackoff
+        }
+
+        suspend fun backoff(): Boolean {
+            // Return false if we have exceeded the number of retries or delay
+            if (attempts >= maxRetries || totalDelay >= maxDelay)
+                return false
+            // One more attempt
+            ++attempts
+            // Exponentially increas the backoff
+            if (attempts > 1)
+                maxBackoff *= exponent
+            // Add jitter, limited to total delay is not exceeded
+            val backoff = Random.nextInt(0, maxBackoff).coerceAtMost(maxDelay - totalDelay)
+            // Track the total delay
+            totalDelay += backoff
+            // Delay next request
+            delay(backoff.toLong())
+            // Let call know to make the request
+            return true
         }
     }
 }
