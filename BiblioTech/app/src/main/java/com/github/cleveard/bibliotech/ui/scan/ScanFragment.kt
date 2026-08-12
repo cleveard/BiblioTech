@@ -758,6 +758,8 @@ class ScanFragment : Fragment() {
                     "Error finding book: $e",
                     Toast.LENGTH_LONG
                 ).show()
+            } catch(_: OAuth.AuthException) {
+                OAuth.toastAuthError(requireContext())
             }
         }
 
@@ -814,6 +816,8 @@ class ScanFragment : Fragment() {
                     // Add the book to the database
                     addBook(book)
                 }
+            } catch(_: OAuth.AuthException) {
+                OAuth.toastAuthError(requireContext())
             } catch (e: GoogleBookLookup.LookupException) {
                 // Display and error if we found one
                 Toast.makeText(

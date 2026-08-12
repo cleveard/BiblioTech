@@ -499,13 +499,12 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
          * Execute an action on google books
          */
         suspend fun <T> execute(action: suspend (String?) -> T): T {
-            if (!isAuthorized)
-                throw OAuth.AuthException("execute: Not authorized", googleBooksAuth.authorizationException)
-
-            try {
-                return googleBooksAuth.execute(action)
-            } catch (_: OAuth.AuthException) {
-                logout(false)
+            if (isAuthorized) {
+                try {
+                    return googleBooksAuth.execute(action)
+                } catch (_: OAuth.AuthException) {
+                    logout(false)
+                }
             }
 
             if (!login())

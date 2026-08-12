@@ -2,9 +2,11 @@ package com.github.cleveard.bibliotech.utils
 
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.emptyPreferences
+import com.github.cleveard.bibliotech.R
 import com.google.api.client.http.HttpResponseException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -191,5 +193,12 @@ abstract class OAuth(
             it.put(tokenKey, state.jsonSerializeString())
         }
         return state
+    }
+
+    companion object {
+        fun toastAuthError(context: Context) {
+            Toast.makeText(context, R.string.auth_error, Toast.LENGTH_LONG)
+                .show()
+        }
     }
 }

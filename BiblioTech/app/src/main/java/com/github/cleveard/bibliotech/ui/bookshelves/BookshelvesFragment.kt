@@ -32,6 +32,7 @@ import com.github.cleveard.bibliotech.db.BookshelfAndTag
 import com.github.cleveard.bibliotech.db.Bookshelf
 import com.github.cleveard.bibliotech.ui.books.BooksAdapterData
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
+import com.github.cleveard.bibliotech.utils.OAuth
 import com.github.cleveard.bibliotech.utils.ParentAccess
 import com.github.cleveard.bibliotech.utils.Thumbnails
 import com.github.cleveard.bibliotech.utils.coroutineAlert
@@ -89,16 +90,20 @@ class BookshelvesFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         shelvesViewModel.viewModelScope.launch {
-            // Make sure we are logged in, cancels coroutine if login fails
-            GoogleBookLoginFragment.login(this@BookshelvesFragment)
-
-            // Update the bookshelf list, but no books within the shelf.
-            shelvesViewModel.viewModelScope.launch {
-                shelvesViewModel.refreshBookshelves(
-                    requireActivity() as BookCredentials,
-                    BookshelvesViewModel.RefreshBooks.NEVER
-                ) { conflicts, addedToShelfCount ->
-                    handleConflicts(this, conflicts, addedToShelfCount)
+            // Make sure we are logged in
+            if (GoogleBookLoginFragment.login(this@BookshelvesFragment) == GoogleBookLoginFragment.LoginResult.SUCCEEDED) {
+                // Update the bookshelf list, but no books within the shelf.
+                shelvesViewModel.viewModelScope.launch {
+                    try {
+                        shelvesViewModel.refreshBookshelves(
+                            requireActivity() as BookCredentials,
+                            BookshelvesViewModel.RefreshBooks.NEVER
+                        ) { conflicts, addedToShelfCount ->
+                            handleConflicts(this, conflicts, addedToShelfCount)
+                        }
+                    } catch (_: OAuth.AuthException) {
+                        OAuth.toastAuthError(requireContext())
+                    }
                 }
             }
         }
@@ -154,13 +159,17 @@ class BookshelvesFragment : Fragment() {
 
             override suspend fun onRefreshClicked(shelf: BookshelfAndTag, button: MaterialButton) {
                 ProgressDialog().run {
-                    shelvesViewModel.refreshShelfAndBooks(
-                        requireActivity() as BookCredentials,
-                        shelf,
-                        BookshelvesViewModel.RefreshBooks.ALWAYS,
-                        it
-                    ) { conflicts, addedToShelfCount ->
-                        handleConflicts(this, conflicts, addedToShelfCount)
+                    try {
+                        shelvesViewModel.refreshShelfAndBooks(
+                            requireActivity() as BookCredentials,
+                            shelf,
+                            BookshelvesViewModel.RefreshBooks.ALWAYS,
+                            it
+                        ) { conflicts, addedToShelfCount ->
+                            handleConflicts(this, conflicts, addedToShelfCount)
+                        }
+                    } catch (_: OAuth.AuthException) {
+                        OAuth.toastAuthError(requireContext())
                     }
                 }
             }
@@ -189,12 +198,16 @@ class BookshelvesFragment : Fragment() {
             R.id.action_refresh -> {
                 shelvesViewModel.viewModelScope.launch {
                     ProgressDialog().run {
-                        shelvesViewModel.refreshBookshelves(
-                            requireActivity() as BookCredentials,
-                            BookshelvesViewModel.RefreshBooks.IF_OUT_OF_DATE,
-                            it
-                        ) { conflicts, addedToShelf ->
-                            handleConflicts(this, conflicts, addedToShelf)
+                        try {
+                            shelvesViewModel.refreshBookshelves(
+                                requireActivity() as BookCredentials,
+                                BookshelvesViewModel.RefreshBooks.IF_OUT_OF_DATE,
+                                it
+                            ) { conflicts, addedToShelf ->
+                                handleConflicts(this, conflicts, addedToShelf)
+                            }
+                        } catch (_: OAuth.AuthException) {
+                            OAuth.toastAuthError(requireContext())
                         }
                     }
                 }

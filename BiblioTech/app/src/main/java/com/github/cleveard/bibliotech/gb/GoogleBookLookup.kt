@@ -5,6 +5,7 @@ import androidx.paging.PagingState
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.BuildConfig
 import com.github.cleveard.bibliotech.db.*
+import com.github.cleveard.bibliotech.utils.OAuth
 import com.google.api.client.extensions.android.json.AndroidJsonFactory
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
@@ -553,6 +554,8 @@ internal class GoogleBookLookup {
             } catch (e: MalformedURLException) {
                 // Throw an exception if we formed a bad URL
                 throw LookupException("Bad URL: $query: $e", e)
+            } catch (e: OAuth.AuthException) {
+                throw e
             } catch (e: Exception) {
                 // Pass on other exceptions
                 throw LookupException("Unknown Error $e", e)

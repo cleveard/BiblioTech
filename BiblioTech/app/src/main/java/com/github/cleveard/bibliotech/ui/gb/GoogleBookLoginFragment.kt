@@ -97,7 +97,7 @@ class GoogleBookLoginFragment : DialogFragment() {
         /**
          * Login into google books for the fragment
          */
-        suspend fun login(frag: Fragment) {
+        suspend fun login(frag: Fragment): LoginResult {
             return suspendCoroutine {continuation ->
                 // Make sure initialization is finished
                 frag.requireView().post {
@@ -107,7 +107,7 @@ class GoogleBookLoginFragment : DialogFragment() {
                     (frag.requireActivity() as? BookCredentials)?.let {
                         // If we are authorized, then return success
                         if (it.isAuthorized) {
-                            continuation.resume(Unit)
+                            continuation.resume(LoginResult.SUCCEEDED)
                             return@let
                         }
 
@@ -118,29 +118,19 @@ class GoogleBookLoginFragment : DialogFragment() {
                                 .observe(backStack) { result ->
                                     when (result) {
                                         // Succeed doesn't need to do anything, the login fragment will return to this one
-                                        LoginResult.SUCCEEDED -> {
-                                            if (it.isAuthorized)
-                                                continuation.resume(Unit)
-                                        }
+                                        LoginResult.SUCCEEDED ->
+                                            continuation.resume(if (it.isAuthorized) result else LoginResult.FAILED)
 
-                                        else -> {
-                                            // Pop off including the current destination
-                                            if (!nav.popBackStack(backStack.destination.id, true))
-                                                nav.navigate(MobileNavigationDirections.filterBooks())
-                                            throw CancellationException("Google book login failed")
-                                        }
+                                        else ->
+                                            continuation.resume(result)
                                     }
+                                    // Prevent re-delivery
+                                    backStack.savedStateHandle.remove<LoginResult>(kLoginResult)
                                 }
-                        } ?: run {
-                            nav.navigate(MobileNavigationDirections.filterBooks())
-                            throw CancellationException("Google book login failed")
-                        }
+                        } ?: continuation.resume(LoginResult.SKIPPED)
                         // Navigate to the login fragment
                         nav.navigate(R.id.googleBookLoginFragment)
-                    } ?: run {
-                        nav.popBackStack()
-                        throw CancellationException("Google book login failed")
-                    }
+                    } ?: continuation.resume(LoginResult.SKIPPED)
                 }
             }
         }

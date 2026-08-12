@@ -19,6 +19,7 @@ import com.github.cleveard.bibliotech.db.BookEntity
 import com.github.cleveard.bibliotech.db.BookRepository
 import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
+import com.github.cleveard.bibliotech.utils.OAuth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.channelFlow
 
@@ -120,23 +121,27 @@ internal class UpdateSeriesFragment : Fragment() {
                             // The update isn't cancellable, but when the fragment is stopped we will
                             // terminate the job anyway. Making it non-cancellable, means that we can
                             // finished up the undo and save the updates we have already made.
-                            withContext(NonCancellable) {
-                                // Start an undo transaction for the update
-                                viewModel.repo.withUndo(requireContext().resources.getString(R.string.update_series)) {
-                                    // Run the update on a background thread
-                                    withContext(BookDatabase.db.queryExecutor.asCoroutineDispatcher()) {
-                                        // Update each book
-                                        list.forEachIndexed { index, bookAndAuthors ->
-                                            // When active is false, we need to finish
-                                            if (!active)
-                                                return@forEachIndexed
-                                            // Update a book
-                                            updateBook(bookAndAuthors)
-                                            // Send progress
-                                            send(index + 1)
+                            try {
+                                withContext(NonCancellable) {
+                                    // Start an undo transaction for the update
+                                    viewModel.repo.withUndo(requireContext().resources.getString(R.string.update_series)) {
+                                        // Run the update on a background thread
+                                        withContext(BookDatabase.db.queryExecutor.asCoroutineDispatcher()) {
+                                            // Update each book
+                                            list.forEachIndexed { index, bookAndAuthors ->
+                                                // When active is false, we need to finish
+                                                if (!active)
+                                                    return@forEachIndexed
+                                                // Update a book
+                                                updateBook(bookAndAuthors)
+                                                // Send progress
+                                                send(index + 1)
+                                            }
                                         }
                                     }
                                 }
+                            } catch (_: OAuth.AuthException) {
+                                OAuth.toastAuthError(requireContext())
                             }
                         }
                     }
