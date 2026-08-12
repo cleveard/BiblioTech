@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.View
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.viewModels
@@ -25,6 +27,7 @@ import androidx.core.view.GravityCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
+import androidx.lifecycle.application
 import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.navigation.NavController
@@ -43,6 +46,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.completeWith
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
 
 const val KEY_EVENT_ACTION = "key_event_action"
 const val KEY_EVENT_EXTRA = "key_event_extra"
@@ -78,9 +82,10 @@ interface BookCredentials {
 
     /**
      * Remove the credential authorization
-     * @return True if the credentials are authorized
+     * @param revoke True to revoke access as well as logout
+     * @return A Pair with the response code and response
      */
-    suspend fun logout(): Boolean
+    suspend fun logout(revoke: Boolean): Pair<Int, String?>
 
     /**
      * Run an action with a the access token for the credentials
@@ -374,7 +379,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
 
     override suspend fun login(): Boolean = viewModel.login()
 
-    override suspend fun logout(): Boolean = viewModel.logout()
+    override suspend fun logout(revoke: Boolean): Pair<Int, String?> = viewModel.logout(revoke)
 
     @Throws(OAuth.AuthException::class)
     override suspend fun <T> execute(action: suspend (token: String?) -> T): T = viewModel.execute(action)
@@ -478,8 +483,17 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
 
         /**
          * Logout of google books
+         * @param revoke Set to true to revoke access as well as logout
+         * @return A Pair with the response code and response
          */
-        suspend fun logout(): Boolean = googleBooksAuth.logout()
+        suspend fun logout(revoke: Boolean): Pair<Int, String?> = googleBooksAuth.logout(revoke).also {
+                if (it.first != HttpURLConnection.HTTP_OK) {
+                    // On error log to logcat and show a message to the user
+                    Log.e("BiblioTech OAuth", "Access token revoke failed ${it.first} - ${it.second}")
+                    Toast.makeText(application, application.getString(R.string.revoke_failed, it.first, it.second), Toast.LENGTH_LONG)
+                        .show()
+                }
+            }
 
         /**
          * Execute an action on google books
@@ -491,7 +505,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
             try {
                 return googleBooksAuth.execute(action)
             } catch (_: OAuth.AuthException) {
-                logout()
+                logout(false)
             }
 
             if (!login())

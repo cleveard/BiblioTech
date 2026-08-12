@@ -99,6 +99,11 @@ class BooksFragment : Fragment() {
     private var logoutMenuItem: MenuItem? = null
 
     /**
+     * The menu item to revoke access to Google Books
+     */
+    private var revokeMenuItem: MenuItem? = null
+
+    /**
      * The menu item to update the series for older books in the database
      */
     private var findSeriesMenuItem: MenuItem? = null
@@ -311,6 +316,7 @@ class BooksFragment : Fragment() {
                     selectAll = menu.findItem(R.id.action_select_all)
                     selectNone = menu.findItem(R.id.action_select_none)
                     logoutMenuItem = menu.findItem(R.id.action_logout)
+                    revokeMenuItem = menu.findItem(R.id.action_revoke)
                     findSeriesMenuItem = menu.findItem(R.id.find_series).also {
                         it.isVisible = booksViewModel.seriesCount.value != 0
                     }
@@ -543,11 +549,12 @@ class BooksFragment : Fragment() {
                     BooksFragmentDirections.actionNavBooksToSettingsFragment()
                 )
             }
-            R.id.action_logout -> {
+            R.id.action_logout,
+            R.id.action_revoke -> {
                 (activity as? BookCredentials)?.let {credentials ->
                     booksViewModel.viewModelScope.launch {
                         if (credentials.isAuthorized)
-                            credentials.logout()
+                            credentials.logout(id == R.id.action_revoke)
                         else
                             credentials.login()
                         updateMenuAndButtons()
@@ -586,11 +593,13 @@ class BooksFragment : Fragment() {
         selectNone?.isEnabled = booksSelected > 0
         // Enable select all when something is not selected
         selectAll?.isEnabled = booksSelected < booksCount
+        val loggedIn = (requireActivity() as? BookCredentials)?.isAuthorized == true
         // Enable logout menu item
-        logoutMenuItem?.title = if ((requireActivity() as? BookCredentials)?.isAuthorized == true)
+        logoutMenuItem?.title = if (loggedIn)
             requireContext().resources.getString(R.string.logout)
         else
             requireContext().resources.getString(R.string.login)
+        revokeMenuItem?.isEnabled = loggedIn
 
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?

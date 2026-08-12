@@ -9,6 +9,7 @@ class GoogleBooksOAuth(context: Context): OAuth(
     context,
     "https://accounts.google.com/o/oauth2/v2/auth",
     "https://oauth2.googleapis.com/token",
+    "https://oauth2.googleapis.com/revoke",
     BuildConfig.GOOGLE_BOOKS_OAUTH_ID,
     "${BuildConfig.GOOGLE_BOOKS_REDIRECT_SCHEME}:/oauth2redirect/}",
     "googleBooksAuthState"

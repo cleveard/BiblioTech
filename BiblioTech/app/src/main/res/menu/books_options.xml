@@ -55,4 +55,9 @@
         android:orderInCategory="100"
         android:title="@string/logout"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_revoke"
+        android:orderInCategory="100"
+        android:title="@string/revoke"
+        app:showAsAction="never" />
 </menu>

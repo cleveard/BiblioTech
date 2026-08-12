@@ -323,4 +323,6 @@
     <string name="unlink_shelf">Unlink Shelf</string>
     <string name="clear_shelf_question">Do you also want to clear all books from this shelf?</string>
     <string name="add_tab">Safely edit in spreadsheet</string>
+    <string name="revoke_failed">Token revocation failed with error %1$d - "%2$s"</string>
+    <string name="revoke">Revoke</string>
 </resources>

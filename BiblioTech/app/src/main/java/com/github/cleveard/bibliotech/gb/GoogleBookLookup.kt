@@ -1,30 +1,32 @@
 package com.github.cleveard.bibliotech.gb
 
-import com.github.cleveard.bibliotech.db.*
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.BuildConfig
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.services.books.v1.Books as BooksService
+import com.github.cleveard.bibliotech.db.*
 import com.google.api.client.extensions.android.json.AndroidJsonFactory
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.googleapis.services.AbstractGoogleClientRequest
 import com.google.api.client.http.HttpResponseException
+import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.services.books.v1.BooksRequestInitializer
+import com.google.api.services.books.v1.model.Bookshelf
+import com.google.api.services.books.v1.model.Bookshelves
 import com.google.api.services.books.v1.model.Volume
 import com.google.api.services.books.v1.model.Volumes
-import com.google.api.services.books.v1.model.Bookshelves
-import com.google.api.services.books.v1.model.Bookshelf
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import java.net.MalformedURLException
 import java.net.SocketTimeoutException
 import java.time.Instant
-import java.util.*
-import kotlin.collections.ArrayDeque
-import kotlin.collections.ArrayList
+import java.util.Calendar
+import java.util.Date
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import com.google.api.services.books.v1.Books as BooksService
 
 /**
  * Class used to query books on books.google.com
@@ -203,8 +205,8 @@ internal class GoogleBookLookup {
 
     /**
      * Get search terms for title and author lookup
-     * @param trimTitle The title to search for
-     * @param trimAuthor The author to search for
+     * @param title The title to search for
+     * @param author The author to search for
      * @return The query search terms
      */
     fun getTitleAuthorQuery(title: String, author: String): String {
@@ -499,7 +501,7 @@ internal class GoogleBookLookup {
         // Do we have a list of books
         if (shelves.kind == kBooksBookshelves) {
             // Get the array of books from the object. Only handle custom shelves
-            val items = shelves.items?.filter { it.id?.let { it >= 1000 } == true } ?: return null
+            val items = shelves.items?.filter {shelf -> shelf.id?.let { it >= 1000 } == true } ?: return null
             val count = items.size
             // If count is 0, then nothing left to do
             if (count == 0)
@@ -574,7 +576,7 @@ internal class GoogleBookLookup {
         /** Number of attempts we have made */
         var attempts = 0
             private set
-        /** The total we have delaed */
+        /** The total we have delayed */
         var totalDelay = 0
             private set
         // The current max backoff
@@ -592,7 +594,7 @@ internal class GoogleBookLookup {
                 return false
             // One more attempt
             ++attempts
-            // Exponentially increas the backoff
+            // Exponentially increase the backoff
             if (attempts > 1)
                 maxBackoff *= exponent
             // Add jitter, limited to total delay is not exceeded
