@@ -17,9 +17,4 @@
         android:id="@+id/action_redo"
         android:title="@string/redo"
         app:showAsAction="never" />
-    <item
-        android:id="@+id/action_to_settingsFragment"
-        android:orderInCategory="100"
-        android:title="@string/action_settings"
-        app:showAsAction="never" />
 </menu>

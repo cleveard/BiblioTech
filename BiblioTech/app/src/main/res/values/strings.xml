@@ -289,8 +289,8 @@
         <item>1</item>
     </string-array>
 
-    <string name="login">Login</string>
-    <string name="logout">Logout</string>
+    <string name="login">Login to Google Books</string>
+    <string name="logout">Logout from Google Books</string>
     <string name="login_message">BiblioTech requires access to Google Books to collect data on your books and bookshelves.
         BiblioTech cannot find books or series or manage bookshelves until you login.
         \n\nYou can login now, or BiblioTech will ask you to login when it needs to access Google Books.
@@ -325,6 +325,6 @@
     <string name="clear_shelf_question">Do you also want to clear all books from this shelf?</string>
     <string name="add_tab">Safely edit in spreadsheet</string>
     <string name="revoke_failed">Token revocation failed with error %1$d - "%2$s"</string>
-    <string name="revoke">Revoke</string>
+    <string name="revoke">Revoke Access to Google Books</string>
     <string name="auth_error">You are not authorized to access Google Books.</string>
 </resources>

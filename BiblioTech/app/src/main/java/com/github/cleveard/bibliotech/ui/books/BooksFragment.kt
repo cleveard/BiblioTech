@@ -32,7 +32,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.bibliotech.BookCredentials
 import com.github.cleveard.bibliotech.BookStats
 import com.github.cleveard.bibliotech.BuildConfig
 import com.github.cleveard.bibliotech.ManageNavigation
@@ -47,6 +46,8 @@ import com.github.cleveard.bibliotech.ui.filter.FilterTable
 import com.github.cleveard.bibliotech.ui.filter.OrderTable
 import com.github.cleveard.bibliotech.ui.modes.DeleteModalAction
 import com.github.cleveard.bibliotech.ui.tags.TagViewModel
+import com.github.cleveard.bibliotech.ui.widget.LoginMenuProvider
+import com.github.cleveard.bibliotech.ui.widget.SettingsMenuProvider
 import com.github.cleveard.bibliotech.utils.BaseViewModel
 import com.github.cleveard.bibliotech.utils.coroutineAlert
 import kotlinx.coroutines.coroutineScope
@@ -92,16 +93,6 @@ class BooksFragment : Fragment() {
      * The menu item to select no books
      */
     private var selectNone: MenuItem? = null
-
-    /**
-     * The menu item to login/logout
-     */
-    private var logoutMenuItem: MenuItem? = null
-
-    /**
-     * The menu item to revoke access to Google Books
-     */
-    private var revokeMenuItem: MenuItem? = null
 
     /**
      * The menu item to update the series for older books in the database
@@ -305,62 +296,72 @@ class BooksFragment : Fragment() {
         })
 
         // Add options menu provider
-        requireActivity().addMenuProvider(
-            object: MenuProvider {
-                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                    // Inflate the menu
-                    menuInflater.inflate(R.menu.books_options, menu)
-                    // Save the edit and filter drawer menu item
-                    drawerMenuItem = menu.findItem(R.id.action_drawer)
-                    deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
-                    selectAll = menu.findItem(R.id.action_select_all)
-                    selectNone = menu.findItem(R.id.action_select_none)
-                    logoutMenuItem = menu.findItem(R.id.action_logout)
-                    revokeMenuItem = menu.findItem(R.id.action_revoke)
-                    findSeriesMenuItem = menu.findItem(R.id.find_series).also {
-                        it.isVisible = booksViewModel.seriesCount.value != 0
-                    }
-                    if (BuildConfig.DEBUG) {
-                        menu.add("Clear Series").apply {
-                            setOnMenuItemClickListener {
-                                booksViewModel.viewModelScope.launch {
-                                    booksViewModel.repo.bookFlags.changeBits(false, BookEntity.SERIES, null)
+        requireActivity().run {
+            addMenuProvider(
+                object: MenuProvider {
+                    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                        // Inflate the menu
+                        menuInflater.inflate(R.menu.books_options, menu)
+                        // Save the edit and filter drawer menu item
+                        drawerMenuItem = menu.findItem(R.id.action_drawer)
+                        deleteMenuItem = BaseViewModel.setupIcon(context, menu, R.id.action_delete)
+                        selectAll = menu.findItem(R.id.action_select_all)
+                        selectNone = menu.findItem(R.id.action_select_none)
+                        findSeriesMenuItem = menu.findItem(R.id.find_series).also {
+                            it.isVisible = booksViewModel.seriesCount.value != 0
+                        }
+                        if (BuildConfig.DEBUG) {
+                            menu.add("Clear Series").apply {
+                                setOnMenuItemClickListener {
+                                    booksViewModel.viewModelScope.launch {
+                                        booksViewModel.repo.bookFlags.changeBits(false, BookEntity.SERIES, null)
+                                    }
+                                    true
                                 }
-                                true
                             }
                         }
+
+                        updateMenuAndButtons()
                     }
 
-                    updateMenuAndButtons()
-                }
-
-                /**
-                 * @inheritDoc
-                 */
-                override fun onPrepareMenu(menu: Menu) {
-                    fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
-                        menu.findItem(id)?.let {item ->
-                            item.isEnabled = desc != null
-                            item.title = if (desc.isNullOrEmpty())
-                                requireContext().getString(undoId)
-                            else
-                                requireContext().getString(undoNameId, desc)
+                    /**
+                     * @inheritDoc
+                     */
+                    override fun onPrepareMenu(menu: Menu) {
+                        fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
+                            menu.findItem(id)?.let {item ->
+                                item.isEnabled = desc != null
+                                item.title = if (desc.isNullOrEmpty())
+                                    requireContext().getString(undoId)
+                                else
+                                    requireContext().getString(undoNameId, desc)
+                            }
                         }
+                        update(R.id.action_undo, booksViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
+                            R.string.undo, R.string.undoName)
+                        update(R.id.action_redo, booksViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
+                            R.string.redo, R.string.redoName)
                     }
-                    update(R.id.action_undo, booksViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
-                        R.string.undo, R.string.undoName)
-                    update(R.id.action_redo, booksViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
-                        R.string.redo, R.string.redoName)
-                }
 
-                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-                    // Direct action to onActionSelected
-                    return onActionSelected(menuItem.itemId)
-                }
-            },
-            viewLifecycleOwner,
-            Lifecycle.State.RESUMED
-        )
+                    override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                        // Direct action to onActionSelected
+                        return onActionSelected(menuItem.itemId)
+                    }
+                },
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                SettingsMenuProvider(this, BooksFragmentDirections.actionNavBooksToSettingsFragment()),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                LoginMenuProvider(this, booksViewModel.viewModelScope),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+        }
 
         // Set onClickListeners for buttons in the edit and filter drawer
         setActionClickListener(root.findViewById<ConstraintLayout>(R.id.action_drawer_view))
@@ -544,23 +545,6 @@ class BooksFragment : Fragment() {
                     booksViewModel.repo.redo()
                 }
             }
-            R.id.action_to_settingsFragment -> {
-                (activity as? ManageNavigation)?.navigate(
-                    BooksFragmentDirections.actionNavBooksToSettingsFragment()
-                )
-            }
-            R.id.action_logout,
-            R.id.action_revoke -> {
-                (activity as? BookCredentials)?.let {credentials ->
-                    booksViewModel.viewModelScope.launch {
-                        if (credentials.isAuthorized)
-                            credentials.logout(id == R.id.action_revoke)
-                        else
-                            credentials.login()
-                        updateMenuAndButtons()
-                    }
-                }
-            }
             R.id.action_to_print_fragment -> {
                 (activity as? ManageNavigation)?.navigate(
                     BooksFragmentDirections.actionNavBooksToPrintFragment(booksViewModel.filterName)
@@ -593,13 +577,6 @@ class BooksFragment : Fragment() {
         selectNone?.isEnabled = booksSelected > 0
         // Enable select all when something is not selected
         selectAll?.isEnabled = booksSelected < booksCount
-        val loggedIn = (requireActivity() as? BookCredentials)?.isAuthorized == true
-        // Enable logout menu item
-        logoutMenuItem?.title = if (loggedIn)
-            requireContext().resources.getString(R.string.logout)
-        else
-            requireContext().resources.getString(R.string.login)
-        revokeMenuItem?.isEnabled = loggedIn
 
         // Change edit and filter menu item based on the current drawer state
         // TODO: Can the images be handled in a StateListDrawable?

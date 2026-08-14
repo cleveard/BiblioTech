@@ -1,74 +1,126 @@
 package com.github.cleveard.bibliotech.ui.scan
 
-import com.github.cleveard.bibliotech.db.*
-import com.github.cleveard.bibliotech.gb.*
+//import android.util.Log
+// import androidx.appcompat.app.AlertDialog
 import android.Manifest
 import android.app.Application
-import android.content.*
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.database.Cursor
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Matrix
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.DisplayMetrics
-//import android.util.Log
 import android.util.Size
 import android.util.SparseArray
-import android.view.*
-import android.widget.*
+import android.view.KeyEvent
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.WindowMetrics
+import android.widget.AdapterView
+import android.widget.Button
+import android.widget.EditText
+import android.widget.SimpleCursorAdapter
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-// import androidx.appcompat.app.AlertDialog
-import androidx.camera.core.*
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
+import androidx.camera.core.CameraInfoUnavailableException
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
-import androidx.core.view.MenuProvider
+import androidx.core.util.isNotEmpty
+import androidx.core.util.size
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.*
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
+import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.paging.*
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.cachedIn
+import androidx.paging.filter
+import androidx.paging.map
 import androidx.recyclerview.widget.RecyclerView
-import com.github.cleveard.bibliotech.*
+import com.github.cleveard.bibliotech.BookCredentials
+import com.github.cleveard.bibliotech.BookStats
+import com.github.cleveard.bibliotech.KEY_EVENT_ACTION
+import com.github.cleveard.bibliotech.KEY_EVENT_EXTRA
 import com.github.cleveard.bibliotech.R
+import com.github.cleveard.bibliotech.db.AuthorEntity
+import com.github.cleveard.bibliotech.db.BookAndAuthors
+import com.github.cleveard.bibliotech.db.BookDatabase
+import com.github.cleveard.bibliotech.db.ColumnDataDescriptor
+import com.github.cleveard.bibliotech.db.IsbnEntity
+import com.github.cleveard.bibliotech.db.TAGS_NAME_COLUMN
+import com.github.cleveard.bibliotech.db.TagEntity
+import com.github.cleveard.bibliotech.gb.GoogleBookLookup
+import com.github.cleveard.bibliotech.gb.GoogleQueryPagingSource
 import com.github.cleveard.bibliotech.ui.books.BooksAdapter
 import com.github.cleveard.bibliotech.ui.books.BooksViewModel
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
 import com.github.cleveard.bibliotech.ui.tags.TagViewModel
 import com.github.cleveard.bibliotech.ui.tags.TagsFragment
 import com.github.cleveard.bibliotech.ui.widget.ChipBox
-import com.github.cleveard.bibliotech.utils.*
+import com.github.cleveard.bibliotech.ui.widget.LoginMenuProvider
+import com.github.cleveard.bibliotech.ui.widget.SettingsMenuProvider
+import com.github.cleveard.bibliotech.utils.GpuCompute
+import com.github.cleveard.bibliotech.utils.OAuth
 import com.github.cleveard.bibliotech.utils.ParentAccess
+import com.github.cleveard.bibliotech.utils.Thumbnails
+import com.github.cleveard.bibliotech.utils.coroutineAlert
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.yanzhenjie.zbar.Config
 import com.yanzhenjie.zbar.Image
 import com.yanzhenjie.zbar.ImageScanner
 import com.yanzhenjie.zbar.Symbol
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
-import java.lang.Exception
-import java.lang.StringBuilder
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.collections.ArrayList
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
-import androidx.core.util.isNotEmpty
-import androidx.core.util.size
 
 private val PERMISSIONS_REQUIRED = arrayOf(Manifest.permission.CAMERA)
 
@@ -325,28 +377,18 @@ class ScanFragment : Fragment() {
     ): View? {
         // Initialize view model observers
         // Add options menu provider
-        requireActivity().addMenuProvider(
-            object: MenuProvider {
-                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                    menuInflater.inflate(R.menu.settings_option, menu)
-                }
-
-                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-                    // Direct action to onActionSelected
-                    return when(menuItem.itemId) {
-                        R.id.action_to_settingsFragment -> {
-                            (activity as? ManageNavigation)?.navigate(
-                                ScanFragmentDirections.actionNavScanToSettingsFragment()
-                            )
-                            true
-                        }
-                        else -> false
-                    }
-                }
-            },
-            viewLifecycleOwner,
-            Lifecycle.State.RESUMED
-        )
+        requireActivity().run {
+            addMenuProvider(
+                SettingsMenuProvider(this, ScanFragmentDirections.actionNavScanToSettingsFragment()),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                LoginMenuProvider(this, scanViewModel.viewModelScope),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+        }
 
         return inflater.inflate(R.layout.scan_fragment, container, false)
     }

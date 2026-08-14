@@ -25,13 +25,14 @@ import androidx.paging.cachedIn
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.github.cleveard.bibliotech.BookCredentials
-import com.github.cleveard.bibliotech.ManageNavigation
 import com.github.cleveard.bibliotech.R
 import com.github.cleveard.bibliotech.db.BookAndAuthors
-import com.github.cleveard.bibliotech.db.BookshelfAndTag
 import com.github.cleveard.bibliotech.db.Bookshelf
+import com.github.cleveard.bibliotech.db.BookshelfAndTag
 import com.github.cleveard.bibliotech.ui.books.BooksAdapterData
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
+import com.github.cleveard.bibliotech.ui.widget.LoginMenuProvider
+import com.github.cleveard.bibliotech.ui.widget.SettingsMenuProvider
 import com.github.cleveard.bibliotech.utils.OAuth
 import com.github.cleveard.bibliotech.utils.ParentAccess
 import com.github.cleveard.bibliotech.utils.Thumbnails
@@ -224,12 +225,6 @@ class BookshelvesFragment : Fragment() {
                     shelvesViewModel.repo.redo()
                 }
             }
-            // Bring up the settings fragment
-            R.id.action_to_settingsFragment -> {
-                (activity as? ManageNavigation)?.navigate(
-                    BookshelvesFragmentDirections.actionBookshelvesFragmentToSettingsFragment()
-                )
-            }
             else -> return false
         }
         return true
@@ -241,43 +236,55 @@ class BookshelvesFragment : Fragment() {
         shelvesViewModel.undoList.observe(viewLifecycleOwner) { }
 
         // Add options menu provider
-        requireActivity().addMenuProvider(
-            object: MenuProvider {
-                override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                    // Inflate the menu
-                    menuInflater.inflate(R.menu.bookshelf_options, menu)
-                }
-
-                /**
-                 * @inheritDoc
-                 */
-                override fun onPrepareMenu(menu: Menu) {
-                    // Method to update description and state of menu items
-                    fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
-                        menu.findItem(id)?.let {item ->
-                            item.isEnabled = desc != null
-                            item.title = if (desc.isNullOrEmpty())
-                                requireContext().getString(undoId)
-                            else
-                                requireContext().getString(undoNameId, desc)
-                        }
+        requireActivity().run {
+            addMenuProvider(
+                object: MenuProvider {
+                    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                        // Inflate the menu
+                        menuInflater.inflate(R.menu.bookshelf_options, menu)
                     }
-                    // Enable/Disable Undo item and set the string
-                    update(R.id.action_undo, shelvesViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
-                        R.string.undo, R.string.undoName)
-                    // Enable/Disable Redo item and set the string
-                    update(R.id.action_redo, shelvesViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
-                        R.string.redo, R.string.redoName)
-                }
 
-                override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-                    // Direct action to onActionSelected
-                    return onActionSelected(menuItem.itemId)
-                }
-            },
-            viewLifecycleOwner,
-            Lifecycle.State.RESUMED
-        )
+                    /**
+                     * @inheritDoc
+                     */
+                    override fun onPrepareMenu(menu: Menu) {
+                        // Method to update description and state of menu items
+                        fun update(id: Int, desc: String?, undoId: Int, undoNameId: Int) {
+                            menu.findItem(id)?.let {item ->
+                                item.isEnabled = desc != null
+                                item.title = if (desc.isNullOrEmpty())
+                                    requireContext().getString(undoId)
+                                else
+                                    requireContext().getString(undoNameId, desc)
+                            }
+                        }
+                        // Enable/Disable Undo item and set the string
+                        update(R.id.action_undo, shelvesViewModel.undoList.value?.lastOrNull { !it.isRedo }?.desc,
+                            R.string.undo, R.string.undoName)
+                        // Enable/Disable Redo item and set the string
+                        update(R.id.action_redo, shelvesViewModel.undoList.value?.firstOrNull { it.isRedo }?.desc,
+                            R.string.redo, R.string.redoName)
+                    }
+
+                    override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                        // Direct action to onActionSelected
+                        return onActionSelected(menuItem.itemId)
+                    }
+                },
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                SettingsMenuProvider(this, BookshelvesFragmentDirections.actionBookshelvesFragmentToSettingsFragment()),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                LoginMenuProvider(this, shelvesViewModel.viewModelScope),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+        }
     }
 
     /**

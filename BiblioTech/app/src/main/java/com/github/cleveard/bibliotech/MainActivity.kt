@@ -215,7 +215,7 @@ class MainActivity : AppCompatActivity(), ManageNavigation, BookCredentials, Boo
             binding.navView.menu.findItem(R.id.action_nav_books_to_exportImportFragment).isEnabled =
                 lastNavId == R.id.nav_books
             binding.navView.menu.findItem(R.id.action_to_settingsFragment).isEnabled =
-                lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan || lastNavId == R.id.action_nav_to_bookshelvesFragment
+                lastNavId == R.id.nav_books || lastNavId == R.id.nav_scan || lastNavId == R.id.nav_bookshelvesFragment
         }
 
         // Passing each menu ID as a set of Ids because each

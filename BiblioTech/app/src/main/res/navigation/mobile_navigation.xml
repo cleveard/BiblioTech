@@ -92,6 +92,10 @@
         android:id="@+id/updateSeriesFragment"
         android:name="com.github.cleveard.bibliotech.ui.books.UpdateSeriesFragment"
         android:label="@string/update_series"
-        tools:layout="@layout/fragment_update_series" />
+        tools:layout="@layout/fragment_update_series" >
+        <action
+            android:id="@+id/action_updateSeriesFragment_to_settingsFragment"
+            app:destination="@id/settingsFragment" />
+    </fragment>
 
 </navigation>

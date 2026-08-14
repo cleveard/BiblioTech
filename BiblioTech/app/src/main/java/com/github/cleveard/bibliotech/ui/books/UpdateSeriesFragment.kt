@@ -2,13 +2,14 @@ package com.github.cleveard.bibliotech.ui.books
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ProgressBar
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.cleveard.bibliotech.BookCredentials
@@ -19,9 +20,17 @@ import com.github.cleveard.bibliotech.db.BookEntity
 import com.github.cleveard.bibliotech.db.BookRepository
 import com.github.cleveard.bibliotech.gb.GoogleBookLookup
 import com.github.cleveard.bibliotech.ui.gb.GoogleBookLoginFragment
+import com.github.cleveard.bibliotech.ui.widget.LoginMenuProvider
+import com.github.cleveard.bibliotech.ui.widget.SettingsMenuProvider
 import com.github.cleveard.bibliotech.utils.OAuth
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * A dialog fragment used to update the series of books in the database
@@ -55,7 +64,24 @@ internal class UpdateSeriesFragment : Fragment() {
     /**  @inheritDoc */
     @SuppressLint("InflateParams")
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_update_series, null)
+        val view = inflater.inflate(R.layout.fragment_update_series, null)
+
+
+        // Add options menu provider
+        requireActivity().run {
+            addMenuProvider(
+                SettingsMenuProvider(this, UpdateSeriesFragmentDirections.actionUpdateSeriesFragmentToSettingsFragment()),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+            addMenuProvider(
+                LoginMenuProvider(this, viewModel.viewModelScope),
+                viewLifecycleOwner,
+                Lifecycle.State.RESUMED
+            )
+        }
+
+        return view
     }
 
     /**
