@@ -368,7 +368,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             // Add the book to the last set of tagged books
                             nextShelfSet.add(book.book.volumeId!!)
                         }
-                    } != null && finished
+                    } == null && finished
 
                     // Untag volumes removed from the bookshelf
                     finished = untagInDb.firstOrNull { volumeId ->
@@ -386,7 +386,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             // remove volume from the last set of tagged books
                             nextShelfSet.remove(volumeId)
                         }
-                    } != null && finished
+                    } == null && finished
                 }
 
                 launch {
@@ -397,7 +397,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             lookup.deleteVolumeFromShelf(auth, shelf.bookshelfId, it)
                             nextShelfSet.remove(it)
                         }
-                    } != null && finished
+                    } == null && finished
 
                     // Add volumes to the shelf that were tagged
                     finished = addToShelf.values.firstOrNull {
@@ -406,7 +406,7 @@ internal class BookshelvesViewModel(private val app: Application) : AndroidViewM
                             lookup.addVolumeToShelf(auth, shelf.bookshelfId, it.book.volumeId!!)
                             nextShelfSet.add(it.book.volumeId!!)
                         }
-                    } != null && finished
+                    } == null && finished
                 }
             }
         }
